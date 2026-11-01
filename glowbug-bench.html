@@ -556,7 +556,7 @@ function xfmr(pct, sct, core) {
   if (pct) s += ln(0, 30, 10, 30); if (sct) s += ln(40, 30, 50, 30);
   return s;
 }
-def('transformer', { cat: 'Transformer', name: 'Transformer, isolation', pre: 'T', value: 'Isolation', tags: 'isolation 1:1', hooks: { P1: [0, 0], P2: [0, 60], S1: [50, 0], S2: [50, 60] }, draw: c => xfmr(0, 0, c) });
+def('transformer', { cat: 'Transformer', name: 'Transformer, isolation', pre: 'T', value: 'Isolation', tags: 'isolation 1:1', layout: 'xfmr', hooks: { P1: [0, 0], P2: [0, 60], S1: [50, 0], S2: [50, 60] }, draw: c => xfmr(0, 0, c) });
 def('transformer_sct', { cat: 'Transformer', name: 'Transformer, secondary CT', pre: 'T', value: '350-0-350 V', hooks: { P1: [0, 0], P2: [0, 60], S1: [50, 0], S2: [50, 60], SCT: [50, 30] }, draw: c => xfmr(0, 1, c) });
 def('transformer_ul', { cat: 'Transformer', name: 'Output transformer, ultra-linear', pre: 'T', value: '6.6 kΩ : 8 Ω, UL', tags: 'ul ultralinear push-pull screen tap opt',
   hooks: { P1: [0, 0], UL1: [0, 20], CT: [0, 40], UL2: [0, 60], P2: [0, 80], S1: [50, 10], S2: [50, 70] },
@@ -860,10 +860,29 @@ const labelShown = p => fieldShown(p, 'ref') || fieldShown(p, 'value');
 const FIELD_NAME = { ref: 'ref des', value: 'value', pri: 'primary text', sec: 'secondary text' };
 const FIELD_ARIA = { ref: 'Reference designator', value: 'Value', pri: 'Primary winding text', sec: 'Secondary winding text' };
 // where a winding note sits: above the transformer over its own winding, or to the left of its winding when the part is turned on end
-function windingPos(p, f) {
+// world centres of the primary and secondary windings: [pri, sec]
+function windingCentres(p) {
   const H = Object.values(shapeOf(p).hooks), xs = H.map(h => h[0]), lo = Math.min(...xs), hi = Math.max(...xs);
   const mid = x => { const ys = H.filter(h => h[0] === x).map(h => h[1]); return (Math.min(...ys) + Math.max(...ys)) / 2; };
-  const a = xf(p, [lo, mid(lo)]), b = xf(p, [hi, mid(hi)]), me = f === 'pri' ? a : b, other = f === 'pri' ? b : a, bb = partBB(p);
+  return [xf(p, [lo, mid(lo)]), xf(p, [hi, mid(hi)])];
+}
+// symbols with layout 'xfmr' (the isolation transformer): ref des on top, value below, Pri and Sec beside their windings.
+// Turned on end: ref des and value to the right, Pri and Sec above and below their windings.
+function xfmrLabelPos(p, f) {
+  const bb = partBB(p), cx = (bb[0] + bb[2]) / 2, cy = (bb[1] + bb[3]) / 2, [a, b] = windingCentres(p);
+  const horiz = Math.abs(a[0] - b[0]) >= Math.abs(a[1] - b[1]);
+  if (f === 'ref' || f === 'value') {
+    const lx = p.lx || 0, ly = p.ly || 0;
+    if (horiz) return f === 'ref' ? [cx + lx, bb[1] - 8 + ly, 'middle'] : [cx + lx, bb[3] + 16 + ly, 'middle'];
+    return [bb[2] + 6 + lx, cy - 4 + (f === 'value' ? 13 : 0) + ly, 'start'];
+  }
+  const me = f === 'pri' ? a : b, other = f === 'pri' ? b : a;
+  if (horiz) return me[0] <= other[0] ? [bb[0] - 6, me[1] + 4, 'end'] : [bb[2] + 6, me[1] + 4, 'start'];
+  return me[1] <= other[1] ? [me[0], bb[1] - 6, 'middle'] : [me[0], bb[3] + 14, 'middle'];
+}
+function windingPos(p, f) {
+  if (LIB[p.type].layout === 'xfmr') return xfmrLabelPos(p, f);
+  const [a, b] = windingCentres(p), me = f === 'pri' ? a : b, other = f === 'pri' ? b : a, bb = partBB(p);
   if (Math.abs(a[0] - b[0]) >= Math.abs(a[1] - b[1])) {
     const cx = (bb[0] + bb[2]) / 2;
     return me[0] <= other[0] ? [cx - 4, bb[1] - 6, 'end'] : [cx + 4, bb[1] - 6, 'start'];
@@ -878,7 +897,11 @@ function labelLines(p) {
     const w = Math.max(String(txt || '').length * 6.3, 14), x0 = a === 'middle' ? x - w / 2 : a === 'end' ? x - w : x;
     out.push({ field, x, y: by, a, x0, x1: x0 + w, top: by - 10, bottom: by + 3 });
   };
-  if (labelShown(p)) {
+  if (LIB[p.type].layout === 'xfmr') {
+    [['ref', p.rdx || 0, p.rdy || 0], ['value', p.vdx || 0, p.vdy || 0]].forEach(([field, ox, oy]) => {
+      if (fieldShown(p, field)) { const [x, y, a] = xfmrLabelPos(p, field); line(field, p[field], x + ox, y + oy, a); }
+    });
+  } else if (labelShown(p)) {
     const [x, y, a] = labelPos(p);
     [['ref', p.ref, p.rdx || 0, p.rdy || 0], ['value', p.value, p.vdx || 0, p.vdy || 0]].forEach(([field, txt, ox, oy], i) => {
       if (fieldShown(p, field)) line(field, txt, x + ox, y + i * 13 + oy, a);

@@ -17,6 +17,7 @@ Open `glowbug-bench.html` in any modern browser. Everything is in the one file; 
   - Double-click a part, its ref des or its value to edit.
   - Delete on a selected label hides it instead of deleting anything.
 - **Pin numbers on tubes:** right-click a tube and choose Show pin numbers. Each hook gets a `p?` label you can double-click to edit (Tab moves to the next pin) and drag anywhere; a moved label is tied back to its pin with a dotted line.
+- **Transformer labels:** the isolation, step-up and step-down transformers place the ref des on top, the value (Isolation, Stepup, Stepdown) below, Pri left of the primary and Sec right of the secondary.
 - **Transformer cores:** right-click any transformer to pick its core: air (no lines), ferrite (dotted lines), iron (solid lines, the default) or variable (iron with an adjusting arrow).
 - **Winding text on transformers:** every transformer starts with "Pri" and "Sec" over its windings. Double-click either to change it to voltages, turns, impedance or anything else. Each has its own Show checkbox in Properties and in the double-click dialog, and the right-click menu can edit, hide or show them. Drag them anywhere; Delete on a selected one just hides it, and its text is kept.
 - **Photomultiplier dynodes:** right-click a photomultiplier (or use the properties panel) to set 2 to 14 dynodes. The photocathode and D1 stay put; the anode's wires follow it.

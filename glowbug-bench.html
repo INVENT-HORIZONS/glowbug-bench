@@ -563,12 +563,12 @@ def('transformer_ul', { cat: 'Transformer', name: 'Output transformer, ultra-lin
   draw: c => pa(coilY(10, 0, 8, 1)) + pa(coilY(40, 10, 6, -1)) + coreSVG(c || 'iron', -4, 84)
     + [0, 20, 40, 60, 80].map(y => ln(0, y, 10, y)).join('') + ln(40, 10, 50, 10) + ln(40, 70, 50, 70) });
 // general-purpose step-down / step-up: more turns drawn on the higher-voltage winding
-def('transformer_down', { cat: 'Transformer', name: 'Transformer, step-down', pre: 'T', value: '120 V : 12 V', tags: 'step down stepdown power mains',
+def('transformer_down', { cat: 'Transformer', name: 'Transformer, step-down', pre: 'T', value: 'Stepdown', tags: 'step down stepdown power mains', layout: 'xfmr',
   hooks: { P1: [0, 0], P2: [0, 60], S1: [50, 10], S2: [50, 50] },
   draw: c => ln(0, 0, 10, 0) + ln(10, 0, 10, 10) + pa(coilY(10, 10, 4, 1)) + ln(10, 50, 10, 60) + ln(10, 60, 0, 60)
     + ln(50, 10, 40, 10) + ln(40, 10, 40, 20) + pa(coilY(40, 20, 2, -1)) + ln(40, 40, 40, 50) + ln(40, 50, 50, 50)
     + coreSVG(c || 'iron', 4, 56) });
-def('transformer_up', { cat: 'Transformer', name: 'Transformer, step-up', pre: 'T', value: '12 V : 120 V', tags: 'step up stepup',
+def('transformer_up', { cat: 'Transformer', name: 'Transformer, step-up', pre: 'T', value: 'Stepup', tags: 'step up stepup', layout: 'xfmr',
   hooks: { P1: [0, 10], P2: [0, 50], S1: [50, 0], S2: [50, 60] },
   draw: c => ln(0, 10, 10, 10) + ln(10, 10, 10, 20) + pa(coilY(10, 20, 2, 1)) + ln(10, 40, 10, 50) + ln(10, 50, 0, 50)
     + ln(50, 0, 40, 0) + ln(40, 0, 40, 10) + pa(coilY(40, 10, 4, -1)) + ln(40, 50, 40, 60) + ln(40, 60, 50, 60)

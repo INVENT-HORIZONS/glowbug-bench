@@ -71,7 +71,7 @@ button, input, select, textarea { font: inherit; color: inherit; box-sizing: bor
 .tb .k { font: 400 10px var(--font-mono); opacity: .65; }
 .tb-spacer { flex: 1 0 8px; }
 .menu-wrap { position: relative; }
-.menu { position: fixed; z-index: 40; min-width: 210px; padding: 4px; background: var(--chrome); border: 1px solid var(--line);
+.menu { position: fixed; z-index: 40; min-width: 210px; max-height: calc(100vh - 16px); overflow-y: auto; padding: 4px; background: var(--chrome); border: 1px solid var(--line);
   border-radius: 6px; box-shadow: 0 10px 28px rgba(20, 12, 4, .28); }
 .menu button { display: flex; justify-content: space-between; gap: 18px; width: 100%; text-align: left; padding: 7px 10px;
   border: 0; border-radius: 4px; background: transparent; cursor: pointer; }
@@ -243,6 +243,28 @@ button, input, select, textarea { font: inherit; color: inherit; box-sizing: bor
 .menu .swatches { padding: 2px 10px 8px; }
 .chips { display: grid; grid-template-columns: repeat(7, 26px); gap: 3px; padding: 2px 10px 8px; }
 .menu button.chip { width: 26px; height: 22px; padding: 0; display: flex; justify-content: center; align-items: center; text-align: center; font: 500 11px var(--font-mono); border: 1px solid var(--line); border-radius: 4px; }
+.menu button.chip:disabled { opacity: .3; cursor: default; }
+/* ---------- configure windings dialog ---------- */
+.dlg.wnd { width: min(760px, 100%); max-height: 92vh; }
+.wnd-body { display: grid; grid-template-columns: 200px 1fr 1fr; gap: 14px; padding: 0 16px; min-height: 0; overflow-y: auto; }
+.wnd-prev { background: var(--paper); border: 1px solid var(--line); border-radius: 6px; display: grid; place-items: center; padding: 6px; align-self: start; position: sticky; top: 0; }
+.wnd-prev svg { width: 100%; height: auto; max-height: 62vh; display: block; }
+.wnd-prev .hk { fill: none; stroke: var(--hook); stroke-width: 1.4; }
+.wnd-prev .hn { font: 500 9px var(--font-mono); fill: #6B5F53; }
+.wnd-col h3 { margin: 2px 0 6px; font: 500 10.5px var(--font-mono); letter-spacing: .12em; text-transform: uppercase; color: var(--muted); display: flex; justify-content: space-between; }
+.wnd-sec { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 6px; padding: 5px 6px; border: 1px solid var(--line); border-radius: 5px; background: var(--chrome-2); }
+.wnd-sec .nm { font: 500 11.5px var(--font-mono); white-space: nowrap; }
+.wnd-sec .ctl { display: flex; align-items: center; gap: 3px; }
+.wnd-sec input { width: 42px; text-align: center; padding: 3px 2px; border: 1px solid var(--line); border-radius: 3px; background: var(--paper); color: var(--ink); }
+.wnd-sec input:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+.wnd button.sm { border: 1px solid var(--line); border-radius: 3px; background: var(--chrome); cursor: pointer; padding: 2px 7px; font-size: 12px; }
+.wnd button.sm:hover:not(:disabled) { background: var(--accent); color: var(--accent-fg); border-color: transparent; }
+.wnd button.sm:disabled { opacity: .35; cursor: default; }
+.wnd-sec .split { grid-column: 1 / -1; justify-self: start; }
+.wnd-tap { display: flex; align-items: center; justify-content: space-between; gap: 6px; margin: 3px 0 3px 14px; padding: 2px 6px; border-left: 2px solid var(--hook); font: 600 11px var(--font-mono); color: var(--hook); }
+.wnd-tot { margin-top: 8px; font-size: 12px; color: var(--muted); }
+.wnd-tot b { color: var(--fg); }
+@media (max-width: 640px) { .wnd-body { grid-template-columns: 1fr 1fr; } .wnd-prev { grid-column: 1 / -1; position: static; } .wnd-prev svg { max-height: 30vh; } }
 .menu button.chip[aria-pressed="true"] { background: var(--accent); color: var(--accent-fg); border-color: transparent; }
 .menu .mlabel { padding: 5px 10px 4px; font: 500 10.5px var(--font-mono); letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
 .pinno { font-family: "Libre Franklin", sans-serif; font-size: 8.5px; fill: var(--ink); }
@@ -573,23 +595,44 @@ def('transformer_up', { cat: 'Transformer', name: 'Transformer, step-up', pre: '
   draw: c => ln(0, 10, 10, 10) + ln(10, 10, 10, 20) + pa(coilY(10, 20, 2, 1)) + ln(10, 40, 10, 50) + ln(10, 50, 0, 50)
     + ln(50, 0, 40, 0) + ln(40, 0, 40, 10) + pa(coilY(40, 10, 4, -1)) + ln(40, 50, 40, 60) + ln(40, 60, 50, 60)
     + coreSVG(c || 'iron', 4, 56) });
-// Versatile: the isolation look at three times the height, with 0-6 evenly spaced taps on each winding (hooks PT1.., ST1..)
-const VERS_TAPS = 6;
-const versTapYs = n => Array.from({ length: n }, (_, i) => 10 * Math.round((10 + (i + 1) * 160 / (n + 1)) / 10));
-function versBuild(o) {
-  const pt = versTapYs(o.pt || 0), st = versTapYs(o.st || 0);
-  const hooks = { P1: [0, 0], P2: [0, 180], S1: [50, 0], S2: [50, 180] };
+// Versatile: the isolation look, sized by loops. Each winding is a list of sections (terminal or tap to the next tap or
+// terminal), each a number of loops; one loop is 0.1 in, so every tap lands on the grid. p.pw / p.sw hold the lists.
+// The taller winding sets the height; the shorter one is centred beside it. Taps are hooks PT1.. and ST1.., top down.
+const VERS_TAPS = 6, VERS_MAX = 40, VERS_DEF = 16;
+const sumL = a => a.reduce((x, y) => x + y, 0);
+// split total loops into k sections as evenly as the grid allows
+const evenSplit = (total, k) => { const c = i => Math.round(i * total / k); return Array.from({ length: k }, (_, i) => c(i + 1) - c(i)); };
+// resize a winding to a new total, keeping its taps in proportion (so asymmetric taps stay asymmetric)
+function scaleSplit(secs, total) {
+  const k = secs.length, old = sumL(secs); total = Math.max(k, Math.min(VERS_MAX, total));
+  const c = [0]; let run = 0; for (const n of secs) { run += n; c.push(Math.round(run * total / old)); }
+  c[k] = total;
+  for (let i = 1; i < k; i++) c[i] = Math.max(c[i], c[i - 1] + 1);
+  for (let i = k - 1; i > 0; i--) c[i] = Math.min(c[i], c[i + 1] - 1);
+  return c.slice(1).map((v, i) => v - c[i]);
+}
+const okWinding = a => Array.isArray(a) && a.length >= 1 && a.length <= VERS_TAPS + 1 && a.every(n => Number.isInteger(n) && n >= 1) && sumL(a) <= VERS_MAX;
+// a part's two windings; parts saved with the older tap counts (pt / st) are read as 16 loops with evenly spread taps
+function windingsOf(p) {
+  const side = (w, n) => okWinding(p[w]) ? p[w] : evenSplit(VERS_DEF, Math.min(VERS_TAPS, Math.max(0, Math.round(+p[n]) || 0)) + 1);
+  return { pw: side('pw', 'pt'), sw: side('sw', 'st') };
+}
+function versBuild(pw, sw) {
+  const lp = sumL(pw), ls = sumL(sw), m = Math.max(lp, ls), H = m * 10 + 20;
+  const y0p = 10 + 10 * Math.floor((m - lp) / 2), y0s = 10 + 10 * Math.floor((m - ls) / 2);
+  const tapYs = (secs, y0) => { const out = []; let y = y0; for (let i = 0; i < secs.length - 1; i++) { y += secs[i] * 10; out.push(y); } return out; };
+  const pt = tapYs(pw, y0p), st = tapYs(sw, y0s);
+  const hooks = { P1: [0, y0p - 10], P2: [0, y0p + lp * 10 + 10], S1: [50, y0s - 10], S2: [50, y0s + ls * 10 + 10] };
   pt.forEach((y, i) => { hooks['PT' + (i + 1)] = [0, y]; }); st.forEach((y, i) => { hooks['ST' + (i + 1)] = [50, y]; });
-  const draw = c => ln(0, 0, 10, 0) + ln(10, 0, 10, 10) + pa(coilY(10, 10, 16, 1)) + ln(10, 170, 10, 180) + ln(10, 180, 0, 180)
-    + ln(50, 0, 40, 0) + ln(40, 0, 40, 10) + pa(coilY(40, 10, 16, -1)) + ln(40, 170, 40, 180) + ln(40, 180, 50, 180)
+  const wind = (x, xc, y0, n, dir) => ln(x, y0 - 10, xc, y0 - 10) + ln(xc, y0 - 10, xc, y0) + pa(coilY(xc, y0, n, dir)) + ln(xc, y0 + n * 10, xc, y0 + n * 10 + 10) + ln(xc, y0 + n * 10 + 10, x, y0 + n * 10 + 10);
+  const draw = c => wind(0, 10, y0p, lp, 1) + wind(50, 40, y0s, ls, -1)
     + pt.map(y => ln(0, y, 10, y)).join('') + st.map(y => ln(40, y, 50, y)).join('')
-    + coreSVG(c || 'iron', 4, 176);
+    + coreSVG(c || 'iron', 4, H - 4);
   return { hooks, draw };
 }
-def('transformer_vers', Object.assign({ cat: 'Transformer', name: 'Transformer, versatile', pre: 'T', value: 'Versatile', layout: 'xfmr',
-  tags: 'versatile tap taps tapped center ct multi-tap ultra-linear ul push-pull output opt power',
-  vary: [{ key: 'pt', label: 'Primary taps', min: 0, max: VERS_TAPS, def: 0 }, { key: 'st', label: 'Secondary taps', min: 0, max: VERS_TAPS, def: 0 }], build: versBuild },
-  versBuild({ pt: 0, st: 0 })));
+def('transformer_vers', Object.assign({ cat: 'Transformer', name: 'Transformer, versatile', pre: 'T', value: 'Versatile', layout: 'xfmr', windings: true,
+  tags: 'versatile tap taps tapped center ct multi-tap ultra-linear ul push-pull output opt power loops turns ratio' },
+  versBuild([VERS_DEF], [VERS_DEF])));
 // Retired from the parts panel (legacy: true) but kept so older drawings still open: secondary CT, ultra-linear, primary CT
 def('transformer_pct', { legacy: true, cat: 'Transformer', name: 'Output transformer, primary CT', pre: 'T', value: '5 kΩ : 8 Ω', tags: 'push-pull opt', hooks: { P1: [0, 0], P2: [0, 60], PCT: [0, 30], S1: [50, 0], S2: [50, 60] }, draw: c => xfmr(1, 0, c) });
 
@@ -827,7 +870,13 @@ const varyList = L => !L.vary ? [] : Array.isArray(L.vary) ? L.vary : [L.vary];
 const varyVal = (p, v) => { const n = Math.round(+p[v.key]); return isFinite(n) ? Math.min(v.max, Math.max(v.min, n)) : v.def; };
 const varyN = p => varyVal(p, varyList(LIB[p.type])[0]);
 function shapeOf(p) {
-  const L = LIB[p.type], vs = varyList(L); if (!vs.length) return L;
+  const L = LIB[p.type];
+  if (L.windings) {   // versatile transformer: shape set by its loop lists
+    const w = windingsOf(p), n = w.pw.join('.') + '|' + w.sw.join('.'), c = L._v || (L._v = {});
+    if (!c[n]) { const v = versBuild(w.pw, w.sw); c[n] = { hooks: v.hooks, draw: v.draw, bb: measureBB(v.draw, v.hooks) }; }
+    return c[n];
+  }
+  const vs = varyList(L); if (!vs.length) return L;
   const vals = Object.fromEntries(vs.map(v => [v.key, varyVal(p, v)])), n = vs.map(v => vals[v.key]).join(','), c = L._v || (L._v = {});
   if (!c[n]) { const v = Array.isArray(L.vary) ? L.build(vals) : L.vary.build(vals[vs[0].key]); c[n] = { hooks: v.hooks, draw: v.draw, bb: measureBB(v.draw, v.hooks) }; }
   return c[n];
@@ -1449,6 +1498,10 @@ function renderProps() {
     const p = it.o, L = LIB[p.type], HK = shapeOf(p).hooks;
     const pins = Object.keys(HK).join(' · ');
     b.innerHTML = `<div class="what">${esc(L.name)}<small>${esc(L.cat)} · ${Object.keys(HK).length} hook${Object.keys(HK).length > 1 ? 's' : ''}</small></div>
+      ${L.windings ? (() => { const ws = windingsOf(p); return ['pw', 'sw'].map(sd => { const w = ws[sd];
+        return `<div class="field"><label for="pWt${sd}">${WSIDE[sd][0]} taps</label><select id="pWt${sd}">${Array.from({ length: VERS_TAPS + 1 }, (_, n) => `<option${n === w.length - 1 ? ' selected' : ''}>${n}</option>`).join('')}</select></div>`
+          + `<div class="field"><label for="pWl${sd}">${WSIDE[sd][0]} loops</label><select id="pWl${sd}">${Array.from({ length: VERS_MAX - w.length + 1 }, (_, i) => w.length + i).map(n => `<option${n === sumL(w) ? ' selected' : ''}>${n}</option>`).join('')}</select></div>`; }).join('')
+        + `<div class="row-btns"><button data-act="windings">Configure windings…</button></div>`; })() : ''}
       ${varyList(L).map((v, k) => `<div class="field"><label for="pVary${k}">${v.label}</label><select id="pVary${k}" data-vk="${v.key}">${Array.from({ length: v.max - v.min + 1 }, (_, i) => v.min + i).map(n => `<option${n === varyVal(p, v) ? ' selected' : ''}>${n}</option>`).join('')}</select></div>`).join('')}
       <div class="field"><label for="pRef">Ref des</label><input type="text" id="pRef" value="${esc(p.ref)}" spellcheck="false"></div>
       <div class="field"><label for="pVal">Value</label><input type="text" id="pVal" value="${esc(p.value)}"></div>
@@ -1458,6 +1511,7 @@ function renderProps() {
       <div class="row-btns"><button data-act="rot">Rotate</button><button data-act="flip">Flip H</button><button data-act="flipv">Flip V</button><button data-act="dup">Duplicate</button>${(p.lx || p.ly || p.rdx || p.rdy || p.vdx || p.vdy || p.pdx || p.pdy || p.sdx || p.sdy) ? '<button data-act="lreset">Reset labels</button>' : ''}<button class="del" data-act="del">Delete</button></div>`;
     const bind = (id, f) => { const e = $(id); if (!e) return; e.addEventListener('focus', () => snapshot(), { once: true }); e.addEventListener('input', () => { f(e); render(); changedSoon(); }); e.addEventListener('keydown', ev => { ev.stopPropagation(); if (ev.key === 'Enter') e.blur(); }); };
     bind('pRef', e => p.ref = e.value); bind('pVal', e => p.value = e.value);
+    if (L.windings) for (const sd of ['pw', 'sw']) { $('pWt' + sd).onchange = e => setWindTaps(p, sd, +e.target.value); $('pWl' + sd).onchange = e => setWindLoops(p, sd, +e.target.value); }
     varyList(L).forEach((v, k) => { $('pVary' + k).onchange = e => setVary(p, +e.target.value, v.key); });
     $('pShowR').onchange = e => { snapshot(); p.showRef = e.target.checked; render(); changed(); };
     $('pShowV').onchange = e => { snapshot(); p.showVal = e.target.checked; render(); changed(); };
@@ -1487,7 +1541,7 @@ function renderProps() {
 $('propBody').addEventListener('click', e => {
   const wc = e.target.closest('[data-wc]'); if (wc) { colorWires(wc.dataset.wc); return; }
   const a = e.target.closest('[data-act]'); if (!a) return;
-  ({ rot: rotateSel, flip: () => flipSel('h'), flipv: () => flipSel('v'), dup: duplicate, del: deleteSel, lreset: () => { snapshot(); for (const it of selItems()) if (it.k === 'part') { Object.assign(it.o, { lx: 0, ly: 0, rdx: 0, rdy: 0, vdx: 0, vdy: 0, pdx: 0, pdy: 0, sdx: 0, sdy: 0 }); } render(); changed(); } })[a.dataset.act]();
+  ({ windings: () => { const it = selItems()[0]; if (it && it.k === 'part') windingDialog(it.o); }, rot: rotateSel, flip: () => flipSel('h'), flipv: () => flipSel('v'), dup: duplicate, del: deleteSel, lreset: () => { snapshot(); for (const it of selItems()) if (it.k === 'part') { Object.assign(it.o, { lx: 0, ly: 0, rdx: 0, rdy: 0, vdx: 0, vdy: 0, pdx: 0, pdy: 0, sdx: 0, sdy: 0 }); } render(); changed(); } })[a.dataset.act]();
 });
 
 /* =====================================================================
@@ -1552,6 +1606,35 @@ function moveSelection(dx, dy, base) {
   if (moves.size && (dx || dy)) dragWiresWithHooks(moves);
 }
 function finishWires() { sheet.wires = sheet.wires.filter(w => w && Array.isArray(w.pts)); for (const w of sheet.wires) w.pts = simplify(w.pts); sheet.wires = sheet.wires.filter(w => w.pts.length >= 2); }
+
+// Change a part's shape and keep its wires on: hooks that move drag their wires along. rename maps an old hook name to its
+// new name (null: the hook is gone and its wires stay put); names not listed keep their name.
+function reshape(p, mutate, rename = {}, msg = '') {
+  snapshot();
+  const before = hooksOf(p).map(h => [h.name, h.pos]);
+  mutate(p);
+  const after = Object.fromEntries(hooksOf(p).map(h => [h.name, h.pos])), moves = new Map();
+  for (const [nm, b] of before) {
+    const nn = nm in rename ? rename[nm] : nm, a = nn != null && after[nn];
+    if (a && (a[0] !== b[0] || a[1] !== b[1])) moves.set(key(b), [a[0] - b[0], a[1] - b[1]]);
+  }
+  if (moves.size) dragWiresWithHooks(moves);
+  finishWires(); render(); changed(); if (msg) setMsg(msg);
+}
+const WSIDE = { pw: ['Primary', 'PT'], sw: ['Secondary', 'ST'] };
+// quick settings: a tap count spreads the taps evenly; a loop count keeps the taps in proportion
+function setWindTaps(p, side, n) {
+  const w = windingsOf(p)[side]; n = Math.max(0, Math.min(VERS_TAPS, n)); if (n === w.length - 1) return;
+  const total = Math.max(sumL(w), n + 1);
+  reshape(p, q => { const ws = windingsOf(q); q.pw = ws.pw; q.sw = ws.sw; q[side] = evenSplit(total, n + 1); delete q.pt; delete q.st; }, {},
+    `${p.ref || 'Transformer'}: ${n} ${WSIDE[side][0].toLowerCase()} tap${n === 1 ? '' : 's'}`);
+}
+function setWindLoops(p, side, total) {
+  const w = windingsOf(p)[side]; total = Math.max(w.length, Math.min(VERS_MAX, total)); if (total === sumL(w)) return;
+  reshape(p, q => { const ws = windingsOf(q); q.pw = ws.pw; q.sw = ws.sw; q[side] = scaleSplit(w, total); delete q.pt; delete q.st; }, {},
+    `${p.ref || 'Transformer'}: ${total} ${WSIDE[side][0].toLowerCase()} loops`);
+}
+const LOOP_PRESETS = [4, 6, 8, 12, 16, 20, 24];
 
 // Change a variable part's setting (e.g. dynode count). Hooks that survive keep their wires; a hook that
 // moves (the anode) drags its wires along; wires left on a removed dynode stay where they were.
@@ -1856,6 +1939,72 @@ function finishEdit(ok) {
   if ((field === 'pri' || field === 'sec') && !(p[field] || '').trim()) { setShown(p, field, false); changed(); }   // an empty winding note would be invisible: hide it
   render();
 }
+/* ---- configure a versatile transformer's windings: loops per section, add and remove taps, live preview ---- */
+function windingDialog(p) {
+  closeMenu(); finishEdit(false);
+  sel.clear(); sel.add(p.id); renderSel();
+  const ws0 = windingsOf(p);
+  // working copy: sections per side, and for each tap the number it had when the dialog opened (null: added here)
+  const st = { pw: [...ws0.pw], sw: [...ws0.sw], ids: { pw: ws0.pw.slice(1).map((_, i) => i + 1), sw: ws0.sw.slice(1).map((_, i) => i + 1) } };
+  const back = document.createElement('div'); back.className = 'dlg-back';
+  back.innerHTML = `<form class="dlg wnd" role="dialog" aria-modal="true" aria-labelledby="wdT">
+    <h2 id="wdT">Configure windings</h2><p>${esc(p.ref || 'Transformer')} · loops between each terminal and tap. One loop is 0.1 in, so taps stay on the grid. Up to ${VERS_TAPS} taps and ${VERS_MAX} loops per winding.</p>
+    <div class="wnd-body"><div class="wnd-prev" id="wdPrev"></div><div class="wnd-col" id="wd_pw"></div><div class="wnd-col" id="wd_sw"></div></div>
+    <div class="foot"><button type="button" id="wdEven" title="Spread the taps evenly on both windings">Even out taps</button><span style="flex:1"></span><button type="button" id="wdCancel">Cancel</button><button type="submit" class="pri">Apply</button></div></form>`;
+  document.body.appendChild(back);
+  const names = sd => { const [, t] = WSIDE[sd], e = sd === 'pw' ? 'P' : 'S', n = st[sd].length; return Array.from({ length: n + 1 }, (_, i) => i === 0 ? e + '1' : i === n ? e + '2' : t + i); };
+  function preview() {
+    const v = versBuild(st.pw, st.sw), H = Object.values(v.hooks), ymax = Math.max(...H.map(h => h[1]));
+    const lab = Object.entries(v.hooks).map(([n, [x, y]]) => `<circle class="hk" cx="${x}" cy="${y}" r="3"/><text class="hn" x="${x === 0 ? -7 : 57}" y="${y + 3}" text-anchor="${x === 0 ? 'end' : 'start'}">${n}</text>`).join('');
+    $('wdPrev').innerHTML = `<svg viewBox="-34 -10 118 ${ymax + 20}" aria-label="Preview">${v.draw(p.core || 'iron')}${lab}</svg>`;
+  }
+  function col(sd) {
+    const w = st[sd], nm = names(sd), full = w.length - 1 >= VERS_TAPS, tot = sumL(w);
+    let h = `<h3><span>${WSIDE[sd][0]}</span><span>${w.length - 1} tap${w.length === 2 ? '' : 's'}</span></h3>`;
+    w.forEach((n, i) => {
+      h += `<div class="wnd-sec"><span class="nm">${nm[i]} – ${nm[i + 1]}</span><span class="ctl"><button type="button" class="sm" data-a="dec" data-i="${i}" aria-label="Fewer loops"${n <= 1 ? ' disabled' : ''}>−</button><input type="number" min="1" max="${VERS_MAX}" value="${n}" data-i="${i}" aria-label="Loops from ${nm[i]} to ${nm[i + 1]}"><button type="button" class="sm" data-a="inc" data-i="${i}" aria-label="More loops"${tot >= VERS_MAX ? ' disabled' : ''}>+</button></span>
+        <button type="button" class="sm split" data-a="split" data-i="${i}" title="Add a tap in the middle of this section"${full || n < 2 ? ' disabled' : ''}>+ Tap here</button></div>`;
+      if (i < w.length - 1) h += `<div class="wnd-tap"><span>${nm[i + 1]}</span><button type="button" class="sm" data-a="rm" data-i="${i}" title="Remove this tap; its two sections join">Remove tap</button></div>`;
+    });
+    h += `<div class="wnd-tot">Total <b>${tot}</b> loops</div>`;
+    const el = $('wd_' + sd); el.innerHTML = h; el.dataset.sd = sd;
+  }
+  const draw = () => { col('pw'); col('sw'); preview(); };
+  draw();
+  back.addEventListener('click', e => {
+    const b = e.target.closest('[data-a]'); if (!b || b.disabled) return;
+    const sd = b.closest('.wnd-col').dataset.sd, w = st[sd], ids = st.ids[sd], i = +b.dataset.i, a = b.dataset.a;
+    if (a === 'inc' && sumL(w) < VERS_MAX) w[i]++;
+    if (a === 'dec' && w[i] > 1) w[i]--;
+    if (a === 'split' && w[i] >= 2 && w.length - 1 < VERS_TAPS) { const h = Math.floor(w[i] / 2); w.splice(i, 1, h, w[i] - h); ids.splice(i, 0, null); }
+    if (a === 'rm') { w.splice(i, 2, w[i] + w[i + 1]); ids.splice(i, 1); }
+    draw();
+    const again = back.querySelector(`#wd_${sd} [data-a="${a}"][data-i="${a === 'split' ? i + 1 : i}"]`) || back.querySelector(`#wd_${sd} input`); if (again) again.focus();
+  });
+  back.addEventListener('change', e => {
+    const inp = e.target.closest('input[data-i]'); if (!inp) return;
+    const sd = inp.closest('.wnd-col').dataset.sd, w = st[sd], i = +inp.dataset.i;
+    const room = VERS_MAX - (sumL(w) - w[i]), n = Math.max(1, Math.min(room, Math.round(+inp.value) || 1));
+    w[i] = n; draw();
+  });
+  const close = () => back.remove();
+  $('wdEven').onclick = () => { for (const sd of ['pw', 'sw']) st[sd] = evenSplit(sumL(st[sd]), st[sd].length); draw(); };
+  back.addEventListener('pointerdown', e => { if (e.target === back) close(); });
+  back.addEventListener('keydown', e => { if (e.key === 'Escape') close(); if (e.key === 'Enter' && e.target.matches('input')) { e.preventDefault(); e.target.blur(); } e.stopPropagation(); });
+  $('wdCancel').onclick = close;
+  back.querySelector('form').addEventListener('submit', e => {
+    e.preventDefault();
+    const same = sd => st[sd].join('.') === ws0[sd].join('.');
+    if (same('pw') && same('sw')) { close(); return; }
+    const rename = {};
+    for (const sd of ['pw', 'sw']) { const t = WSIDE[sd][1], ids = st.ids[sd];
+      for (let k = 1; k < ws0[sd].length; k++) { const j = ids.indexOf(k); rename[t + k] = j < 0 ? null : t + (j + 1); } }
+    reshape(p, q => { q.pw = [...st.pw]; q.sw = [...st.sw]; delete q.pt; delete q.st; }, rename,
+      `${p.ref || 'Transformer'}: ${st.pw.length - 1}+${st.sw.length - 1} taps, ${sumL(st.pw)} : ${sumL(st.sw)} loops`);
+    renderSel(); close();
+  });
+  back.querySelector('#wd_pw input').focus();
+}
 /* ---- edit both in one dialog ---- */
 function partDialog(p) {
   closeMenu(); finishEdit(false);
@@ -1927,6 +2076,11 @@ function partMenu(e, raw) {
           : `<button role="menuitem" data-m="wadd-${f}"><span>${(q[f] || '').trim() ? 'Show' : 'Add'} ${FIELD_NAME[f]}</span><span></span></button>`).join(''); })() : '')
     + (items.length === 1 && items[0].k === 'part' && isTube(items[0].o) ? `<button role="menuitem" data-m="pins"><span>${items[0].o.showPins ? 'Hide' : 'Show'} pin numbers</span><span></span></button>` : '')
     + (t.k === 'pin' ? `<button role="menuitem" data-m="editpin"><span>Edit pin number</span><span>dbl-click</span></button>` + (((t.o.pins || {})[t.pin] || {}).dx || ((t.o.pins || {})[t.pin] || {}).dy ? `<button role="menuitem" data-m="resetpin"><span>Put pin number back</span><span></span></button>` : '') : '')
+    + (items.length === 1 && items[0].k === 'part' && LIB[items[0].o.type].windings ? (() => { const q = items[0].o, ws = windingsOf(q);
+        return ['pw', 'sw'].map(sd => { const w = ws[sd], nt = w.length - 1, tl = sumL(w);
+          return `<div class="mlabel">${WSIDE[sd][0]} taps</div><div class="chips">${Array.from({ length: VERS_TAPS + 1 }, (_, n) => `<button class="chip" data-wnd="${sd}:t:${n}" aria-pressed="${n === nt}">${n}</button>`).join('')}</div>`
+            + `<div class="mlabel">${WSIDE[sd][0]} loops${LOOP_PRESETS.includes(tl) ? '' : ' · now ' + tl}</div><div class="chips">${LOOP_PRESETS.map(n => `<button class="chip" data-wnd="${sd}:l:${n}" aria-pressed="${n === tl}"${n < w.length ? ' disabled' : ''}>${n}</button>`).join('')}</div>`; }).join('')
+          + `<button role="menuitem" data-m="windings"><span>Configure windings…</span><span></span></button>`; })() : '')
     + (items.length === 1 && items[0].k === 'part' && LIB[items[0].o.type].vary ? (() => { const q = items[0].o;
         return varyList(LIB[q.type]).map(v => { const cur = varyVal(q, v);
           return `<div class="mlabel">${v.label}</div><div class="chips">${Array.from({ length: v.max - v.min + 1 }, (_, i) => v.min + i).map(n => `<button class="chip" data-vary="${v.key}:${n}" aria-pressed="${n === cur}">${n}</button>`).join('')}</div>`; }).join(''); })() : '')
@@ -1937,12 +2091,14 @@ function partMenu(e, raw) {
   document.body.appendChild(menuEl);
   const mw = menuEl.offsetWidth, mh = menuEl.offsetHeight;
   menuEl.style.left = Math.min(e.clientX, window.innerWidth - mw - 8) + 'px';
-  menuEl.style.top = Math.min(e.clientY, window.innerHeight - mh - 8) + 'px';
+  menuEl.style.top = Math.max(8, Math.min(e.clientY, window.innerHeight - mh - 8)) + 'px';
   menuEl.onclick = ev => { const wc = ev.target.closest('[data-wc]'); if (wc) { closeMenu(); colorWires(wc.dataset.wc); return; }
+    const wd = ev.target.closest('[data-wnd]'); if (wd) { if (wd.disabled) return; closeMenu(); const [sd, kind, n] = wd.dataset.wnd.split(':'); (kind === 't' ? setWindTaps : setWindLoops)(items[0].o, sd, +n); return; }
     const cr = ev.target.closest('[data-core]'); if (cr) { closeMenu(); const q = items[0].o, k = cr.dataset.core; if ((q.core || 'iron') !== k) { snapshot(); q.core = k; render(); changed(); setMsg(`${q.ref || LIB[q.type].name}: ${CORE_NAME[k]}`); } return; }
     const vy = ev.target.closest('[data-vary]'); if (vy) { closeMenu(); const [vk, vn] = vy.dataset.vary.split(':'); setVary(items[0].o, +vn, vk); return; }
     const b = ev.target.closest('[data-m]'); if (!b) return; const m = b.dataset.m; closeMenu();
     if (m === 'edit') { const L0 = selLabel; if (L0) editInPlace(sheet.parts.find(x => x.id === L0.id), L0.field); return; }
+    if (m === 'windings') { windingDialog(items[0].o); return; }
     if (m === 'pins') { const q = items[0].o; snapshot(); q.showPins = !q.showPins; if (q.showPins) { q.pins = q.pins || {}; for (const n of Object.keys(shapeOf(q).hooks)) q.pins[n] = q.pins[n] || { t: 'p?' }; } render(); changed(); setMsg(q.showPins ? 'Pin numbers shown. Double-click one to edit it; drag it to move it.' : 'Pin numbers hidden. Their text is kept.'); return; }
     if (m === 'editpin') { editPin(t.o, t.pin); return; }
     if (m === 'resetpin') { snapshot(); const pn = t.o.pins[t.pin]; pn.dx = 0; pn.dy = 0; render(); changed(); return; }

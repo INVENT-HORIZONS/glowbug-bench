@@ -25,6 +25,7 @@ Open `glowbug-bench.html` in any modern browser. Everything is in the one file; 
   - A title block with logo, company, project, sheet title, file name, part number, size, revision, sheet *n* of *m*, and drawn, checked and approved by.
 - **Movable blocks:** the title block and revision chart drag anywhere and stick to any corner.
 - **Project tree:** schematics are listed by file name; double-click to rename.
+- **Live camera:** press K or the Camera button to float a live webcam view over the sheet, for showing your bench while you teach. Drag it, resize it from the corner dot, and use its hover bar to pick a camera, mirror the picture, switch between round and rectangle, or close it. It is never recorded and never appears in exports.
 - **Export:** whole sheet or drawing only, as SVG or PNG, plus a project file (.json) you can import later.
 
 ## Colors
@@ -36,6 +37,7 @@ The sheet uses the newsletter's palette: paper `#FBF8F3`, ink `#17120E`, and glo
 | Key | Action |
 | --- | --- |
 | V / W / T / C / S | Select, Wire, Text, Cut, Snip |
+| K | Show or hide the live camera |
 | R / X / Y | Rotate, flip horizontal, flip vertical |
 | Del | Delete the selection (hides a selected label) |
 | Ctrl+Z / Ctrl+Y | Undo, redo |

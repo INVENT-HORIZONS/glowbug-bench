@@ -298,6 +298,30 @@ button, input, select, textarea { font: inherit; color: inherit; box-sizing: bor
   .app.panel-open .panel { visibility: visible; }
   .app.panel-open .view { visibility: hidden; }
 }
+/* ---------- live camera window (floats over the sheet; never part of an export) ---------- */
+.cam { position: absolute; z-index: 30; left: 0; top: 0; touch-action: none; user-select: none; cursor: grab; }
+.cam[hidden] { display: none; }
+.cam.drag { cursor: grabbing; }
+.cam-frame { position: absolute; inset: 0; overflow: hidden; border-radius: 8px; background: #0E0B09;
+  border: 2px solid var(--chrome); box-shadow: 0 0 0 1px var(--line), 0 10px 28px rgba(20, 12, 4, .32); }
+.cam.round .cam-frame { border-radius: 50%; }
+.cam video { width: 100%; height: 100%; object-fit: cover; display: block; pointer-events: none; }
+.cam.mirror video { transform: scaleX(-1); }
+.cam-wait[hidden] { display: none !important; }
+.cam-wait { position: absolute; inset: 0; display: grid; place-items: center; color: #A3958A; font: 500 11px var(--font-mono); letter-spacing: .08em; text-transform: uppercase; pointer-events: none; }
+.cam-bar { position: absolute; left: 50%; bottom: 10px; transform: translateX(-50%); display: flex; gap: 4px; padding: 3px;
+  border-radius: 16px; background: rgba(23, 18, 14, .72); opacity: 0; transition: opacity .15s; }
+.cam.round .cam-bar { bottom: auto; top: 50%; transform: translate(-50%, -50%); }
+.cam:hover .cam-bar, .cam:focus-within .cam-bar, .cam.drag .cam-bar { opacity: 1; }
+.cam-bar button { width: 26px; height: 26px; display: grid; place-items: center; padding: 0; border: 0; border-radius: 50%;
+  background: transparent; color: #FFF8EE; cursor: pointer; }
+.cam-bar button:hover, .cam-bar button[aria-pressed="true"] { background: rgba(255, 248, 238, .2); }
+.cam-bar button:focus-visible { outline: 2px solid var(--glow); outline-offset: 0; }
+.cam-bar svg { width: 16px; height: 16px; }
+.cam-rs { position: absolute; right: -5px; bottom: -5px; width: 16px; height: 16px; border-radius: 50%; cursor: nwse-resize;
+  background: var(--chrome); border: 1.5px solid var(--accent); opacity: 0; transition: opacity .15s; }
+.cam.round .cam-rs { right: calc(14.6% - 8px); bottom: calc(14.6% - 8px); }
+.cam:hover .cam-rs, .cam.drag .cam-rs { opacity: 1; }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
 </style>
 
@@ -325,6 +349,8 @@ button, input, select, textarea { font: inherit; color: inherit; box-sizing: bor
     <span class="sep"></span>
     <button class="tb" id="bGrid" title="Show grid (G)" aria-pressed="true"><svg viewBox="0 0 24 24" fill="currentColor"><circle cx="6" cy="6" r="1.3"/><circle cx="12" cy="6" r="1.3"/><circle cx="18" cy="6" r="1.3"/><circle cx="6" cy="12" r="1.3"/><circle cx="12" cy="12" r="1.3"/><circle cx="18" cy="12" r="1.3"/><circle cx="6" cy="18" r="1.3"/><circle cx="12" cy="18" r="1.3"/><circle cx="18" cy="18" r="1.3"/></svg><span class="lb">Grid</span></button>
     <button class="tb" id="bHooks" title="Show hooks (H)" aria-pressed="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M2 12h6M16 12h6"/><circle cx="12" cy="12" r="3.5"/></svg><span class="lb">Hooks</span></button>
+    <span class="sep"></span>
+    <button class="tb" id="bCam" title="Live camera view over the sheet (K)" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"><rect x="2.5" y="6.5" width="13" height="11" rx="1.5"/><path d="M15.5 10.5l6-3.5v10l-6-3.5z"/></svg><span class="lb">Camera</span></button>
     <span class="tb-spacer"></span>
     <button class="tb" id="bImport" title="Open a .json project file"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15V3M7 10l5 5 5-5M4 15v5h16v-5"/></svg><span class="lb">Import</span></button>
     <button class="tb" id="bExport" title="Export the sheet" aria-haspopup="menu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12M7 8l5-5 5 5M4 15v5h16v-5"/></svg><span class="lb">Export</span></button>
@@ -373,6 +399,16 @@ button, input, select, textarea { font: inherit; color: inherit; box-sizing: bor
       </g>
     </svg>
     <div class="hint" id="hint"></div>
+    <div class="cam" id="cam" hidden role="region" aria-label="Live camera view">
+      <div class="cam-frame"><video id="camVid" autoplay muted playsinline></video><div class="cam-wait" id="camWait">Starting camera…</div></div>
+      <div class="cam-bar">
+        <button id="camPick" title="Choose camera" aria-label="Choose camera" aria-haspopup="menu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><rect x="2.5" y="6.5" width="13" height="11" rx="1.5"/><path d="M15.5 10.5l6-3.5v10l-6-3.5z"/></svg></button>
+        <button id="camMirror" title="Mirror the picture" aria-label="Mirror" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M12 3v18" stroke-dasharray="2 2"/><path d="M9 7L3 17h6zM15 7l6 10h-6z"/></svg></button>
+        <button id="camShape" title="Round or rectangle" aria-label="Round or rectangle"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle id="camShapeIco" cx="12" cy="12" r="8"/></svg></button>
+        <button id="camClose" title="Close the camera (K)" aria-label="Close camera"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+      </div>
+      <div class="cam-rs" id="camRs" title="Drag to resize"></div>
+    </div>
   </main>
 
   <nav class="toolbox" aria-label="Tools">
@@ -1944,7 +1980,7 @@ document.addEventListener('keydown', e => {
   if (k === 'enter' && wireDraft) { finishDraft(); return; }
   if (k === 'v') setMode('select'); else if (k === 'w') setMode('wire'); else if (k === 't') setMode('text'); else if (k === 'c') setMode(mode === 'cut' ? 'select' : 'cut'); else if (k === 's') setMode(mode === 'snip' ? 'select' : 'snip');
   else if (k === 'r') rotateSel(); else if (k === 'x') flipSel('h'); else if (k === 'y') flipSel('v'); else if (k === 'f') (e.shiftKey ? fitDrawing() : fit());
-  else if (k === 'g') $('bGrid').click(); else if (k === 'h') $('bHooks').click();
+  else if (k === 'g') $('bGrid').click(); else if (k === 'h') $('bHooks').click(); else if (k === 'k') $('bCam').click();
   else if (k === '+' || k === '=') zoomAt(null, 1.25); else if (k === '-') zoomAt(null, 0.8);
   else if (k.startsWith('arrow') && sel.size) {
     e.preventDefault(); snapshot();
@@ -2119,6 +2155,119 @@ $('bExport').onclick = e => {
 };
 document.addEventListener('click', e => { if (menuEl && !menuEl.contains(e.target) && !e.target.closest('#bExport')) closeMenu(); });
 document.addEventListener('keydown', e => { if (menuEl && e.key === 'Escape') closeMenu(); });
+
+/* =====================================================================
+   LIVE CAMERA: a floating webcam window over the sheet, for showing the bench
+   while teaching. Display only; nothing is recorded and it never goes into an export.
+   Settings live in gs.cam. The camera is never opened on load, only from the button or K.
+   ===================================================================== */
+const camEl = $('cam'), camVid = $('camVid');
+const CAM_MIN = 140;
+const camCfg = Object.assign({ x: null, y: null, w: 320, mirror: true, round: false, dev: null }, lsGet('gs.cam', {}) || {});
+let camStream = null, camAspect = 16 / 9, camOn = false;
+const camSave = () => lsSet('gs.cam', camCfg);
+function camH() { return camCfg.round ? camCfg.w : Math.round(camCfg.w / camAspect); }
+function camPlace() {
+  const vr = $('view').getBoundingClientRect(), pad = 8;
+  camCfg.w = Math.max(CAM_MIN, Math.min(camCfg.w, vr.width - 2 * pad, (vr.height - 2 * pad) * (camCfg.round ? 1 : camAspect)));
+  const h = camH();
+  if (camCfg.x == null || camCfg.y == null) { camCfg.x = vr.width - camCfg.w - 16; camCfg.y = vr.height - h - 16; }   // first time: bottom-right
+  camCfg.x = Math.max(pad, Math.min(camCfg.x, vr.width - camCfg.w - pad));
+  camCfg.y = Math.max(pad, Math.min(camCfg.y, vr.height - h - pad));
+  Object.assign(camEl.style, { left: camCfg.x + 'px', top: camCfg.y + 'px', width: camCfg.w + 'px', height: h + 'px' });
+}
+function camLook() {
+  camEl.classList.toggle('mirror', !!camCfg.mirror); camEl.classList.toggle('round', !!camCfg.round);
+  $('camMirror').setAttribute('aria-pressed', !!camCfg.mirror);
+  const ico = $('camShapeIco');   // icon shows the shape you will switch to
+  ico.outerHTML = camCfg.round ? '<rect id="camShapeIco" x="3.5" y="6" width="17" height="12" rx="1.5"/>' : '<circle id="camShapeIco" cx="12" cy="12" r="8"/>';
+  camPlace();
+}
+function camStopTracks() { if (camStream) camStream.getTracks().forEach(t => { t.onended = null; t.stop(); }); camStream = null; camVid.srcObject = null; }
+async function camStart(dev) {
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { setMsg('This browser cannot open a camera here.', true); camHide(); return; }
+  $('camWait').hidden = false; $('camWait').textContent = 'Starting camera…';
+  const want = { width: { ideal: 1280 }, height: { ideal: 720 } };
+  let s = null;
+  try { s = await navigator.mediaDevices.getUserMedia({ audio: false, video: dev ? { ...want, deviceId: { exact: dev } } : want }); }
+  catch (err) {
+    if (dev && (err.name === 'OverconstrainedError' || err.name === 'NotFoundError')) {   // saved camera is gone: use any camera
+      try { s = await navigator.mediaDevices.getUserMedia({ audio: false, video: want }); } catch (e2) { err = e2; }
+    }
+    if (!s) {
+      const why = { NotAllowedError: 'Camera permission was blocked. Allow the camera for this page in the browser’s address bar, then try again.',
+        NotFoundError: 'No camera was found.', NotReadableError: 'The camera is busy in another program. Close it there and try again.' }[err.name];
+      setMsg(why || 'The camera could not be opened (' + err.name + ').', true); camHide(); return;
+    }
+  }
+  if (!camOn) { s.getTracks().forEach(t => t.stop()); return; }   // closed while the browser was asking
+  camStopTracks(); camStream = s;
+  const tr = s.getVideoTracks()[0], st = tr.getSettings ? tr.getSettings() : {};
+  camCfg.dev = st.deviceId || dev || null; camSave();
+  tr.onended = () => { setMsg('The camera was disconnected.', true); camHide(); };
+  camVid.srcObject = s;
+  camVid.onloadedmetadata = () => {
+    if (camVid.videoWidth && camVid.videoHeight) camAspect = camVid.videoWidth / camVid.videoHeight;
+    $('camWait').hidden = true; camPlace();
+  };
+  camVid.play().catch(() => {});
+  setMsg('Camera on: ' + (tr.label || 'camera') + '. Drag to move, corner dot to resize.');
+}
+function camShow() {
+  camOn = true; camEl.hidden = false; $('bCam').setAttribute('aria-pressed', 'true');
+  camLook(); camStart(camCfg.dev);
+}
+function camHide() {
+  camOn = false; camStopTracks(); camEl.hidden = true; $('bCam').setAttribute('aria-pressed', 'false');
+  if (menuEl && menuEl.dataset.cam) closeMenu();
+}
+$('bCam').onclick = () => (camOn ? camHide() : camShow());
+$('camClose').onclick = e => { e.stopPropagation(); camHide(); };
+$('camMirror').onclick = e => { e.stopPropagation(); camCfg.mirror = !camCfg.mirror; camSave(); camLook(); };
+$('camShape').onclick = e => {
+  e.stopPropagation();
+  const cx = camCfg.x + camCfg.w / 2, cy = camCfg.y + camH() / 2;   // keep the centre where it is
+  camCfg.round = !camCfg.round; camCfg.x = cx - camCfg.w / 2; camCfg.y = cy - camH() / 2; camSave(); camLook();
+};
+$('camPick').onclick = async e => {
+  e.stopPropagation();
+  if (menuEl) { const was = menuEl.dataset.cam; closeMenu(); if (was) return; }
+  let cams = [];
+  try { cams = (await navigator.mediaDevices.enumerateDevices()).filter(d => d.kind === 'videoinput'); } catch { /* none listed */ }
+  const r = $('camPick').getBoundingClientRect();
+  menuEl = document.createElement('div'); menuEl.className = 'menu'; menuEl.setAttribute('role', 'menu'); menuEl.dataset.cam = '1';
+  menuEl.innerHTML = cams.length
+    ? cams.map((d, i) => `<button role="menuitemradio" aria-checked="${d.deviceId === camCfg.dev}" data-dev="${esc(d.deviceId)}"><span>${d.deviceId === camCfg.dev ? '● ' : ''}${esc(d.label || 'Camera ' + (i + 1))}</span><span></span></button>`).join('')
+    : '<button role="menuitem" disabled><span>No cameras found</span><span></span></button>';
+  document.body.appendChild(menuEl);
+  const mw = menuEl.getBoundingClientRect().width;
+  menuEl.style.left = Math.max(8, Math.min(window.innerWidth - mw - 8, r.left)) + 'px';
+  menuEl.style.top = Math.max(8, r.top - menuEl.getBoundingClientRect().height - 6) + 'px';
+  menuEl.onclick = ev => { const b = ev.target.closest('[data-dev]'); if (!b) return; ev.stopPropagation(); closeMenu(); if (b.dataset.dev !== camCfg.dev) { camCfg.dev = b.dataset.dev; camSave(); camStart(camCfg.dev); } };
+  const first = menuEl.querySelector('button:not([disabled])'); if (first) first.focus();
+};
+// drag to move, corner dot to resize; keep the sheet's own handlers out of it
+(() => {
+  let st = null;
+  camEl.addEventListener('pointerdown', e => {
+    if (e.button !== 0 || e.target.closest('.cam-bar')) { e.stopPropagation(); return; }
+    e.preventDefault(); e.stopPropagation();
+    st = { rs: e.target === $('camRs'), px: e.clientX, py: e.clientY, x: camCfg.x, y: camCfg.y, w: camCfg.w };
+    camEl.setPointerCapture(e.pointerId); camEl.classList.add('drag');
+  });
+  camEl.addEventListener('pointermove', e => {
+    if (!st) return;
+    const dx = e.clientX - st.px, dy = e.clientY - st.py;
+    if (st.rs) camCfg.w = st.w + Math.max(dx, dy * (camCfg.round ? 1 : camAspect));
+    else { camCfg.x = st.x + dx; camCfg.y = st.y + dy; }
+    camPlace();
+  });
+  const end = () => { if (!st) return; st = null; camEl.classList.remove('drag'); camSave(); };
+  camEl.addEventListener('pointerup', end); camEl.addEventListener('pointercancel', end);
+  ['dblclick', 'contextmenu', 'wheel'].forEach(t => camEl.addEventListener(t, e => { e.stopPropagation(); if (t === 'contextmenu') e.preventDefault(); }));
+  new ResizeObserver(() => { if (camOn) camPlace(); }).observe($('view'));
+  window.addEventListener('pagehide', camStopTracks);
+})();
 
 /* =====================================================================
    START

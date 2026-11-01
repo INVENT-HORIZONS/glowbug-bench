@@ -65,7 +65,12 @@ The owner is Larry Higley (GitHub: INVENT-HORIZONS). The app started as the sche
 - **Tools:** Select V, Wire W, Text T, Cut C (whole item), Snip S (one wire segment).
   - Space flips the corner while drawing a wire.
   - Alt+wheel pans horizontally; Shift+wheel pans vertically.
-- **Local storage keys:** `gs.current`, `gs.doc`, `gs.grid`, `gs.hooks`, `gs.panelw`, `gs.closed`, `gs.wirecolor`, `gs.broken`.
+- **Local storage keys:** `gs.current`, `gs.doc`, `gs.grid`, `gs.hooks`, `gs.panelw`, `gs.closed`, `gs.wirecolor`, `gs.broken`, `gs.cam`.
   - Loading is defensive: saved data is cleaned up first, and a failed load falls back to the example sheet.
   - `#fresh` starts on the example sheet without opening saved work.
+- **Live camera (K / Camera button):** a floating webcam window over the sheet, so Larry can show his bench while he records training videos with his own production software. It is display only: nothing is recorded, and it is a DOM overlay, so it never appears in exports.
+  - Drag to move, corner dot to resize, hover bar for camera picker, mirror, round/rectangle and close. Settings (position, size, mirror, shape, camera) persist in `gs.cam`.
+  - The camera is never opened on page load, only from the button or K. Closing it stops the camera tracks so the camera light goes off.
+  - The app always runs locally from a PC (file://). Larry may remove this feature from the production build.
+  - Possible future: let users record their own training videos (screen + camera + mic via `getDisplayMedia` and `MediaRecorder`) to post. Not started; do not build until Larry asks.
 - **Testing:** the main script is one IIFE. To reach its internals from Playwright, inject `window.__t = {...}` just before the final `})();`, in a scratch copy only.

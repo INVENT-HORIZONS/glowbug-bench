@@ -1,0 +1,2167 @@
+<title>Glowbug Bench</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@800&family=JetBrains+Mono:wght@400;500&family=Libre+Franklin:wght@400;500;600&display=swap">
+<style>
+/* Layout: drafting-bench app shell. Toolbar / [project + parts panel | splitter | paper sheet on a warm well] / status bar.
+   The sheet is always paper-and-ink (it is the newsletter page); the chrome around it follows the theme. */
+:root {
+  --chrome: #EEE7DC;      /* toolbar, panel, status */
+  --chrome-2: #E2D8C9;    /* hover, pressed */
+  --well: #D8CDBC;        /* behind the sheet */
+  --line: #CDBFAC;
+  --fg: #17120E;
+  --muted: #6B5F53;
+  --accent: #9A5210;      /* glow-text: active tool, focus */
+  --accent-fg: #FFF8EE;
+  --sel: #2B6CB0;         /* selection on the sheet: blue, so it never reads as a heater */
+  --danger: #B23A1E;
+  --paper: #FBF8F3;       /* the sheet */
+  --ink: #17120E;
+  --glow: #E8912D;        /* heaters and filaments only */
+  --hook: #2B6CB0;
+  --font-display: "Big Shoulders Display", "Arial Narrow", Impact, sans-serif;
+  --font-ui: "Libre Franklin", "Franklin Gothic Book", "Segoe UI", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", Consolas, ui-monospace, monospace;
+  --bar-h: 46px;
+  --status-h: 26px;
+  --panel-w: 270px;
+  --tools-w: 48px;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --chrome: #1C1714; --chrome-2: #2A231E; --well: #110E0C; --line: #3A3029;
+    --fg: #EDE4D8; --muted: #A3958A; --accent: #E8912D; --accent-fg: #1C1714; --danger: #E2694C;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --chrome: #1C1714; --chrome-2: #2A231E; --well: #110E0C; --line: #3A3029;
+  --fg: #EDE4D8; --muted: #A3958A; --accent: #E8912D; --accent-fg: #1C1714; --danger: #E2694C;
+  color-scheme: dark;
+}
+html, body { height: 100%; }
+body { background: var(--chrome); color: var(--fg); font-family: var(--font-ui); font-size: 13px; overflow: hidden; }
+button, input, select, textarea { font: inherit; color: inherit; box-sizing: border-box; }
+
+.app { height: 100%; display: grid;
+  grid-template-rows: var(--bar-h) minmax(0, 1fr) var(--status-h);
+  grid-template-columns: var(--panel-w) 6px minmax(0, 1fr) var(--tools-w);
+  grid-template-areas: "bar bar bar bar" "panel split view tools" "status status status status"; }
+.app.panel-hidden { grid-template-columns: 0 0 minmax(0, 1fr) var(--tools-w); }
+.app.panel-hidden .panel, .app.panel-hidden .split { visibility: hidden; }
+
+/* ---------- toolbar ---------- */
+.toolbar { grid-area: bar; display: flex; align-items: center; gap: 2px;
+  padding-left: max(10px, env(safe-area-inset-left, 0px)); padding-right: max(10px, env(safe-area-inset-right, 0px));
+  border-bottom: 1px solid var(--line); overflow-x: auto; scrollbar-width: none; }
+.toolbar::-webkit-scrollbar { display: none; }
+.brand { font: 800 19px/1 var(--font-display); letter-spacing: .02em; text-transform: uppercase; white-space: nowrap;
+  padding-right: 12px; margin-right: 4px; border-right: 1px solid var(--line); display: flex; align-items: center; gap: 7px; }
+.brand i { width: 9px; height: 9px; border-radius: 50%; background: var(--glow); box-shadow: 0 0 8px var(--glow); flex: none; }
+.sep { width: 1px; align-self: stretch; margin: 10px 5px; background: var(--line); flex: none; }
+.tb { display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 9px; flex: none;
+  border: 1px solid transparent; border-radius: 4px; background: transparent; cursor: pointer; white-space: nowrap; font-weight: 500; }
+.tb svg { width: 18px; height: 18px; flex: none; }
+.tb:hover:not(:disabled) { background: var(--chrome-2); border-color: var(--line); }
+.tb:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.tb:disabled { opacity: .35; cursor: default; }
+.tb[aria-pressed="true"] { background: var(--accent); color: var(--accent-fg); border-color: transparent; }
+.tb .k { font: 400 10px var(--font-mono); opacity: .65; }
+.tb-spacer { flex: 1 0 8px; }
+.menu-wrap { position: relative; }
+.menu { position: fixed; z-index: 40; min-width: 210px; padding: 4px; background: var(--chrome); border: 1px solid var(--line);
+  border-radius: 6px; box-shadow: 0 10px 28px rgba(20, 12, 4, .28); }
+.menu button { display: flex; justify-content: space-between; gap: 18px; width: 100%; text-align: left; padding: 7px 10px;
+  border: 0; border-radius: 4px; background: transparent; cursor: pointer; }
+.menu button:hover, .menu button:focus-visible { background: var(--accent); color: var(--accent-fg); outline: none; }
+.menu button span:last-child { color: var(--muted); font: 400 11px var(--font-mono); }
+.menu button:hover span:last-child { color: inherit; }
+
+/* ---------- toolbox (right edge) ---------- */
+.toolbox { grid-area: tools; display: flex; flex-direction: column; align-items: center; gap: 4px;
+  padding: 8px 0 calc(8px + env(safe-area-inset-bottom, 0px)); padding-right: env(safe-area-inset-right, 0px);
+  border-left: 1px solid var(--line); background: var(--chrome); overflow-y: auto; }
+.toolbox .tlabel { font: 500 8.5px var(--font-mono); letter-spacing: .14em; text-transform: uppercase; color: var(--muted); margin-bottom: 2px; }
+.tool { position: relative; width: 38px; height: 38px; display: grid; place-items: center; border: 1px solid transparent; border-radius: 5px;
+  background: transparent; cursor: pointer; padding: 0; }
+.tool svg { width: 20px; height: 20px; }
+.tool .k { position: absolute; right: 3px; bottom: 1px; font: 500 8.5px var(--font-mono); opacity: .6; }
+.tool:hover { background: var(--chrome-2); border-color: var(--line); }
+.tool:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.tool[aria-pressed="true"] { background: var(--accent); color: var(--accent-fg); border-color: transparent; }
+.tool[aria-pressed="true"] .k { opacity: .8; }
+.toolbox hr { width: 26px; border: 0; border-top: 1px solid var(--line); margin: 4px 0; }
+
+/* ---------- left panel ---------- */
+.panel { grid-area: panel; min-width: 0; display: flex; flex-direction: column; overflow: hidden; background: var(--chrome); }
+.split { grid-area: split; cursor: col-resize; background: var(--chrome); border-right: 1px solid var(--line); border-left: 1px solid var(--line); }
+.split:hover, .split.drag { background: var(--accent); }
+.sec { border-bottom: 1px solid var(--line); display: flex; flex-direction: column; min-height: 0; }
+.sec:first-child { flex: none; max-height: 34%; overflow-y: auto; }
+.sec-head { display: flex; align-items: center; justify-content: space-between; gap: 6px; padding: 9px 12px 6px;
+  font: 500 10.5px var(--font-mono); letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
+.sec-head button { border: 1px solid var(--line); background: transparent; border-radius: 3px; padding: 1px 7px; cursor: pointer; font: 500 11px var(--font-ui); letter-spacing: 0; text-transform: none; color: var(--fg); }
+.sec-head button:hover { background: var(--chrome-2); }
+.proj-name { margin: 0 12px 6px; padding: 4px 6px; border: 1px solid transparent; border-radius: 3px; background: transparent;
+  font: 600 14px var(--font-ui); width: calc(100% - 24px); }
+.proj-name:hover { border-color: var(--line); }
+.proj-name:focus { border-color: var(--accent); outline: none; background: var(--paper); color: var(--ink); }
+.tree { padding: 0 6px 8px; display: grid; gap: 1px; outline: none; }
+.tnode { display: flex; align-items: center; gap: 5px; padding: 4px 6px; border-radius: 4px; cursor: pointer; min-width: 0; }
+.tnode:hover { background: var(--chrome-2); }
+.tnode.on { background: var(--accent); color: var(--accent-fg); }
+.tnode.root { font-weight: 600; }
+.tnode .car { width: 14px; height: 14px; flex: none; border: 0; background: transparent; padding: 0; cursor: pointer; color: inherit; font-size: 10px; display: grid; place-items: center; transition: transform .12s; }
+.tnode .car.open { transform: rotate(90deg); }
+.tnode svg { width: 15px; height: 15px; flex: none; opacity: .75; }
+.tnode .nm { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tnode .ct { font: 400 10.5px var(--font-mono); opacity: .7; }
+.tnode .x { border: 0; background: transparent; cursor: pointer; padding: 0 3px; opacity: 0; color: inherit; font-size: 14px; }
+.tnode:hover .x, .tnode.on .x { opacity: .75; }
+.tnode input { flex: 1; min-width: 0; padding: 1px 4px; border: 1px solid var(--accent); border-radius: 3px; background: var(--paper); color: var(--ink); font: inherit; }
+.tkids { display: grid; gap: 1px; padding-left: 14px; margin-left: 9px; border-left: 1px dotted var(--line); }
+.tree:focus-visible .tnode.on { outline: 2px solid var(--fg); outline-offset: -2px; }
+.sheet-row { display: flex; align-items: center; gap: 6px; padding: 5px 8px; border-radius: 4px; cursor: pointer; }
+.sheet-row:hover { background: var(--chrome-2); }
+.sheet-row.on { background: var(--accent); color: var(--accent-fg); }
+.sheet-row svg { width: 14px; height: 14px; flex: none; opacity: .7; }
+.sheet-row .nm { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sheet-row .ct { font: 400 10.5px var(--font-mono); opacity: .7; }
+.sheet-row .x { border: 0; background: transparent; cursor: pointer; padding: 0 3px; opacity: 0; color: inherit; font-size: 14px; }
+.sheet-row:hover .x, .sheet-row.on .x { opacity: .75; }
+.sheet-row input { flex: 1; min-width: 0; padding: 1px 4px; border: 1px solid var(--accent); border-radius: 3px; background: var(--paper); color: var(--ink); }
+.confirm { display: flex; align-items: center; gap: 6px; padding: 5px 8px; font-size: 12px; background: var(--chrome-2); border-radius: 4px; }
+.confirm button { border: 1px solid var(--line); border-radius: 3px; background: var(--chrome); padding: 1px 8px; cursor: pointer; }
+.confirm button.yes { background: var(--danger); color: #fff; border-color: transparent; }
+
+.parts { flex: 1 1 auto; min-height: 120px; }
+.docsec { flex: none; max-height: 46%; overflow-y: auto; }
+.docsec > summary { list-style: none; cursor: pointer; }
+.docsec > summary::-webkit-details-marker { display: none; }
+.docsec > summary .tw { display: inline-block; margin-right: 6px; transition: transform .12s; }
+.docsec[open] > summary .tw { transform: rotate(90deg); }
+.docbody { display: grid; gap: 9px; padding: 0 12px 12px; }
+.seg { display: grid; grid-template-columns: repeat(4, 1fr); gap: 3px; }
+.seg.two { grid-template-columns: 1fr 1fr; }
+.seg button { border: 1px solid var(--line); background: transparent; border-radius: 3px; padding: 4px 2px; cursor: pointer; display: grid; gap: 1px; line-height: 1.15; }
+.seg button b { font: 600 13px var(--font-ui); }
+.seg button small { font: 400 9.5px var(--font-mono); color: var(--muted); }
+.seg button[aria-pressed="true"] { background: var(--accent); color: var(--accent-fg); border-color: transparent; }
+.seg button[aria-pressed="true"] small { color: inherit; opacity: .85; }
+.seg button:hover { border-color: var(--accent); }
+.dnote { font-size: 11.5px; color: var(--muted); line-height: 1.4; }
+.dsub { font: 500 10px var(--font-mono); letter-spacing: .12em; text-transform: uppercase; color: var(--muted); margin-top: 4px; padding-top: 8px; border-top: 1px dashed var(--line); }
+.checks { display: grid; gap: 4px; }
+.checks label { display: flex; align-items: center; gap: 7px; cursor: pointer; }
+.logo-row { display: flex; align-items: center; gap: 8px; }
+.logo-row img { width: 46px; height: 34px; object-fit: contain; background: var(--paper); border: 1px solid var(--line); border-radius: 3px; }
+.logo-row .ph { width: 46px; height: 34px; border: 1px dashed var(--line); border-radius: 3px; display: grid; place-items: center; font-size: 9px; color: var(--muted); }
+.logo-row button, .addrev { border: 1px solid var(--line); background: transparent; border-radius: 3px; padding: 3px 8px; cursor: pointer; }
+.logo-row button:hover, .addrev:hover { background: var(--chrome-2); }
+.revs { display: grid; gap: 3px; }
+.revrow { display: grid; grid-template-columns: 34px minmax(0, 1fr) 70px 52px 18px; gap: 3px; align-items: center; }
+.revrow.head { font: 500 9px var(--font-mono); letter-spacing: .08em; color: var(--muted); text-transform: uppercase; }
+.revrow input { width: 100%; padding: 3px 4px; border: 1px solid var(--line); border-radius: 3px; background: var(--paper); color: var(--ink); font-size: 12px; min-width: 0; }
+.revrow input:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+.revrow button { border: 0; background: transparent; cursor: pointer; color: var(--muted); font-size: 14px; padding: 0; }
+.revrow button:hover { color: var(--danger); }
+.fr { stroke: var(--ink); fill: none; stroke-width: 1.1; }
+.fr-b { stroke: var(--ink); fill: none; stroke-width: 2; }
+.fr-lab { font-family: "JetBrains Mono", Consolas, monospace; font-size: 7.5px; letter-spacing: .08em; fill: #5C5248; }
+.fr-val { font-family: "Libre Franklin", sans-serif; fill: var(--ink); }
+.fr-zone { font-family: "JetBrains Mono", Consolas, monospace; font-size: 10px; fill: #5C5248; }
+.fr-co { font-family: "Big Shoulders Display", "Arial Narrow", sans-serif; font-weight: 800; fill: var(--ink); }
+.search { margin: 0 12px 6px; padding: 5px 8px; border: 1px solid var(--line); border-radius: 4px; background: var(--paper); color: var(--ink); }
+.search:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+.lib { overflow-y: auto; padding: 0 6px 10px; flex: 1; min-height: 0; }
+.cat { margin-top: 4px; }
+.cat > summary { list-style: none; cursor: pointer; padding: 5px 6px; font: 600 12px var(--font-ui); display: flex; align-items: center; gap: 6px; border-radius: 3px; }
+.cat > summary::-webkit-details-marker { display: none; }
+.cat > summary::before { content: "▸"; font-size: 10px; color: var(--muted); transition: transform .12s; }
+.cat[open] > summary::before { transform: rotate(90deg); }
+.cat > summary:hover { background: var(--chrome-2); }
+.cat > summary small { margin-left: auto; font: 400 10.5px var(--font-mono); color: var(--muted); }
+.subcat { font: 500 9.5px var(--font-mono); letter-spacing: .12em; text-transform: uppercase; color: var(--muted); padding: 4px 4px 0; }
+.tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(74px, 1fr)); gap: 4px; padding: 3px 2px 6px; }
+.tile { display: grid; grid-template-rows: 46px auto; gap: 2px; align-items: center; justify-items: center; padding: 4px 3px 5px;
+  border: 1px solid var(--line); border-radius: 4px; background: var(--paper); color: var(--ink); cursor: pointer; text-align: center; }
+.tile svg { width: 100%; height: 46px; }
+.tile svg .ink, .tile svg .env, .tile svg .htr, .tile svg .dash, .tile svg .tgt { vector-effect: non-scaling-stroke; stroke-width: .75px; }
+.tile svg .dash { stroke-dasharray: 2 1.4; }
+.tile span { font-size: 10.5px; line-height: 1.2; }
+.tile:hover { border-color: var(--accent); }
+.tile.armed { outline: 2px solid var(--accent); outline-offset: 0; border-color: var(--accent); }
+.tile:focus-visible { outline: 2px solid var(--accent); }
+
+.props { flex: none; max-height: 42%; overflow-y: auto; border-bottom: 0; border-top: 1px solid var(--line); }
+.props .body { padding: 0 12px 12px; display: grid; gap: 8px; }
+.props .empty { color: var(--muted); line-height: 1.45; font-size: 12px; }
+.props .what { font: 600 13px var(--font-ui); }
+.props .what small { display: block; font: 400 11px var(--font-mono); color: var(--muted); margin-top: 2px; }
+.field { display: grid; grid-template-columns: 62px minmax(0, 1fr); align-items: center; gap: 8px; }
+.field label { font-size: 12px; color: var(--muted); }
+.field input[type=text], .field textarea, .field select { width: 100%; padding: 4px 6px; border: 1px solid var(--line); border-radius: 3px; background: var(--paper); color: var(--ink); min-width: 0; }
+.field textarea { resize: vertical; min-height: 44px; font-family: var(--font-ui); }
+.field input:focus, .field textarea:focus, .field select:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+.row-btns { display: flex; flex-wrap: wrap; gap: 5px; }
+.row-btns button { border: 1px solid var(--line); background: transparent; border-radius: 3px; padding: 4px 9px; cursor: pointer; }
+.row-btns button:hover { background: var(--chrome-2); }
+.row-btns button.del { color: var(--danger); }
+.pins { font: 400 11px/1.5 var(--font-mono); color: var(--muted); }
+
+/* ---------- canvas ---------- */
+.view { grid-area: view; position: relative; overflow: hidden; background: var(--well); min-width: 0; touch-action: none; }
+#svg { position: absolute; inset: 0; width: 100%; height: 100%; display: block; user-select: none; -webkit-user-select: none; }
+.view.mode-wire #svg, .view.mode-place #svg, .view.mode-text #svg { cursor: crosshair; }
+.view.mode-cut #svg, .view.mode-snip #svg { cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%23B23A1E' stroke-width='2' stroke-linecap='round'%3E%3Ccircle cx='6' cy='6' r='3' fill='white'/%3E%3Ccircle cx='6' cy='18' r='3' fill='white'/%3E%3Cpath d='M8.6 7.6L20 18M8.6 16.4L20 6'/%3E%3C/svg%3E") 20 12, crosshair; }
+.cutmark { fill: none; stroke: var(--danger); stroke-width: 2; stroke-dasharray: 4 3; }
+.cutwire { fill: none; stroke: var(--danger); stroke-width: 5; opacity: .45; stroke-linecap: round; stroke-linejoin: round; }
+.view.panning #svg { cursor: grabbing; }
+.inplace { position: absolute; z-index: 5; padding: 1px 3px; border: 1.5px solid var(--sel); border-radius: 2px; background: #FFFFFF; color: #17120E; font-family: 'Libre Franklin', sans-serif; outline: none; box-shadow: 0 2px 8px rgba(20,12,4,.25); }
+.hint { position: absolute; left: 12px; bottom: 12px; padding: 6px 10px; border-radius: 4px; background: color-mix(in srgb, var(--chrome) 92%, transparent);
+  border: 1px solid var(--line); font-size: 12px; color: var(--muted); pointer-events: none; max-width: calc(100% - 24px); }
+.hint b { color: var(--fg); font-weight: 600; }
+
+/* sheet drawing */
+.ink { stroke: var(--ink); fill: none; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.env { stroke: var(--ink); fill: none; stroke-width: 1.8; }
+.solid { fill: var(--ink); }
+.htr { stroke: var(--glow); fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.tgt { stroke: #2F8A45; fill: none; stroke-width: 1.8; stroke-linecap: round; }
+.dash { stroke: var(--ink); fill: none; stroke-width: 1.6; stroke-dasharray: 5 3.4; }
+.wire { stroke: var(--ink); fill: none; stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; }
+.wire-hit { stroke: transparent; fill: none; stroke-width: 10; }
+.jdot { fill: var(--ink); }
+.swatches { display: flex; flex-wrap: wrap; gap: 6px; padding: 4px 0 2px; }
+.sw, .menu button.sw { width: 20px; height: 20px; flex: none; display: block; padding: 0; border-radius: 50%; border: 2px solid var(--paper);
+  box-shadow: 0 0 0 1px var(--line); cursor: pointer; }
+.sw[aria-pressed="true"], .menu button.sw[aria-pressed="true"] { box-shadow: 0 0 0 2px var(--accent); }
+.sw:hover, .sw:focus-visible, .menu button.sw:hover, .menu button.sw:focus-visible { box-shadow: 0 0 0 2px var(--accent); outline: none; }
+.menu .swatches { padding: 2px 10px 8px; }
+.chips { display: grid; grid-template-columns: repeat(7, 26px); gap: 3px; padding: 2px 10px 8px; }
+.menu button.chip { width: 26px; height: 22px; padding: 0; display: flex; justify-content: center; align-items: center; text-align: center; font: 500 11px var(--font-mono); border: 1px solid var(--line); border-radius: 4px; }
+.menu button.chip[aria-pressed="true"] { background: var(--accent); color: var(--accent-fg); border-color: transparent; }
+.menu .mlabel { padding: 5px 10px 4px; font: 500 10.5px var(--font-mono); letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
+.pinno { font-family: "Libre Franklin", sans-serif; font-size: 8.5px; fill: var(--ink); }
+.pinlead { stroke: #5C5248; stroke-width: .8; stroke-dasharray: 1.2 2; fill: none; }
+.lbl { font-family: "Libre Franklin", sans-serif; font-size: 11px; fill: var(--ink); }
+.lbl .ref, .lbl.ref { font-weight: 600; }
+.stxt { font-family: "Libre Franklin", sans-serif; fill: var(--ink); white-space: pre; }
+.hookc { fill: var(--paper); stroke: var(--hook); stroke-width: 1.2; }
+.hookc.hot { fill: var(--hook); }
+.selbox { fill: color-mix(in srgb, var(--sel) 8%, transparent); stroke: var(--sel); stroke-width: 1; stroke-dasharray: 4 3; }
+.selwire { stroke: var(--sel); stroke-width: 4; opacity: .35; fill: none; stroke-linecap: round; stroke-linejoin: round; }
+.band { fill: color-mix(in srgb, var(--sel) 10%, transparent); stroke: var(--sel); stroke-width: 1; }
+.ghost { opacity: .55; }
+.preview { stroke: var(--sel); stroke-width: 1.4; fill: none; stroke-dasharray: 5 4; }
+.cursor-x { stroke: var(--sel); stroke-width: 1; }
+
+/* ---------- status bar ---------- */
+.status { grid-area: status; display: flex; align-items: center; border-top: 1px solid var(--line);
+  padding-left: max(10px, env(safe-area-inset-left, 0px)); padding-right: max(10px, env(safe-area-inset-right, 0px));
+  font: 400 11.5px var(--font-mono); color: var(--muted); white-space: nowrap; overflow: hidden; font-variant-numeric: tabular-nums; }
+.status > span { padding: 0 12px; border-right: 1px solid var(--line); line-height: 1; }
+.status > span:first-child { padding-left: 0; color: var(--fg); font-weight: 500; }
+.status .msg { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; border-right: 0; color: var(--fg); font-family: var(--font-ui); }
+.status .msg.err { color: var(--danger); }
+.status .save i { display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin-right: 6px; background: var(--muted); vertical-align: 0; }
+.status .save[data-k="ok"] i { background: #3E9A5A; }
+.status .save[data-k="busy"] i { background: var(--glow); }
+.status .save[data-k="err"] i { background: var(--danger); }
+
+/* dialog */
+.dlg-back { position: fixed; inset: 0; background: rgba(20, 12, 4, .35); display: grid; place-items: center; z-index: 50; padding: 16px; }
+.dlg { width: min(460px, 100%); max-height: 80vh; display: flex; flex-direction: column; background: var(--chrome); border: 1px solid var(--line); border-radius: 8px; box-shadow: 0 20px 50px rgba(20, 12, 4, .35); }
+.dlg h2 { margin: 0; padding: 14px 16px 8px; font: 800 22px/1 var(--font-display); text-transform: uppercase; letter-spacing: .02em; }
+.dlg p { margin: 0 16px 10px; color: var(--muted); }
+.dlg .list { overflow-y: auto; padding: 0 10px; display: grid; gap: 2px; }
+.dlg .item { display: flex; align-items: center; gap: 8px; padding: 8px; border-radius: 4px; cursor: pointer; }
+.dlg .item:hover { background: var(--chrome-2); }
+.dlg .item .nm { flex: 1; min-width: 0; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dlg .item .meta { font: 400 11px var(--font-mono); color: var(--muted); }
+.dlg .item .x { border: 1px solid var(--line); background: transparent; border-radius: 3px; cursor: pointer; padding: 1px 7px; }
+.dlg .foot { display: flex; justify-content: flex-end; gap: 8px; padding: 12px 16px; }
+.dlg .foot button { border: 1px solid var(--line); border-radius: 4px; padding: 6px 14px; background: transparent; cursor: pointer; }
+.dlg .foot button.pri { background: var(--accent); color: var(--accent-fg); border-color: transparent; }
+
+@media (max-width: 760px) {
+  .tb .lb, .tb .k, .brand span { display: none; }
+  :root { --panel-w: 200px; }
+}
+@media (max-width: 520px) {
+  .app { grid-template-columns: 0 0 minmax(0, 1fr) var(--tools-w); }
+  .app .panel, .app .split { visibility: hidden; }
+  .app.panel-open { grid-template-columns: minmax(0, 1fr) 0 0 0; }
+  .app.panel-open .toolbox { visibility: hidden; }
+  .app.panel-open .panel { visibility: visible; }
+  .app.panel-open .view { visibility: hidden; }
+}
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+
+<div class="app" id="app">
+  <header class="toolbar" role="toolbar" aria-label="Main toolbar">
+    <span class="brand"><i></i><span>Glowbug Bench</span></span>
+    <button class="tb" id="bPanel" title="Show or hide the project panel" aria-pressed="true">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="3" y="4" width="18" height="16" rx="1"/><path d="M9 4v16"/></svg></button>
+    <span class="sep"></span>
+    <button class="tb" id="bNew" title="New project"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"><path d="M6 3h8l4 4v14H6z"/><path d="M12 10v7M8.5 13.5h7"/></svg><span class="lb">New</span></button>
+    <button class="tb" id="bOpen" title="Open one of your projects"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"><path d="M3 7h6l2 2h10v10H3z"/><path d="M3 7V5h6"/></svg><span class="lb">Projects</span></button>
+    <button class="tb" id="bSave" title="Save now (Ctrl+S). Changes also save on their own."><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"><path d="M4 4h13l3 3v13H4z"/><path d="M8 4v5h8V4M8 20v-6h8v6"/></svg><span class="lb">Save</span></button>
+    <span class="sep"></span>
+    <button class="tb" id="bUndo" title="Undo (Ctrl+Z)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M9 7L4 12l5 5"/><path d="M4 12h10a6 6 0 0 1 0 12h-2" transform="translate(0 -5)"/></svg></button>
+    <button class="tb" id="bRedo" title="Redo (Ctrl+Y)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M15 7l5 5-5 5"/><path d="M20 12H10a6 6 0 0 0 0 12h2" transform="translate(0 -5)"/></svg></button>
+    <span class="sep"></span>
+    <button class="tb" id="bRot" title="Rotate 90° (R)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M20 12a8 8 0 1 1-2.3-5.6"/><path d="M20 4v5h-5"/></svg><span class="k">R</span></button>
+    <button class="tb" id="bFlip" title="Flip horizontal (X)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"><path d="M12 3v18" stroke-dasharray="2 2"/><path d="M9 7L3 17h6zM15 7l6 10h-6z"/></svg><span class="k">X</span></button>
+    <button class="tb" id="bFlipV" title="Flip vertical (Y)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"><path d="M3 12h18" stroke-dasharray="2 2"/><path d="M7 9L17 3v6zM7 15l10 6v-6z"/></svg><span class="k">Y</span></button>
+    <button class="tb" id="bDel" title="Delete the selection (Del)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/></svg><span class="k">Del</span></button>
+    <span class="sep"></span>
+    <button class="tb" id="bZo" title="Zoom out (−)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5L21 21M7.5 10.5h6"/></svg></button>
+    <button class="tb" id="bZi" title="Zoom in (+)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5L21 21M7.5 10.5h6M10.5 7.5v6"/></svg></button>
+    <button class="tb" id="bFit" title="Fit the whole sheet (F). Shift+F fits just the drawing."><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg><span class="lb">Fit</span></button>
+    <span class="sep"></span>
+    <button class="tb" id="bGrid" title="Show grid (G)" aria-pressed="true"><svg viewBox="0 0 24 24" fill="currentColor"><circle cx="6" cy="6" r="1.3"/><circle cx="12" cy="6" r="1.3"/><circle cx="18" cy="6" r="1.3"/><circle cx="6" cy="12" r="1.3"/><circle cx="12" cy="12" r="1.3"/><circle cx="18" cy="12" r="1.3"/><circle cx="6" cy="18" r="1.3"/><circle cx="12" cy="18" r="1.3"/><circle cx="18" cy="18" r="1.3"/></svg><span class="lb">Grid</span></button>
+    <button class="tb" id="bHooks" title="Show hooks (H)" aria-pressed="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M2 12h6M16 12h6"/><circle cx="12" cy="12" r="3.5"/></svg><span class="lb">Hooks</span></button>
+    <span class="tb-spacer"></span>
+    <button class="tb" id="bImport" title="Open a .json project file"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15V3M7 10l5 5 5-5M4 15v5h16v-5"/></svg><span class="lb">Import</span></button>
+    <button class="tb" id="bExport" title="Export the sheet" aria-haspopup="menu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12M7 8l5-5 5 5M4 15v5h16v-5"/></svg><span class="lb">Export</span></button>
+    <input type="file" id="fileIn" accept=".json,application/json" hidden>
+    <input type="file" id="logoIn" accept="image/png,image/jpeg,image/svg+xml,image/webp" hidden>
+  </header>
+
+  <aside class="panel" id="panel" aria-label="Project">
+    <section class="sec">
+      <div class="sec-head"><span>Project</span><button id="bAddSheet" title="Add a sheet">+ Sheet</button></div>
+      <div class="tree" id="sheets" role="tree" aria-label="Project schematics"></div>
+    </section>
+    <details class="sec docsec" id="docSec" open>
+      <summary class="sec-head"><span><span class="tw">▸</span>Document</span><span id="docSize"></span></summary>
+      <div class="docbody" id="docBody"></div>
+    </details>
+    <section class="sec parts">
+      <div class="sec-head"><span>Parts</span><span id="partCount"></span></div>
+      <input class="search" id="search" type="search" placeholder="Find a part (triode, 2A3, ground…)" aria-label="Find a part">
+      <div class="lib" id="lib"></div>
+    </section>
+    <section class="sec props" id="props" aria-label="Properties">
+      <div class="sec-head"><span>Properties</span></div>
+      <div class="body" id="propBody"></div>
+    </section>
+  </aside>
+  <div class="split" id="split" role="separator" aria-orientation="vertical" aria-label="Resize the project panel" tabindex="0"></div>
+
+  <main class="view" id="view">
+    <svg id="svg" xmlns="http://www.w3.org/2000/svg" aria-label="Schematic sheet">
+      <defs>
+        <pattern id="gMinor" width="10" height="10" patternUnits="userSpaceOnUse"><circle cx="0" cy="0" r=".7" fill="#C9BBA6"/></pattern>
+        <pattern id="gMajor" width="50" height="50" patternUnits="userSpaceOnUse"><rect width="50" height="50" fill="url(#gMinor)"/><circle cx="0" cy="0" r="1.25" fill="#B4A48D"/></pattern>
+      </defs>
+      <g id="world">
+        <rect id="sheetShadow" style="fill:rgba(40,25,10,.18)"/>
+        <rect id="paper" style="fill:var(--paper)"/>
+        <rect id="gridRect" fill="url(#gMajor)"/>
+        <g id="layerFrame"></g>
+        <g id="layerParts"></g>
+        <g id="layerWires"></g>
+        <g id="layerText"></g>
+        <g id="layerSel"></g>
+        <g id="layerHooks"></g>
+        <g id="layerOver"></g>
+      </g>
+    </svg>
+    <div class="hint" id="hint"></div>
+  </main>
+
+  <nav class="toolbox" aria-label="Tools">
+    <span class="tlabel">Tools</span>
+    <button class="tool" id="mSelect" title="Select and move (V)" aria-label="Select" aria-pressed="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"><path d="M5 3l14 8-6 1.5L10 19z"/></svg><span class="k">V</span></button>
+    <button class="tool" id="mWire" title="Draw a wire (W). Or click any hook." aria-label="Wire" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="4" cy="18" r="2"/><path d="M6 18h6V6h6"/><circle cx="20" cy="6" r="2"/></svg><span class="k">W</span></button>
+    <button class="tool" id="mWColor" title="Wire color" aria-label="Wire color" aria-haspopup="menu"><svg viewBox="0 0 24 24" fill="none" stroke-linecap="round"><path id="mWColorLine" d="M4 17h6V7h10" stroke="#17120E" stroke-width="3"/></svg></button>
+    <button class="tool" id="mText" title="Add text (T)" aria-label="Text" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M5 6V4h14v2M12 4v16M9 20h6"/></svg><span class="k">T</span></button>
+    <hr>
+    <button class="tool" id="mCut" title="Cut: click a part, wire or text to delete it (C)" aria-label="Cut" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M8.6 7.6L20 18M8.6 16.4L20 6"/></svg><span class="k">C</span></button>
+    <button class="tool" id="mSnip" title="Snip: click a wire to cut just that segment; parts and text are deleted (S)" aria-label="Snip" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 3v16" stroke-dasharray="0.1 3.2" stroke-width="2.2"/><path d="M4 20h17" stroke-width="2"/><circle cx="18.5" cy="5.5" r="2.4"/><circle cx="18.5" cy="12.5" r="2.4"/><path d="M16.3 6.6L6.5 11.2M16.3 11.4L6.5 6.8"/></svg><span class="k">S</span></button>
+  </nav>
+
+  <footer class="status">
+    <span id="stMode">Select</span>
+    <span class="msg" id="stMsg">Ready</span>
+    <span id="stXY">x – y –</span>
+    <span id="stCount">0 parts · 0 wires</span>
+    <span id="stZoom">100%</span>
+    <span class="save" id="stSave" data-k="off"><i></i><b id="stSaveT" style="font-weight:400">Not saved yet</b></span>
+  </footer>
+</div>
+
+<script>
+window.addEventListener('error', e => { const m = document.getElementById('stMsg'); if (m) { m.textContent = 'Something went wrong: ' + (e.message || 'unknown error') + '. Undo (Ctrl+Z) usually recovers.'; m.classList.add('err'); } });
+(() => {
+'use strict';
+const $ = id => document.getElementById(id);
+const G = 10;                      // grid pitch in px; every hook lands on a multiple of G
+const snap = v => Math.round(v / G) * G;
+const LG = G / 2;                  // labels (ref des and value) move on a finer 0.05 in grid
+const snapL = v => Math.round(v / LG) * LG;
+const uid = () => Math.random().toString(36).slice(2, 10);
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+/* =====================================================================
+   SYMBOL LIBRARY
+   Every symbol is drawn in its own coordinates (px). Hooks sit on the
+   10 px grid, so rotation about (0,0) keeps them on the grid.
+   Classes: ink = element, env = envelope, dash = dashed grid,
+   htr = heater / filament (always orange).
+   ===================================================================== */
+const ln = (x1, y1, x2, y2, c = 'ink') => `<line class="${c}" x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}"/>`;
+const pl = (pts, c = 'ink') => `<polyline class="${c}" points="${pts.map(p => p.join(',')).join(' ')}"/>`;
+const pg = (pts, c = 'ink') => `<polygon class="${c}" points="${pts.map(p => p.join(',')).join(' ')}"/>`;
+const ci = (x, y, r, c = 'ink') => `<circle class="${c}" cx="${x}" cy="${y}" r="${r}"/>`;
+const pa = (d, c = 'ink') => `<path class="${c}" d="${d}"/>`;
+const tx = (x, y, s, size = 10, anchor = 'middle') => `<text x="${x}" y="${y}" text-anchor="${anchor}" font-family="Libre Franklin, sans-serif" font-size="${size}" style="fill:var(--ink)">${s}</text>`;
+function zig(x1, y1, x2, y2, n, a) {
+  const L = Math.hypot(x2 - x1, y2 - y1), ux = (x2 - x1) / L, uy = (y2 - y1) / L, nx = -uy, ny = ux, pts = [[x1, y1]];
+  for (let i = 1; i < n * 2; i++) { const t = i / (n * 2), s = i % 2 ? a : -a; pts.push([+(x1 + ux * L * t + nx * s).toFixed(2), +(y1 + uy * L * t + ny * s).toFixed(2)]); }
+  pts.push([x2, y2]); return pts;
+}
+// coil of n loops along x from x0, each 10 px wide, bulging toward -y (up) when dir = -1
+const coilX = (x0, y, n, dir = -1) => { let d = `M${x0} ${y}`; for (let i = 0; i < n; i++) d += ` a5 5 0 0 ${dir < 0 ? 1 : 0} 10 0`; return d; };
+const coilY = (x, y0, n, dir = 1) => { let d = `M${x} ${y0}`; for (let i = 0; i < n; i++) d += ` a5 5 0 0 ${dir > 0 ? 1 : 0} 0 10`; return d; };
+const stadium = (cx, r) => `M${-cx} ${-r} H${cx} A${r} ${r} 0 0 1 ${cx} ${r} H${-cx} A${r} ${r} 0 0 1 ${-cx} ${-r} Z`;
+
+const LIB = {};
+function def(type, o) { LIB[type] = Object.assign({ type, pre: '', value: '', tags: '' }, o); }
+
+/* ---- passives ---- */
+def('resistor', { cat: 'Passive', name: 'Resistor', pre: 'R', value: '100 kΩ', hooks: { 1: [0, 0], 2: [60, 0] },
+  draw: () => ln(0, 0, 15, 0) + pl(zig(15, 0, 45, 0, 6, 6)) + ln(45, 0, 60, 0) });
+def('pot', { cat: 'Passive', name: 'Potentiometer', pre: 'R', value: '500 kΩ', hooks: { 1: [0, 0], 2: [60, 0], W: [30, -30] },
+  draw: () => ln(0, 0, 15, 0) + pl(zig(15, 0, 45, 0, 6, 6)) + ln(45, 0, 60, 0) + ln(30, -30, 30, -13) + pg([[26, -14], [34, -14], [30, -8]]).replace('class="ink"', 'class="ink" style="fill:var(--ink)"') });
+def('capacitor', { cat: 'Passive', name: 'Capacitor', pre: 'C', value: '0.022 µF', hooks: { 1: [0, 0], 2: [40, 0] },
+  draw: () => ln(0, 0, 17, 0) + ln(17, -10, 17, 10) + ln(23, -10, 23, 10) + ln(23, 0, 40, 0) });
+def('electrolytic', { cat: 'Passive', name: 'Electrolytic', pre: 'C', value: '47 µF 450 V', hooks: { '+': [0, 0], '−': [40, 0] },
+  draw: () => ln(0, 0, 17, 0) + ln(17, -10, 17, 10) + pa('M26 -10 Q21 0 26 10') + ln(23, 0, 40, 0) + ln(8, -10, 8, -4) + ln(5, -7, 11, -7) });
+def('inductor', { cat: 'Passive', name: 'Inductor', pre: 'L', value: '2.5 mH', hooks: { 1: [0, 0], 2: [60, 0] },
+  draw: () => ln(0, 0, 10, 0) + pa(coilX(10, 0, 4)) + ln(50, 0, 60, 0) });
+def('choke', { cat: 'Passive', name: 'Choke (iron core)', pre: 'L', value: '10 H', hooks: { 1: [0, 0], 2: [60, 0] },
+  draw: () => ln(0, 0, 10, 0) + pa(coilX(10, 0, 4)) + ln(50, 0, 60, 0) + ln(10, -9, 50, -9) + ln(10, -12, 50, -12) });
+def('inductor_ct', { cat: 'Passive', name: 'Winding, center tap', pre: 'T', value: '6.3 V CT', tags: 'heater winding secondary', hooks: { 1: [0, 0], 2: [60, 0], CT: [30, 20] },
+  draw: () => ln(0, 0, 10, 0) + pa(coilX(10, 0, 4)) + ln(50, 0, 60, 0) + ln(30, 0, 30, 20) });
+def('diode', { cat: 'Semiconductors', name: 'Diode (solid-state)', pre: 'D', value: '1N4007', hooks: { A: [0, 0], K: [40, 0] },
+  draw: () => ln(0, 0, 13, 0) + pg([[13, -8], [13, 8], [27, 0]]) + ln(27, -8, 27, 8) + ln(27, 0, 40, 0) });
+def('diode_schottky', { cat: 'Semiconductors', name: 'Schottky diode', pre: 'D', value: '1N5819', hooks: { A: [0, 0], K: [40, 0] },
+  draw: () => ln(0, 0, 13, 0) + pg([[13, -8], [13, 8], [27, 0]]) + pl([[31, 5], [31, 8], [27, 8], [27, -8], [23, -8], [23, -5]]) + ln(27, 0, 40, 0) });
+def('diode_zener', { cat: 'Semiconductors', name: 'Zener diode', pre: 'D', value: '1N4742A', hooks: { A: [0, 0], K: [40, 0] },
+  draw: () => ln(0, 0, 13, 0) + pg([[13, -8], [13, 8], [27, 0]]) + pl([[31, 11], [27, 8], [27, -8], [23, -11]]) + ln(27, 0, 40, 0) });
+
+// Bipolar transistors: base on the left, collector up, emitter down; the arrow on the emitter
+// points out for NPN and in for PNP.
+const bjt = arrow => ci(2, 0, 18, 'env') + ln(-30, 0, -5, 0) + ln(-5, -11, -5, 11)
+  + pl([[-5, -6], [10, -16], [10, -30]]) + pl([[-5, 6], [10, 16], [10, 30]]) + pg(arrow, 'ink solid');
+def('npn', { cat: 'Semiconductors', name: 'NPN transistor', pre: 'Q', value: '2N3904', tags: 'bjt bipolar', hooks: { B: [-30, 0], C: [10, -30], E: [10, 30] },
+  draw: () => bjt([[7.8, 14.5], [1.1, 13.7], [4.4, 8.7]]) });
+def('pnp', { cat: 'Semiconductors', name: 'PNP transistor', pre: 'Q', value: '2N3906', tags: 'bjt bipolar', hooks: { B: [-30, 0], C: [10, -30], E: [10, 30] },
+  draw: () => bjt([[0.3, 9.5], [3.6, 15.3], [6.9, 10.3]]) });
+
+// Darlington pairs: Q1 (upper left) drives Q2's base from its emitter; the collectors are tied.
+// Arrows on both emitters point out for NPN and in for PNP.
+const darl = (a1, a2) => ci(-1, 0, 24, 'env') + ln(-30, -10, -12, -10) + ln(-12, -16, -12, -4) + ln(2, 4, 2, 16)
+  + pl([[-12, -13], [-4, -18], [-4, -20], [10, -20]]) + pl([[-12, -7], [-4, -2], [-4, 10], [2, 10]])
+  + pl([[2, 7], [10, 2], [10, -30]]) + pl([[2, 13], [10, 18], [10, 30]]) + ci(10, -20, 1.6, 'ink solid')
+  + pg(a1, 'ink solid') + pg(a2, 'ink solid');
+const DARL_H = { B: [-30, -10], C: [10, -30], E: [10, 30] };
+def('npn_darl', { cat: 'Semiconductors', name: 'NPN Darlington', pre: 'Q', value: 'TIP120', tags: 'bjt bipolar darlington', hooks: DARL_H,
+  draw: () => darl([[-4.8, -2.5], [-10.5, -2.8], [-7.6, -7.5]], [[9.2, 17.5], [3.5, 17.2], [6.4, 12.5]]) });
+def('pnp_darl', { cat: 'Semiconductors', name: 'PNP Darlington', pre: 'Q', value: 'TIP125', tags: 'bjt bipolar darlington', hooks: DARL_H,
+  draw: () => darl([[-11.2, -6.5], [-8.4, -1.5], [-5.4, -6.2]], [[2.9, 13.5], [5.6, 18.6], [8.6, 13.8]]) });
+
+// JFETs: gate on the left meeting the channel bar, drain up, source down; the gate arrow points
+// into the channel for N-channel and out of it for P-channel.
+const jfet = arrow => ci(2, 0, 18, 'env') + ln(-30, 0, -5, 0) + ln(-5, -12, -5, 12)
+  + pl([[-5, -8], [10, -8], [10, -30]]) + pl([[-5, 8], [10, 8], [10, 30]]) + pg(arrow, 'ink solid');
+def('njfet', { cat: 'Semiconductors', name: 'N-channel JFET', pre: 'Q', value: '2N5457', tags: 'jfet fet n channel', hooks: { G: [-30, 0], D: [10, -30], S: [10, 30] },
+  draw: () => jfet([[-6, 0], [-13, -3.5], [-13, 3.5]]) });
+def('pjfet', { cat: 'Semiconductors', name: 'P-channel JFET', pre: 'Q', value: '2N5460', tags: 'jfet fet p channel', hooks: { G: [-30, 0], D: [10, -30], S: [10, 30] },
+  draw: () => jfet([[-15, 0], [-8, -3.5], [-8, 3.5]]) });
+
+// MOSFETs (body tied to source): insulated gate bar, channel broken in three for enhancement or
+// solid for depletion, drain up, source down. The body arrow points in for N-channel, out for P.
+const mosfet = (dep, arrow) => ci(2, 0, 18, 'env') + ln(-30, 0, -8, 0) + ln(-8, -10, -8, 10)
+  + (dep ? ln(-3, -12, -3, 12) : ln(-3, -12, -3, -6) + ln(-3, -3, -3, 3) + ln(-3, 6, -3, 12))
+  + pl([[-3, -9], [10, -9], [10, -30]]) + pl([[-3, 9], [10, 9], [10, 30]]) + pl([[-3, 0], [10, 0], [10, 9]]) + pg(arrow, 'ink solid');
+const NARR = [[-2, 0], [5, -3.5], [5, 3.5]], PARR = [[9, 0], [2, -3.5], [2, 3.5]];
+const MOS_H = { G: [-30, 0], D: [10, -30], S: [10, 30] };
+def('nmos', { cat: 'Semiconductors', name: 'N-channel MOSFET, enhancement', pre: 'Q', value: '2N7000', tags: 'mosfet fet n channel enhancement', hooks: MOS_H, draw: () => mosfet(0, NARR) });
+def('nmos_dep', { cat: 'Semiconductors', name: 'N-channel MOSFET, depletion', pre: 'Q', value: 'BSS139', tags: 'mosfet fet n channel depletion', hooks: MOS_H, draw: () => mosfet(1, NARR) });
+def('pmos', { cat: 'Semiconductors', name: 'P-channel MOSFET, enhancement', pre: 'Q', value: 'BS250', tags: 'mosfet fet p channel enhancement', hooks: MOS_H, draw: () => mosfet(0, PARR) });
+def('pmos_dep', { cat: 'Semiconductors', name: 'P-channel MOSFET, depletion', pre: 'Q', value: '', tags: 'mosfet fet p channel depletion', hooks: MOS_H, draw: () => mosfet(1, PARR) });
+
+/* ---- transformers ---- */
+function xfmr(pct, sct) {
+  let s = ln(0, 0, 10, 0) + ln(10, 0, 10, 10) + pa(coilY(10, 10, 4, 1)) + ln(10, 50, 10, 60) + ln(10, 60, 0, 60)
+        + ln(50, 0, 40, 0) + ln(40, 0, 40, 10) + pa(coilY(40, 10, 4, -1)) + ln(40, 50, 40, 60) + ln(40, 60, 50, 60)
+        + ln(22, 4, 22, 56) + ln(28, 4, 28, 56);
+  if (pct) s += ln(0, 30, 10, 30); if (sct) s += ln(40, 30, 50, 30);
+  return s;
+}
+def('transformer', { cat: 'Transformer', name: 'Transformer', pre: 'T', value: '120 V : 6.3 V', hooks: { P1: [0, 0], P2: [0, 60], S1: [50, 0], S2: [50, 60] }, draw: () => xfmr(0, 0) });
+def('transformer_sct', { cat: 'Transformer', name: 'Transformer, secondary CT', pre: 'T', value: '350-0-350 V', hooks: { P1: [0, 0], P2: [0, 60], S1: [50, 0], S2: [50, 60], SCT: [50, 30] }, draw: () => xfmr(0, 1) });
+def('transformer_ul', { cat: 'Transformer', name: 'Output transformer, ultra-linear', pre: 'T', value: '6.6 kΩ : 8 Ω, UL', tags: 'ul ultralinear push-pull screen tap opt',
+  hooks: { P1: [0, 0], UL1: [0, 20], CT: [0, 40], UL2: [0, 60], P2: [0, 80], S1: [50, 10], S2: [50, 70] },
+  draw: () => pa(coilY(10, 0, 8, 1)) + pa(coilY(40, 10, 6, -1)) + ln(22, -4, 22, 84) + ln(28, -4, 28, 84)
+    + [0, 20, 40, 60, 80].map(y => ln(0, y, 10, y)).join('') + ln(40, 10, 50, 10) + ln(40, 70, 50, 70) });
+def('transformer_pct', { cat: 'Transformer', name: 'Output transformer, primary CT', pre: 'T', value: '5 kΩ : 8 Ω', tags: 'push-pull opt', hooks: { P1: [0, 0], P2: [0, 60], PCT: [0, 30], S1: [50, 0], S2: [50, 60] }, draw: () => xfmr(1, 0) });
+
+/* ---- heaters (always orange) ---- */
+def('heater', { cat: 'Heater', name: 'Heater', pre: 'H', value: '6.3 V', hooks: { 1: [0, 0], 2: [40, 0] },
+  draw: () => pa('M0 0 H12 A8 8 0 0 1 28 0 H40', 'htr') });
+def('heater_ct', { cat: 'Heater', name: 'Heater, center tap', pre: 'H', value: '12.6 V', tags: '12ax7 twin', hooks: { 1: [0, 0], 2: [60, 0], CT: [30, 20] },
+  draw: () => pa('M0 0 H8 A7 7 0 0 1 22 0 H38 A7 7 0 0 1 52 0 H60', 'htr') + ln(30, 0, 30, 20, 'htr') });
+def('heater_tri', { cat: 'Heater', name: 'Heater, triangle', pre: 'H', value: '6.3 V', tags: 'filament v', hooks: { 1: [0, 0], 2: [40, 0] },
+  draw: () => pa('M0 0 H12 L20 -8 L28 0 H40', 'htr') });
+def('heater_ct_tri', { cat: 'Heater', name: 'Heater, center tap, triangle', pre: 'H', value: '12.6 V', tags: '12ax7 twin filament v', hooks: { 1: [0, 0], 2: [60, 0], CT: [30, 20] },
+  draw: () => pa('M0 0 H8 L15 -7 L22 0 H38 L45 -7 L52 0 H60', 'htr') + ln(30, 0, 30, 20, 'htr') });
+
+/* ---- power and connections ---- */
+def('ground', { cat: 'Power', name: 'Ground', pre: 'GND', value: '0 V', hooks: { G: [0, 0] }, hideLabel: true,
+  draw: () => ln(0, 0, 0, 10) + ln(-10, 10, 10, 10) + ln(-6, 14, 6, 14) + ln(-2, 18, 2, 18) });
+def('chassis', { cat: 'Power', name: 'Chassis', pre: 'CH', value: 'chassis', hooks: { G: [0, 0] }, hideLabel: true,
+  draw: () => ln(0, 0, 0, 10) + ln(-10, 10, 10, 10) + ln(-10, 10, -15, 17) + ln(-3, 10, -8, 17) + ln(4, 10, -1, 17) + ln(10, 10, 5, 17) });
+def('supply', { cat: 'Power', name: 'Supply (B+)', pre: 'PS', value: 'B+ 250 V', tags: 'b+ vdd rail', hooks: { V: [0, 0] },
+  draw: () => ln(0, 0, 0, -12) + ln(-8, -12, 8, -12) });
+def('supply_circle', { cat: 'Power', name: 'Supply (B+), circle', pre: 'PS', value: 'B+ 250 V', tags: 'b+ vdd rail terminal', hooks: { V: [0, 0] },
+  draw: () => ln(0, 0, 0, -12) + ci(0, -16, 4) });
+def('terminal', { cat: 'Power', name: 'Terminal', pre: 'J', value: 'Input', tags: 'jack input output', hooks: { T: [0, 0] },
+  draw: () => ci(0, 0, 4) });
+def('fuse', { cat: 'Misc', name: 'Fuse', pre: 'F', value: '2 A', hooks: { 1: [0, 0], 2: [60, 0] },
+  draw: () => ln(0, 0, 15, 0) + `<rect class="ink" x="15" y="-6" width="30" height="12"/>` + ln(15, 0, 45, 0) + ln(45, 0, 60, 0) });
+def('switch', { cat: 'Misc', name: 'Switch', pre: 'S', value: 'SPST', hooks: { 1: [0, 0], 2: [40, 0] },
+  draw: () => ln(0, 0, 10, 0) + ci(13, 0, 3) + ci(27, 0, 3) + ln(15, -2, 28, -11) + ln(30, 0, 40, 0) });
+def('lamp', { cat: 'Misc', name: 'Pilot lamp', pre: 'PL', value: '6.3 V', hooks: { 1: [0, 0], 2: [40, 0] },
+  draw: () => ln(0, 0, 10, 0) + ci(20, 0, 10) + pa('M13 0 C13 -8 27 -8 27 0 M17 0 C17 6 23 6 23 0') + ln(30, 0, 40, 0) });
+def('speaker', { cat: 'Misc', name: 'Speaker', pre: 'LS', value: '8 Ω', hooks: { 1: [0, 0], 2: [0, 20] },
+  draw: () => ln(0, 0, 10, 0) + ln(0, 20, 10, 20) + `<rect class="ink" x="10" y="-5" width="8" height="30"/>` + pg([[18, -5], [32, -15], [32, 35], [18, 25]]) });
+
+/* ---- modern tubes (dashed grids, inverted-T plates, heaters left out) ---- */
+const cath = (x1, x2, y, lx, ly) => ln(x1, y, x2, y) + ln(x2, y, x2, y + 5) + ln(lx, y, lx, ly);   // inverted L + lead
+const filV = (apex, legY, end, x = 10) => pl([[-x, end], [-x, legY], [0, apex], [x, legY], [x, end]], 'htr');
+def('m_diode_dh', { cat: 'Tube, modern', name: 'Diode, direct', pre: 'V', value: '81', tags: 'directly heated filament', hooks: { P: [0, -50], F1: [-10, 50], F2: [10, 50] },
+  draw: () => ci(0, 0, 30, 'env') + ln(-12, -8, 12, -8) + ln(0, -8, 0, -50) + filV(6, 24, 50) });
+def('m_diode', { cat: 'Tube, modern', name: 'Diode', pre: 'V', value: '6H6', tags: '6al5 6h6 cathode no heater', hooks: { P: [0, -50], K: [-10, 50] },
+  draw: () => ci(0, 0, 30, 'env') + ln(-12, -10, 12, -10) + ln(0, -10, 0, -50) + cath(-10, 12, 10, -10, 50) });
+def('m_diode_ih', { cat: 'Tube, modern', name: 'Diode, indirect', pre: 'V', value: '6H6', tags: '6al5 6h6 indirectly heated heater', hooks: { P: [0, -50], K: [-20, 50], H1: [-10, 50], H2: [10, 50] },
+  draw: () => ci(0, 0, 30, 'env') + ln(-17, -10, 17, -10) + ln(0, -10, 0, -50) + cath(-20, 19, 8, -20, 50)
+    + pl([[-10, 50], [-10, 26], [0, 16], [10, 26], [10, 50]], 'htr') });
+def('m_rect', { cat: 'Tube, modern', name: 'Full-wave rectifier', pre: 'V', value: '5Y3', tags: '5u4 80 5ar4 gz34', hooks: { P1: [-20, -50], P2: [20, -50], F1: [-10, 50], F2: [10, 50] },
+  draw: () => pa(stadium(20, 30), 'env') + ln(-32, -10, -8, -10) + ln(8, -10, 32, -10) + ln(-20, -10, -20, -50) + ln(20, -10, 20, -50) + filV(8, 24, 50) });
+def('m_rect_k', { cat: 'Tube, modern', name: 'Full-wave rectifier, cathode', pre: 'V', value: '6X4', tags: '5ar4 gz34 6x5 6x4 ez81 6ca4 indirectly heated', hooks: { P1: [-20, -50], P2: [20, -50], K: [-30, 50] },
+  draw: () => pa(stadium(20, 30), 'env') + ln(-32, -10, -8, -10) + ln(8, -10, 32, -10) + ln(-20, -10, -20, -50) + ln(20, -10, 20, -50) + cath(-30, 30, 12, -30, 50) });
+def('m_rect_ih', { cat: 'Tube, modern', name: 'Full-wave rectifier, indirect', pre: 'V', value: '6X4', tags: '5ar4 gz34 6x5 6x4 ez81 6ca4 indirectly heated heater', hooks: { P1: [-20, -50], P2: [20, -50], K: [-30, 50], H1: [-10, 50], H2: [10, 50] },
+  draw: () => pa(stadium(20, 30), 'env') + ln(-32, -10, -8, -10) + ln(8, -10, 32, -10) + ln(-20, -10, -20, -50) + ln(20, -10, 20, -50) + cath(-30, 30, 10, -30, 50)
+    + pl([[-10, 50], [-10, 27], [0, 17], [10, 27], [10, 50]], 'htr') });
+def('m_triode_dh', { cat: 'Tube, modern', name: 'Triode, direct', pre: 'V', value: '2A3', tags: '300b 45 directly heated', hooks: { P: [0, -50], G: [-50, 0], F1: [-10, 50], F2: [10, 50] },
+  draw: () => ci(0, 0, 30, 'env') + ln(-12, -15, 12, -15) + ln(0, -15, 0, -50) + ln(-15, 0, 15, 0, 'dash') + ln(-50, 0, -15, 0) + filV(10, 24, 50) });
+def('m_triode', { cat: 'Tube, modern', name: 'Triode', pre: 'V', value: '6J5', tags: '12ax7 half 6sn7', hooks: { P: [0, -50], G: [-50, 0], K: [-10, 50] },
+  draw: () => ci(0, 0, 30, 'env') + ln(-12, -15, 12, -15) + ln(0, -15, 0, -50) + ln(-15, 0, 15, 0, 'dash') + ln(-50, 0, -15, 0) + cath(-10, 12, 15, -10, 50) });
+def('m_triode_ih', { cat: 'Tube, modern', name: 'Triode, indirect', pre: 'V', value: '6J5', tags: '12ax7 half 6sn7 indirectly heated heater', hooks: { P: [0, -50], G: [-50, 0], K: [-20, 50], H1: [-10, 50], H2: [10, 50] },
+  draw: () => ci(0, 0, 30, 'env') + ln(-17, -15, 17, -15) + ln(0, -15, 0, -50) + ln(-17, 0, 17, 0, 'dash') + ln(-50, 0, -17, 0) + cath(-20, 19, 10, -20, 50)
+    + pl([[-10, 50], [-10, 27], [0, 17], [10, 27], [10, 50]], 'htr') });
+def('m_twin', { cat: 'Tube, modern', name: 'Twin triode', pre: 'V', value: '12AX7', tags: '12au7 12at7 6sn7 ecc83', hooks: { P1: [-30, -50], G1: [-70, 0], K1: [-40, 50], P2: [30, -50], G2: [70, 0], K2: [20, 50] },
+  draw: () => pa(stadium(30, 30), 'env')
+    + ln(-42, -15, -18, -15) + ln(-30, -15, -30, -50) + ln(-45, 0, -15, 0, 'dash') + ln(-70, 0, -45, 0) + cath(-40, -18, 15, -40, 50)
+    + ln(18, -15, 42, -15) + ln(30, -15, 30, -50) + ln(15, 0, 45, 0, 'dash') + ln(45, 0, 70, 0) + cath(20, 42, 15, 20, 50) });
+def('m_tetrode_dh', { cat: 'Tube, modern', name: 'Tetrode, direct', pre: 'V', value: '22', tags: 'directly heated filament screen grid', hooks: { P: [0, -60], G2: [60, -10], G1: [-60, 0], F1: [-10, 60], F2: [10, 60] },
+  draw: () => ci(0, 0, 40, 'env') + ln(-15, -22, 15, -22) + ln(0, -22, 0, -60) + ln(-18, -10, 18, -10, 'dash') + ln(18, -10, 60, -10)
+    + ln(-18, 0, 18, 0, 'dash') + ln(-60, 0, -18, 0) + filV(12, 32, 60) });
+def('m_tetrode', { cat: 'Tube, modern', name: 'Tetrode', pre: 'V', value: '24-A', hooks: { P: [0, -60], G2: [60, -10], G1: [-60, 0], K: [-10, 60] },
+  draw: () => ci(0, 0, 40, 'env') + ln(-15, -22, 15, -22) + ln(0, -22, 0, -60) + ln(-18, -10, 18, -10, 'dash') + ln(18, -10, 60, -10)
+    + ln(-18, 0, 18, 0, 'dash') + ln(-60, 0, -18, 0) + cath(-10, 15, 15, -10, 60) });
+def('m_tetrode_ih', { cat: 'Tube, modern', name: 'Tetrode, indirect', pre: 'V', value: '24-A', tags: 'indirectly heated heater screen grid', hooks: { P: [0, -60], G2: [60, -10], G1: [-60, 0], K: [-20, 60], H1: [-10, 60], H2: [10, 60] },
+  draw: () => ci(0, 0, 40, 'env') + ln(-20, -22, 20, -22) + ln(0, -22, 0, -60) + ln(-20, -10, 20, -10, 'dash') + ln(20, -10, 60, -10)
+    + ln(-20, 0, 20, 0, 'dash') + ln(-60, 0, -20, 0) + cath(-20, 22, 12, -20, 60)
+    + pl([[-10, 60], [-10, 31], [0, 21], [10, 31], [10, 60]], 'htr') });
+def('m_pentode_dh', { cat: 'Tube, modern', name: 'Pentode, direct', pre: 'V', value: '33', tags: 'directly heated filament suppressor', hooks: { P: [0, -60], G3: [60, -10], G2: [60, 0], G1: [-60, 10], F1: [-10, 60], F2: [10, 60] },
+  draw: () => ci(0, 0, 40, 'env') + ln(-15, -24, 15, -24) + ln(0, -24, 0, -60)
+    + ln(-18, -10, 18, -10, 'dash') + ln(18, -10, 60, -10) + ln(-18, 0, 18, 0, 'dash') + ln(18, 0, 60, 0)
+    + ln(-18, 10, 18, 10, 'dash') + ln(-60, 10, -18, 10) + filV(19, 33, 60) });
+def('m_pentode', { cat: 'Tube, modern', name: 'Pentode', pre: 'V', value: 'EF86', tags: '6au6 el34 6sj7', hooks: { P: [0, -60], G3: [60, -10], G2: [60, 0], G1: [-60, 10], K: [-20, 60] },
+  draw: () => ci(0, 0, 40, 'env') + ln(-15, -24, 15, -24) + ln(0, -24, 0, -60)
+    + ln(-18, -10, 18, -10, 'dash') + ln(18, -10, 60, -10) + ln(-18, 0, 18, 0, 'dash') + ln(18, 0, 60, 0)
+    + ln(-18, 10, 18, 10, 'dash') + ln(-60, 10, -18, 10) + cath(-20, 20, 22, -20, 60) });
+def('m_pentode_ih', { cat: 'Tube, modern', name: 'Pentode, indirect', pre: 'V', value: 'EF86', tags: '6au6 el34 6sj7 indirectly heated heater', hooks: { P: [0, -60], G3: [60, -10], G2: [60, 0], G1: [-60, 10], K: [-20, 60], H1: [-10, 60], H2: [10, 60] },
+  draw: () => ci(0, 0, 40, 'env') + ln(-20, -24, 20, -24) + ln(0, -24, 0, -60)
+    + ln(-20, -10, 20, -10, 'dash') + ln(20, -10, 60, -10) + ln(-20, 0, 20, 0, 'dash') + ln(20, 0, 60, 0)
+    + ln(-20, 10, 20, 10, 'dash') + ln(-60, 10, -20, 10) + cath(-20, 22, 18, -20, 60)
+    + pl([[-10, 60], [-10, 34], [0, 24], [10, 34], [10, 60]], 'htr') });
+// Beam-forming plates: a cathode-tied cradle around the grids. The bottom bar is the cathode;
+// each side hops outward where a grid lead crosses it (G1 on the left at y 0, G2 on the right at y -10).
+const beamCradle = () => pa('M -22 -17 L -28 -17 L -28 -3 A 3 3 0 0 0 -28 3 L -28 8 L -24 12 L 24 12 L 28 8 L 28 -7 A 3 3 0 0 0 28 -13 L 28 -17 L 22 -17');
+const beamBody = () => ci(0, 0, 40, 'env') + ln(-20, -24, 20, -24) + ln(0, -24, 0, -60)
+  + ln(-18, -10, 18, -10, 'dash') + ln(18, -10, 60, -10) + ln(-18, 0, 18, 0, 'dash') + ln(-60, 0, -18, 0) + beamCradle();
+def('m_beam', { cat: 'Tube, modern', name: 'Beam power', pre: 'V', value: '6V6', tags: '6l6 kt88 6550 el34', hooks: { P: [0, -60], G2: [60, -10], G1: [-60, 0], K: [-10, 60] },
+  draw: () => beamBody() + ln(-10, 12, -10, 60) });
+def('m_beam_ih', { cat: 'Tube, modern', name: 'Beam power, filament', pre: 'V', value: '6V6', tags: '6l6 kt88 6550 el34 heater indirectly heated', hooks: { P: [0, -60], G2: [60, -10], G1: [-60, 0], K: [-20, 60], H1: [-10, 60], H2: [10, 60] },
+  draw: () => beamBody() + ln(-20, 12, -20, 60)
+    + pl([[-10, 60], [-10, 31], [0, 21], [10, 31], [10, 60]], 'htr') });
+
+// Gas-filled tubes: the solid dot inside the envelope marks the gas (or mercury vapour) fill.
+const gasDot = (x, y) => ci(x, y, 2.5, 'ink solid');
+def('m_gas_rect_hw', { cat: 'Tube, modern', name: 'Gas rectifier, half-wave', pre: 'V', value: '', tags: '866a 816 872a mercury vapor gas filament', hooks: { P: [0, -50], F1: [-10, 50], F2: [10, 50] },
+  draw: () => ci(0, 0, 30, 'env') + ln(-12, -8, 12, -8) + ln(0, -8, 0, -50) + filV(6, 24, 50) + gasDot(18, 6) });
+def('m_gas_rect', { cat: 'Tube, modern', name: 'Gas rectifier, full-wave', pre: 'V', value: '', tags: '83 mercury vapor gas', hooks: { P1: [-20, -50], P2: [20, -50], F1: [-10, 50], F2: [10, 50] },
+  draw: () => pa(stadium(20, 30), 'env') + ln(-32, -10, -8, -10) + ln(8, -10, 32, -10) + ln(-20, -10, -20, -50) + ln(20, -10, 20, -50) + filV(8, 24, 50) + gasDot(28, 8) });
+def('m_gas_vr', { cat: 'Tube, modern', name: 'Voltage regulator (glow)', pre: 'V', value: '', tags: '0a2 0b2 0c3 0d3 vr150 vr105 vr75 glow regulator cold cathode gas', hooks: { P: [0, -50], K: [0, 50] },
+  draw: () => ci(0, 0, 30, 'env') + ln(-12, -12, 12, -12) + ln(0, -12, 0, -50) + pa('M -12 4 A 12 12 0 0 0 12 4') + ln(0, 16, 0, 50) + gasDot(18, -2) });
+def('m_gas_thyratron', { cat: 'Tube, modern', name: 'Thyratron', pre: 'V', value: '', tags: '884 6d4 2050 gas triode thyratron', hooks: { P: [0, -50], G: [-50, 0], K: [-20, 50], H1: [-10, 50], H2: [10, 50] },
+  draw: () => ci(0, 0, 30, 'env') + ln(-17, -15, 17, -15) + ln(0, -15, 0, -50) + ln(-17, 0, 17, 0, 'dash') + ln(-50, 0, -17, 0) + cath(-20, 19, 10, -20, 50)
+    + pl([[-10, 50], [-10, 27], [0, 17], [10, 27], [10, 50]], 'htr') + gasDot(21, -7) });
+def('m_gas_thyratron_t', { cat: 'Tube, modern', name: 'Thyratron, tetrode', pre: 'V', value: '', tags: '2d21 2050 eN91 gas tetrode thyratron shield grid', hooks: { P: [0, -60], G2: [60, -10], G1: [-60, 0], K: [-20, 60], H1: [-10, 60], H2: [10, 60] },
+  draw: () => ci(0, 0, 40, 'env') + ln(-20, -22, 20, -22) + ln(0, -22, 0, -60) + ln(-20, -10, 20, -10, 'dash') + ln(20, -10, 60, -10)
+    + ln(-20, 0, 20, 0, 'dash') + ln(-60, 0, -20, 0) + cath(-20, 22, 12, -20, 60)
+    + pl([[-10, 60], [-10, 31], [0, 21], [10, 31], [10, 60]], 'htr') + gasDot(28, -18) });
+
+// Specialized tubes.
+// Photomultiplier, built for any number of dynodes (2-14). Left to right along the bottom/top: the curved
+// photocathode (bottom, lead K) faces D1 above it; the dynodes then alternate top/bottom, 10 apart; the anode
+// bar sits past the last dynode with its lead P out to the right. K and D1 never move as the count changes.
+function pmtBuild(n) {
+  const x0 = -50, xn = x0 + n * 10, xl = x0 - 16, xr = xn + 26, cx = (xl + xr) / 2, hl = Math.max(0, (xr - xl) / 2 - 30);
+  const hooks = { K: [x0, 50] };
+  for (let i = 1; i <= n; i++) hooks['D' + i] = [x0 + i * 10, i % 2 ? -50 : 50];
+  hooks.P = [xn + 40, 0];
+  const arrow = (x1, y1, x2, y2) => { const L = Math.hypot(x2 - x1, y2 - y1), ux = (x2 - x1) / L, uy = (y2 - y1) / L, bx = x2 - 6 * ux, by = y2 - 6 * uy;
+    return ln(x1, y1, bx, by) + pg([[x2, y2], [bx - 2.6 * uy, by + 2.6 * ux], [bx + 2.6 * uy, by - 2.6 * ux]], 'ink solid'); };
+  const draw = () => {
+    let d = `<g transform="translate(${cx} 0)">${pa(stadium(hl, 30), 'env')}</g>`;
+    d += pa(`M ${x0 - 9} -8 Q ${x0 - 6} 14 ${x0 + 9} 4`) + ln(x0, 7, x0, 50);           // photocathode, cupped toward D1
+    for (let i = 1; i < n; i++) { const x = x0 + i * 10; d += i % 2 ? ln(x - 4, -14, x + 4, -14) + ln(x, -14, x, -50) : ln(x - 4, 14, x + 4, 14) + ln(x, 14, x, 50); }
+    // last dynode: a slanted plate that bounces the electrons on to the anode
+    d += n % 2 ? ln(xn - 5, -7, xn + 5, -17) + ln(xn, -12, xn, -50)
+               : ln(xn - 5, 7, xn + 5, 17) + ln(xn, 12, xn, 50);
+    d += ln(xn + 18, -12, xn + 18, 12) + ln(xn + 18, 0, xn + 40, 0);                         // anode
+    return d + arrow(x0 - 27, -41, x0 - 13, -27) + arrow(x0 - 34, -30, x0 - 20, -16);          // light in at the upper left, onto the photocathode
+  };
+  return { hooks, draw };
+}
+def('m_sp_pmt', Object.assign({ cat: 'Tube, modern', name: 'Photomultiplier', pre: 'V', value: '', tags: '931a 1p21 1p28 photomultiplier pmt photo dynode',
+  vary: { key: 'dyn', label: 'Dynodes', min: 2, max: 14, def: 9, build: pmtBuild } }, pmtBuild(9)));
+// Single-section electron-ray indicator: green fluorescent target a at the top, a ray-control electrode b (fed from the
+// left, stepping down to its dashed vane), the grid g, the heavy cathode k and the heater. No triode section.
+def('m_sp_eye1', { cat: 'Tube, modern', name: 'Electron-ray indicator, single section', pre: 'V', value: '', tags: 'eye magic eye tuning indicator electron ray single section', hooks: { A: [0, -60], B: [-60, -20], G: [-60, 0], K: [-30, 60], H1: [-10, 60], H2: [10, 60] },
+  draw: () => ci(0, 0, 40, 'env') + pa('M -19 -26 Q 0 -34 20 -26', 'tgt') + ln(0, -60, 0, -30)
+    + pl([[-60, -20], [-6, -20], [-6, -10]]) + ln(-6, -10, 22, -10, 'dash')
+    + ln(-60, 0, -32, 0) + ln(-32, 0, 22, 0, 'dash')
+    + '<polyline class="ink" style="stroke-width:3" points="-18,21 -11,15 14,15 20,21"/>' + pl([[-18, 21], [-30, 33], [-30, 60]])
+    + pl([[-10, 60], [-10, 38], [0, 30], [10, 38], [10, 60]], 'htr') });
+// Electron-ray tuning indicator ("magic eye"), drawn to Larry's reference: target a (top right), triode plate
+// (top left), ray-control electrode b (upright, fed from the left), split grid g whose right half is tied
+// down to the heavy cathode k, and the heater below.
+def('m_sp_eye', { cat: 'Tube, modern', name: 'Electron-ray indicator, two section', pre: 'V', value: '', tags: '6e5 6u5 6af6 6g5 em34 em84 eye magic eye tuning indicator electron ray', hooks: { A: [20, -60], P: [-20, -60], B: [-60, -30], G: [-60, 0], K: [-30, 60], H1: [-10, 60], H2: [10, 60] },
+  draw: () => ci(0, 0, 40, 'env')
+    + pa('M 11 -24 Q 20 -33 29 -23', 'tgt') + ln(20, -28, 20, -60)                   // a: green fluorescent target
+    + ln(-28, -14, -8, -14) + ln(-20, -14, -20, -60)                                // triode plate
+    + ln(10, -20, 10, -4) + pl([[-60, -30], [-2, -30], [-2, -16], [10, -16]])       // b: ray-control electrode
+    + ln(-60, 0, -36, 0) + ln(-36, 0, -6, 0, 'dash') + ln(10, 0, 34, 0, 'dash') + ln(34, 0, 19, 21)   // g, right half tied to k
+    + '<polyline class="ink" style="stroke-width:3" points="-18,21 -11,15 13,15 19,21"/>'               // k: heavy cathode
+    + pl([[-18, 21], [-30, 33], [-30, 60]])
+    + pl([[-10, 60], [-10, 36], [0, 28], [10, 36], [10, 60]], 'htr') });
+
+
+/* ---- period tubes for the Vintage Tube spotlight ---- */
+function period(era, kind, ih) {
+  const n = { diode: 0, triode: 1, tetrode: 2, pentode: 3 }[kind];
+  const hooks = {}; let s = '';
+  if (era === '1930s') {
+    const r = n >= 2 ? 40 : 30, out = r + 20, w = r === 30 ? 14 : 18, gw = r === 30 ? 18 : 22;
+    s += ci(0, 0, r, 'env');
+    const py = r === 30 ? -20 : -28;
+    s += `<rect class="ink" x="${-w}" y="${py}" width="${2 * w}" height="5"/>` + ln(0, py, 0, -out); hooks.P = [0, -out];
+    const gys = { 0: [], 1: [0], 2: [0, -10], 3: [10, 0, -10] }[n];
+    gys.forEach((y, i) => {
+      s += pl(zig(-gw, y, gw, y, 8, 3));
+      if (i === 0) { s += ln(-out, y, -gw, y); hooks.G1 = [-out, y]; } else { s += ln(gw, y, out, y); hooks['G' + (i + 1)] = [out, y]; }
+    });
+    if (gys.length === 1) { hooks.G = hooks.G1; delete hooks.G1; }
+    if (!ih) {
+      const apex = { 0: 0, 1: 8, 2: 12, 3: 20 }[n], leg = r === 30 ? 24 : 34;
+      s += pl([[-10, out], [-10, leg], [0, apex], [10, leg], [10, out]], 'htr'); hooks.F1 = [-10, out]; hooks.F2 = [10, out];
+    } else {
+      const yb = { 0: 0, 1: 8, 2: 10, 3: 18 }[n];
+      s += pl([[-18, yb + 14], [-18, yb], [8, yb], [8, yb + 6], [20, yb + 6], [20, out]]); hooks.K = [20, out];
+      s += pl([[-10, out], [-10, yb + 16], [-5, yb + 4], [0, yb + 16], [0, out]], 'htr'); hooks.H1 = [-10, out]; hooks.H2 = [0, out];
+    }
+  } else { // 1920s, sideways: filament left, plate right
+    const r = (ih || n >= 2) ? 40 : 30, out = r + 20, h = r === 30 ? 17 : 22;
+    s += ci(0, 0, r, 'env');
+    const px = r === 30 ? 20 : 30;
+    s += `<rect class="ink" x="${px - 3}" y="${-h}" width="6" height="${2 * h}"/>` + ln(px, -h, px, -out); hooks.P = [px, -out];
+    let fx = r === 30 ? -15 : -25;
+    s += pl([[fx - 5, out], [fx - 5, h - 2], [fx, -h], [fx + 5, h - 2], [fx + 5, out]], 'htr');
+    hooks.F1 = [fx - 5, out]; hooks.F2 = [fx + 5, out];
+    if (ih) {
+      s += `<rect class="ink" x="-12" y="${-h}" width="4" height="${2 * h}"/>` + ln(-10, -h, -10, -out); hooks.K = [-10, -out];
+      hooks.H1 = hooks.F1; hooks.H2 = hooks.F2; delete hooks.F1; delete hooks.F2;
+    }
+    const gxs = { 0: [], 1: [r === 30 ? 0 : 10], 2: [0, 10], 3: [0, 10, 20] }[n];
+    gxs.forEach((x, i) => {
+      s += pl(zig(x, -h + 2, x, h - 2, 6, 3.5));
+      if (i === 1) { s += ln(x, h - 2, x, out); hooks.G2 = [x, out]; } else { s += ln(x, -h + 2, x, -out); hooks['G' + (i + 1)] = [x, -out]; }
+    });
+    if (gxs.length === 1) { hooks.G = hooks.G1; delete hooks.G1; }
+  }
+  return { hooks, draw: () => s };
+}
+const KN = { diode: 'Diode', triode: 'Triode', tetrode: 'Tetrode', pentode: 'Pentode' };
+// default tube types for the period symbols
+const PV = { '1930s': { dh: { diode: '81', triode: '2A3', tetrode: '22', pentode: '33' }, ih: { diode: '1-V', triode: '56', tetrode: '24-A', pentode: '57' } },
+             '1920s': { dh: { diode: '81', triode: '01-A', tetrode: '22', pentode: '33' }, ih: { diode: '1-V', triode: '27', tetrode: '24', pentode: '57' } } };
+for (const era of ['1930s', '1920s']) for (const ih of [false, true]) for (const kind of ['diode', 'triode', 'tetrode', 'pentode']) {
+  const p = period(era, kind, ih);
+  def(`p${era.slice(2, 4)}_${kind}_${ih ? 'ih' : 'dh'}`, { cat: `Tube, ${era}`, name: `${KN[kind]}, ${ih ? 'heater-cathode' : 'filament'}`, pre: 'V',
+    value: PV[era][ih ? 'ih' : 'dh'][kind], tags: `vintage period zigzag ${era === '1930s' ? '1930 1936 2a3 45 56 27' : '1920 01-a 201a'}`,
+    hooks: p.hooks, draw: p.draw });
+}
+// tubes start with no value: the part number comes later (a fixed-tube section is planned); the designator is just V?
+for (const k in LIB) if (LIB[k].cat.startsWith('Tube')) LIB[k].value = '';
+const CATS = ['Passive', 'Semiconductors', 'Tube, modern', 'Transformer', 'Heater', 'Power', 'Misc', 'Tube, 1930s', 'Tube, 1920s'];
+
+/* local bounding boxes, measured once (and per variant, on first use) */
+function measureBB(draw, hooks) {
+  const ns = 'http://www.w3.org/2000/svg', tmp = document.createElementNS(ns, 'svg');
+  tmp.setAttribute('style', 'position:absolute;left:-9999px;top:0;width:10px;height:10px;visibility:hidden');
+  document.body.appendChild(tmp);
+  const g = document.createElementNS(ns, 'g'); g.innerHTML = draw(); tmp.appendChild(g);
+  let b; try { b = g.getBBox(); } catch { b = { x: -30, y: -30, width: 60, height: 60 }; }
+  tmp.remove();
+  const hs = Object.values(hooks);
+  const x0 = Math.min(b.x, ...hs.map(h => h[0])), y0 = Math.min(b.y, ...hs.map(h => h[1]));
+  const x1 = Math.max(b.x + b.width, ...hs.map(h => h[0])), y1 = Math.max(b.y + b.height, ...hs.map(h => h[1]));
+  return [x0 - 1, y0 - 1, x1 + 1, y1 + 1];
+}
+for (const k in LIB) LIB[k].bb = measureBB(LIB[k].draw, LIB[k].hooks);
+// Parts with a setting that changes their shape (the photomultiplier's dynode count) get their hooks,
+// drawing and box from here; every other part just returns its library entry.
+const varyN = p => { const v = LIB[p.type].vary; const n = Math.round(+p[v.key]); return isFinite(n) ? Math.min(v.max, Math.max(v.min, n)) : v.def; };
+function shapeOf(p) {
+  const L = LIB[p.type]; if (!L.vary) return L;
+  const n = varyN(p), c = L._v || (L._v = {});
+  if (!c[n]) { const v = L.vary.build(n); c[n] = { hooks: v.hooks, draw: v.draw, bb: measureBB(v.draw, v.hooks) }; }
+  return c[n];
+}
+
+/* =====================================================================
+   DOCUMENT MODEL
+   project { id, name, sheets:[{ id, name, parts, wires, texts }] }
+   part { id, type, x, y, rot 0-3, flip, ref, value, showRef, showVal, rdx/rdy, vdx/vdy }
+   wire { id, pts:[[x,y],…] } orthogonal polyline
+   text { id, x, y, text, size, tone }
+   ===================================================================== */
+let project, sheet;
+const view = { x: 0, y: 0, z: 1.4 };
+let sel = new Set();               // ids
+let mode = 'select';               // select | wire | text | place
+let placeType = null, placeRot = 0, placeFlip = false;
+let wireDraft = null;              // { pts:[[x,y]...], hvFirst:true }
+let showGrid = true, showHooks = true;
+let undoStack = [], redoStack = [];
+let mouse = [0, 0], mouseRaw = [0, 0];
+let clip = null;
+
+function xf(p, h) {             // local hook -> world
+  let x = h[0], y = h[1];
+  if (p.flip) x = -x;
+  for (let i = 0; i < (p.rot || 0); i++) [x, y] = [-y, x];
+  return [p.x + x, p.y + y];
+}
+function partBB(p) {
+  const b = shapeOf(p).bb, cs = [[b[0], b[1]], [b[2], b[1]], [b[0], b[3]], [b[2], b[3]]].map(c => xf(p, c));
+  const xs = cs.map(c => c[0]), ys = cs.map(c => c[1]);
+  return [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)];
+}
+function hooksOf(p) { return Object.entries(shapeOf(p).hooks).map(([name, h]) => ({ name, pos: xf(p, h), part: p })); }
+const allHooks = () => sheet.parts.flatMap(hooksOf);
+function labelPos(p) {
+  const bb = partBB(p);
+  if ((p.type === 'supply' || p.type === 'supply_circle') && !(p.rot % 2)) { const v = xf(p, [0, p.type === 'supply' ? -18 : -24]); return [v[0] + (p.lx || 0), v[1] - 13 + (p.ly || 0), 'middle']; }
+  return [bb[2] + 6 + (p.lx || 0), (bb[1] + bb[3]) / 2 - 4 + (p.ly || 0), 'start'];
+}
+const fieldShown = (p, f) => f === 'ref' ? p.showRef !== false : p.showVal !== false;
+const labelShown = p => fieldShown(p, 'ref') || fieldShown(p, 'value');
+const FIELD_NAME = { ref: 'ref des', value: 'value' };
+let selLabel = null;   // { id, field } when a single label line is selected
+// the two label lines as boxes: [{ field:'ref'|'value', x, y (baseline), x0, x1, top, bottom }]
+function labelLines(p) {
+  if (!labelShown(p)) return [];
+  const [x, y, a] = labelPos(p), out = [];
+  [['ref', p.ref, p.rdx || 0, p.rdy || 0], ['value', p.value, p.vdx || 0, p.vdy || 0]].forEach(([field, txt, ox, oy], i) => {
+    if (!fieldShown(p, field)) return;
+    const w = Math.max(String(txt || '').length * 6.3, 14), lx = x + ox, by = y + i * 13 + oy;
+    const x0 = a === 'middle' ? lx - w / 2 : lx;
+    out.push({ field, x: lx, y: by, a, x0, x1: x0 + w, top: by - 10, bottom: by + 3 });
+  });
+  return out;
+}
+
+function newSheet(name, like) {
+  return { id: uid(), name, file: slugFile(name), parts: [], wires: [], texts: [], size: like ? like.size : 'A', orient: like ? like.orient : 'L', border: true, revs: true, title: true, tbPos: { c: 'BR' }, rvPos: { c: 'TR' } };
+}
+// ANSI sheet sizes, landscape, in drawing px (100 px = 1 in, so the 10 px grid is 0.1 in)
+const SIZES = {
+  A: { w: 1100, h: 850, name: '8.5 × 11 in', note: 'Letter' },
+  B: { w: 1700, h: 1100, name: '11 × 17 in', note: 'Tabloid' },
+  C: { w: 2200, h: 1700, name: '17 × 22 in', note: '' },
+  D: { w: 3400, h: 2200, name: '22 × 34 in', note: '' },
+};
+const sheetDims = s => { const z = SIZES[s.size] || SIZES.A; return s.orient === 'P' ? [z.h, z.w] : [z.w, z.h]; };
+const docDefaults = () => ({ company: 'The Glow Report', logo: '', part: '', rev: '', drawnBy: '', checkedBy: '', approvedBy: '', revisions: [{ rev: 'A', desc: 'Initial release', date: '', by: '' }] });
+function currentRev() { const d = project.doc; if (d.rev) return d.rev; const r = (d.revisions || []).filter(x => x.rev); return r.length ? r[r.length - 1].rev : '—'; }
+
+/* ---- border, revision chart and title block, drawn in sheet coordinates ---- */
+const ZL = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
+const CORNERS = { TL: 'top-left', TR: 'top-right', BL: 'bottom-left', BR: 'bottom-right', F: 'free' };
+const BLOCK_DEFAULT = { tb: 'BR', rv: 'TR' };
+const BLOCK_SIZE = s => ({ tb: [560, 160], rv: [460, 36 + Math.max(1, (project.doc.revisions || []).length) * 20] });
+function innerBox(s) { const [W, H] = sheetDims(s); return s.border ? [50, 50, W - 50, H - 50] : [25, 25, W - 25, H - 25]; }
+// top-left of a block: stuck to a corner of the drawing area, or at a free position
+function blockXY(s, which, w, h) {
+  const [W, H] = sheetDims(s), [ix0, iy0, ix1, iy1] = innerBox(s);
+  const pos = s[which + 'Pos'] || { c: BLOCK_DEFAULT[which] };
+  const at = c => ({ TL: [ix0, iy0], TR: [ix1 - w, iy0], BL: [ix0, iy1 - h], BR: [ix1 - w, iy1 - h] })[c];
+  if (pos.c === 'F') return [Math.max(0, Math.min(W - w, pos.x)), Math.max(0, Math.min(H - h, pos.y))];
+  let [x, y] = at(pos.c);
+  // the revision chart shares a corner with the title block by stacking beside it
+  if (which === 'rv' && s.title) {
+    const tp = s.tbPos || { c: BLOCK_DEFAULT.tb };
+    if (tp.c === pos.c) { const [, th] = BLOCK_SIZE(s).tb; y = pos.c[0] === 'T' ? y + th : y - th; x = pos.c[1] === 'R' ? ix1 - w : ix0; }
+  }
+  return [x, y];
+}
+const tbox = { };
+function frameSVG(s) {
+  const [W, H] = sheetDims(s), d = project.doc, out = [];
+  const idx = project.sheets.indexOf(s) + 1, total = project.sheets.length;
+  let ix0 = 25, iy0 = 25, ix1 = W - 25, iy1 = H - 25;
+  if (s.border) {
+    out.push(`<rect class="fr" x="25" y="25" width="${W - 50}" height="${H - 50}"/>`);
+    ix0 = 50; iy0 = 50; ix1 = W - 50; iy1 = H - 50;
+    out.push(`<rect class="fr-b" x="${ix0}" y="${iy0}" width="${ix1 - ix0}" height="${iy1 - iy0}"/>`);
+    const nx = Math.max(2, Math.round((W - 100) / 425)), ny = Math.max(2, Math.round((H - 100) / 425));
+    for (let i = 0; i <= nx; i++) { const x = ix0 + (ix1 - ix0) * i / nx; if (i > 0 && i < nx) out.push(`<line class="fr" x1="${x}" y1="25" x2="${x}" y2="${iy0}"/><line class="fr" x1="${x}" y1="${iy1}" x2="${x}" y2="${H - 25}"/>`);
+      if (i < nx) { const cx = ix0 + (ix1 - ix0) * (i + .5) / nx, n = nx - i; out.push(`<text class="fr-zone" x="${cx}" y="41" text-anchor="middle">${n}</text><text class="fr-zone" x="${cx}" y="${H - 34}" text-anchor="middle">${n}</text>`); } }
+    for (let j = 0; j <= ny; j++) { const y = iy0 + (iy1 - iy0) * j / ny; if (j > 0 && j < ny) out.push(`<line class="fr" x1="25" y1="${y}" x2="${ix0}" y2="${y}"/><line class="fr" x1="${ix1}" y1="${y}" x2="${W - 25}" y2="${y}"/>`);
+      if (j < ny) { const cy = iy0 + (iy1 - iy0) * (j + .5) / ny + 3.5, L = ZL[ny - 1 - j]; out.push(`<text class="fr-zone" x="37.5" y="${cy}" text-anchor="middle">${L}</text><text class="fr-zone" x="${W - 37.5}" y="${cy}" text-anchor="middle">${L}</text>`); } }
+  }
+  tbox.inner = [ix0, iy0, ix1, iy1]; tbox.W = W; tbox.H = H;
+  const lab = (x, y, t) => `<text class="fr-lab" x="${x}" y="${y}">${esc(t)}</text>`;
+  const val = (x, y, t, size = 12, weight = 400, anchor = 'start') => `<text class="fr-val" x="${x}" y="${y}" font-size="${size}" font-weight="${weight}" text-anchor="${anchor}">${esc(t || '')}</text>`;
+  tbox.title = tbox.revs = null;
+  if (s.revs) {
+    const cols = [['REV', 40], ['DESCRIPTION', 240], ['DATE', 90], ['APPROVED', 90]], RW = 460;
+    const rows = (d.revisions && d.revisions.length) ? d.revisions : [{ rev: '', desc: '', date: '', by: '' }];
+    const RH = 36 + rows.length * 20, [x, y] = blockXY(s, 'rv', RW, RH);
+    const X1 = x + RW;
+    out.push(`<rect class="fr-b" x="${x}" y="${y}" width="${RW}" height="${RH}"/>`, `<line class="fr" x1="${x}" y1="${y + 20}" x2="${X1}" y2="${y + 20}"/>`, `<line class="fr" x1="${x}" y1="${y + 36}" x2="${X1}" y2="${y + 36}"/>`);
+    out.push(`<text class="fr-lab" x="${x + RW / 2}" y="${y + 14}" text-anchor="middle" style="font-size:9px;letter-spacing:.2em">REVISIONS</text>`);
+    let cx = x;
+    cols.forEach(([n, w], i) => { if (i) out.push(`<line class="fr" x1="${cx}" y1="${y + 20}" x2="${cx}" y2="${y + RH}"/>`); out.push(lab(cx + 5, y + 31, n)); cx += w; });
+    rows.forEach((r, k) => { const ry = y + 36 + k * 20; if (k) out.push(`<line class="fr" x1="${x}" y1="${ry}" x2="${X1}" y2="${ry}"/>`);
+      let cx2 = x; [r.rev, r.desc, r.date, r.by].forEach((t, i) => { out.push(val(cx2 + (i ? 6 : 20), ry + 14, t, 11, i ? 400 : 600, i ? 'start' : 'middle')); cx2 += cols[i][1]; }); });
+    tbox.revs = [x, y, X1, y + RH];
+  }
+  if (s.title) {
+    const TW = 560, TH = 160, [x, y] = blockXY(s, 'tb', TW, TH), LW = 150, rx = x + LW, rw = TW - LW, X1 = x + TW, Y1 = y + TH;
+    out.push(`<rect class="fr-b" x="${x}" y="${y}" width="${TW}" height="${TH}"/>`, `<line class="fr-b" x1="${rx}" y1="${y}" x2="${rx}" y2="${Y1}"/>`);
+    for (let k = 1; k < 4; k++) out.push(`<line class="fr" x1="${rx}" y1="${y + k * 40}" x2="${X1}" y2="${y + k * 40}"/>`);
+    // logo and company
+    if (d.logo) {
+      out.push(`<image href="${d.logo}" x="${x + 12}" y="${y + 10}" width="${LW - 24}" height="${d.company ? 108 : 140}" preserveAspectRatio="xMidYMid meet"/>`);
+      if (d.company) out.push(val(x + LW / 2, y + 144, d.company, 11, 600, 'middle'));
+    } else {
+      const words = String(d.company || 'Company').toUpperCase().split(/\s+/); const lines = []; let line = '';
+      for (const w of words) { if ((line + ' ' + w).trim().length > 11 && line) { lines.push(line); line = w; } else line = (line + ' ' + w).trim(); }
+      if (line) lines.push(line);
+      const fs = lines.length > 3 ? 18 : 24, top = y + TH / 2 - (lines.length - 1) * fs * .5 + fs * .35;
+      lines.forEach((l, i) => out.push(`<text class="fr-co" x="${x + LW / 2}" y="${top + i * fs}" font-size="${fs}" text-anchor="middle">${esc(l)}</text>`));
+    }
+    // row 1: project, row 2: sheet title
+    out.push(lab(rx + 6, y + 11, 'PROJECT'), val(rx + 6, y + 32, project.name, 15, 600));
+    out.push(lab(rx + 6, y + 51, 'SHEET TITLE'), val(rx + 6, y + 72, s.name, 13));
+    out.push(`<line class="fr" x1="${rx + 240}" y1="${y + 40}" x2="${rx + 240}" y2="${y + 80}"/>`, lab(rx + 246, y + 51, 'FILE NAME'), val(rx + 246, y + 72, s.file, 11.5));
+    // row 3: part number, size, rev, sheet n of m
+    const r3 = [['PART NUMBER', 170, d.part], ['SIZE', 50, s.size + (s.orient === 'P' ? ' P' : '')], ['REV', 50, currentRev()], ['SHEET', rw - 270, `${idx} OF ${total}`]];
+    let cx = rx; r3.forEach(([n, w, t], i) => { if (i) out.push(`<line class="fr" x1="${cx}" y1="${y + 80}" x2="${cx}" y2="${y + 120}"/>`); out.push(lab(cx + 6, y + 91, n), val(cx + 6, y + 112, t, 12, i === 2 || i === 3 ? 600 : 400)); cx += w; });
+    // row 4: drawn, checked, approved
+    const r4 = [['DRAWN BY', d.drawnBy], ['CHECKED BY', d.checkedBy], ['APPROVED BY', d.approvedBy]];
+    cx = rx; r4.forEach(([n, t], i) => { const w = rw / 3; if (i) out.push(`<line class="fr" x1="${cx}" y1="${y + 120}" x2="${cx}" y2="${Y1}"/>`); out.push(lab(cx + 6, y + 131, n), val(cx + 6, y + 152, t, 12)); cx += w; });
+    tbox.title = [x, y, X1, Y1];
+  }
+  return out.join('');
+}
+// new parts get an unnumbered designator (V?, R?, C? ...); numbers are filled in by the user
+function nextRef(pre) { return pre ? pre + '?' : ''; }
+function exampleProject() {
+  const s = newSheet('2A3 filament, center tap'); s.file = '2a3-filament-ct.sch';
+  const P = (type, x, y, o = {}) => { const p = Object.assign({ id: uid(), type, x, y, rot: 0, flip: false, ref: '', value: LIB[type].value, showRef: !LIB[type].hideLabel, showVal: !LIB[type].hideLabel, lx: 0, ly: 0 }, o); s.parts.push(p); return p; };
+  P('p30_triode_dh', 300, 200, { ref: 'V?', value: '2A3' });
+  P('resistor', 210, 200, { rot: 1, ref: 'R?', value: 'grid return', lx: -86, ly: 0 });
+  P('ground', 210, 260);
+  P('inductor_ct', 270, 300, { ref: 'T?', value: 'Ef 2.5 V ac, 2.5 A', lx: 6, ly: -12 });
+  P('resistor', 380, 340, { rot: 1, ref: 'R?', value: 'Rk, about 700 Ω' });
+  P('capacitor', 470, 340, { rot: 1, ref: 'C?', value: 'bypass' });
+  P('ground', 420, 410);
+  P('terminal', 340, 130, { ref: 'J?', value: 'to OPT', showRef: false, showVal: false });
+  const W = pts => s.wires.push({ id: uid(), pts });
+  W([[300, 150], [300, 130], [340, 130]]);
+  W([[250, 200], [210, 200]]);
+  W([[290, 250], [290, 270], [270, 270], [270, 300]]);
+  W([[310, 250], [310, 270], [330, 270], [330, 300]]);
+  W([[300, 320], [300, 340], [380, 340]]);
+  W([[380, 340], [470, 340]]);
+  W([[380, 400], [380, 410], [470, 410], [470, 380]]);
+  const T = (x, y, text, o = {}) => s.texts.push(Object.assign({ id: uid(), x, y, text, size: 12, tone: 'ink' }, o));
+  T(200, 110, 'Center-tapped winding', { size: 15 });
+  T(352, 134, 'to output transformer and B+', { size: 11 });
+  T(290, 146, '2', { size: 11 }); T(256, 196, '3', { size: 11 }); T(280, 262, '1', { size: 11 }); T(314, 262, '4', { size: 11 });
+  T(226, 350, 'mid-point', { size: 11, tone: 'glow' });
+  T(208, 368, 'plate current returns here;\ngrid bias measured from here', { size: 11 });
+  const doc = docDefaults(); doc.part = 'GR-001-SCH-01';
+  return { id: uid(), name: 'Example: 2A3 filament wiring', sheets: [s], active: s.id, example: true, doc };
+}
+
+/* =====================================================================
+   RENDER
+   ===================================================================== */
+const svg = $('svg'), world = $('world');
+function applyView() {
+  if (!sheet) return;                 // called by the panel splitter before a project has loaded
+  world.setAttribute('transform', `translate(${view.x} ${view.y}) scale(${view.z})`);
+  const W = svg.clientWidth, H = svg.clientHeight;
+  const [SW, SH] = sheetDims(sheet);
+  for (const id of ['paper', 'gridRect']) { const r = $(id); r.setAttribute('x', 0); r.setAttribute('y', 0); r.setAttribute('width', SW); r.setAttribute('height', SH); }
+  const sh = $('sheetShadow'); sh.setAttribute('x', 4 / view.z); sh.setAttribute('y', 5 / view.z); sh.setAttribute('width', SW); sh.setAttribute('height', SH);
+  $('gridRect').style.display = showGrid ? '' : 'none';
+  $('stZoom').textContent = Math.round(view.z * 100) + '%';
+}
+function partSVG(p, extra = '') {
+  return `<g transform="translate(${p.x} ${p.y}) rotate(${(p.rot || 0) * 90}) scale(${p.flip ? -1 : 1} 1)"${extra}>${shapeOf(p).draw()}</g>`;
+}
+/* ---- pin numbers on tubes: one editable, movable label per hook ---- */
+const isTube = p => LIB[p.type].cat.startsWith('Tube');
+function pinGeom(p) {
+  if (!p.showPins) return [];
+  const bb = partBB(p), cx = (bb[0] + bb[2]) / 2, cy = (bb[1] + bb[3]) / 2, out = [];
+  const all = Object.entries(shapeOf(p).hooks).map(([n, h]) => [n, xf(p, h)]);
+  for (const [name, [hx, hy]] of all) {
+    let ux = hx - cx, uy = hy - cy;
+    if (Math.abs(ux) >= Math.abs(uy)) { ux = Math.sign(ux) || 1; uy = 0; } else { uy = Math.sign(uy) || 1; ux = 0; }   // along the lead
+    const pin = (p.pins && p.pins[name]) || {}, t = pin.t != null ? pin.t : 'p?';
+    // leads leaving the top or bottom: the leftmost hook in the row labels on its left, the others on their right,
+    // so closely spaced hooks (cathode and heater) never overprint; side leads label just above the lead
+    const leftmost = uy && all.every(([, q]) => q[1] !== hy || q[0] >= hx);
+    const bx = hx - ux * 12 + (uy ? (leftmost ? -7 : 7) : 0), by = hy - uy * 12 + (ux ? -6 : 0);
+    const x = bx + (pin.dx || 0), y = by + (pin.dy || 0), w = Math.max(String(t).length * 5.4, 8);
+    out.push({ name, t, x, y, hx, hy, moved: !!(pin.dx || pin.dy), x0: x - w / 2 - 1, x1: x + w / 2 + 1, top: y - 7, bottom: y + 3 });
+  }
+  return out;
+}
+function pinSVG(p) {
+  return pinGeom(p).map(g => (g.moved ? `<line class="pinlead" x1="${g.hx}" y1="${g.hy}" x2="${g.x}" y2="${g.y + (g.y < g.hy ? 2 : -7)}"/>` : '')
+    + `<text class="pinno" x="${g.x}" y="${g.y}" text-anchor="middle"${editing && editing.p === p && editing.field === 'pin:' + g.name ? ' visibility="hidden"' : ''}>${esc(g.t)}</text>`).join('');
+}
+function labelSVG(p) {
+  return labelLines(p).map(l => `<text class="lbl${l.field === 'ref' ? ' ref' : ''}" x="${l.x}" y="${l.y}" text-anchor="${l.a === 'middle' ? 'middle' : 'start'}"${editing && editing.p === p && editing.field === l.field ? ' visibility="hidden"' : ''}>${esc(l.field === 'ref' ? p.ref || '' : p.value || '')}</text>`).join('');
+}
+function textSVG(t) {
+  const lines = String(t.text).split('\n');
+  const fill = t.tone === 'glow' ? '#9A5210' : t.tone === 'muted' ? '#5C5248' : 'var(--ink)';
+  return `<text class="stxt" x="${t.x}" y="${t.y}" font-size="${t.size}" style="fill:${fill}">${lines.map((l, i) => `<tspan x="${t.x}" dy="${i ? t.size * 1.25 : 0}">${esc(l) || ' '}</tspan>`).join('')}</text>`;
+}
+function textBB(t) {
+  const lines = String(t.text).split('\n'), w = Math.max(...lines.map(l => l.length)) * t.size * 0.52;
+  return [t.x - 2, t.y - t.size, t.x + Math.max(w, 8) + 2, t.y + (lines.length - 1) * t.size * 1.25 + t.size * 0.3];
+}
+const key = p => p[0] + ',' + p[1];
+function onSegInterior(p, a, b) {
+  if (a[0] === b[0] && p[0] === a[0]) return p[1] > Math.min(a[1], b[1]) && p[1] < Math.max(a[1], b[1]);
+  if (a[1] === b[1] && p[1] === a[1]) return p[0] > Math.min(a[0], b[0]) && p[0] < Math.max(a[0], b[0]);
+  return false;
+}
+function connectivity() {
+  const cnt = new Map(), add = (p, n) => cnt.set(key(p), (cnt.get(key(p)) || 0) + n);
+  const ends = [];
+  for (const w of sheet.wires) { const a = w.pts[0], b = w.pts[w.pts.length - 1]; ends.push(a, b); add(a, 1); add(b, 1);
+    for (let i = 1; i < w.pts.length - 1; i++) { /* bends are not junctions */ } }
+  const hooks = allHooks(); for (const h of hooks) add(h.pos, 1);
+  const pts = new Map(); for (const e of ends) pts.set(key(e), e); for (const h of hooks) pts.set(key(h.pos), h.pos);
+  for (const [k, p] of pts) for (const w of sheet.wires) for (let i = 0; i < w.pts.length - 1; i++) if (onSegInterior(p, w.pts[i], w.pts[i + 1])) add(p, 2);
+  return cnt;
+}
+/* ---- wire colors ---- */
+const WIRE_COLORS = [
+  { k: 'ink', name: 'Black (signal)', c: '#17120E' }, { k: 'red', name: 'Red (power)', c: '#A3241B' },
+  { k: 'green', name: 'Green (ground)', c: '#2E6B34' }, { k: 'blue', name: 'Blue', c: '#1F4E8C' },
+  { k: 'brown', name: 'Brown', c: '#7A4A22' }, { k: 'orange', name: 'Orange', c: '#C2571A' }];
+const wcol = k => (WIRE_COLORS.find(c => c.k === k) || WIRE_COLORS[0]).c;
+const wstyle = w => w.color && w.color !== 'ink' ? ` style="stroke:${wcol(w.color)}"` : '';
+let drawColor = WIRE_COLORS.some(c => c.k === lsGet('gs.wirecolor', 'ink')) ? lsGet('gs.wirecolor', 'ink') : 'ink';
+const swatchRow = cur => `<div class="swatches" role="group" aria-label="Wire color">${WIRE_COLORS.map(c => `<button class="sw" data-wc="${c.k}" title="${c.name}" aria-label="${c.name}" aria-pressed="${c.k === cur}" style="background:${c.c}"></button>`).join('')}</div>`;
+function showDrawColor() { $('mWColorLine').setAttribute('stroke', wcol(drawColor)); $('mWColor').title = `Wire color for new wires: ${WIRE_COLORS.find(c => c.k === drawColor).name}`; }
+function colorWires(k) {   // recolor the selected wires
+  const ws = selItems().filter(i => i.k === 'wire').map(i => i.o); if (!ws.length) return false;
+  snapshot(); for (const w of ws) { if (k === 'ink') delete w.color; else w.color = k; }
+  render(); changed(); setMsg(`${ws.length === 1 ? 'Wire' : ws.length + ' wires'} set to ${WIRE_COLORS.find(c => c.k === k).name.split(' ')[0].toLowerCase()}`); return true;
+}
+function setDrawColor(k) { drawColor = k; lsSet('gs.wirecolor', k); showDrawColor(); }
+function wireColorMenu(btn) {
+  closeMenu();
+  menuEl = document.createElement('div'); menuEl.className = 'menu'; menuEl.setAttribute('role', 'menu'); menuEl.style.minWidth = '0';
+  const n = selItems().filter(i => i.k === 'wire').length;
+  menuEl.innerHTML = `<div class="mlabel">Wire color</div>${swatchRow(drawColor)}<div style="padding:0 10px 6px;font-size:11px;color:var(--muted);max-width:170px">New wires use this color${n ? `; the ${n} selected wire${n > 1 ? 's' : ''} change too` : ''}.</div>`;
+  document.body.appendChild(menuEl);
+  const r = btn.getBoundingClientRect();
+  menuEl.style.left = Math.max(8, r.left - menuEl.offsetWidth - 6) + 'px'; menuEl.style.top = Math.min(r.top, window.innerHeight - menuEl.offsetHeight - 8) + 'px';
+  menuEl.onclick = ev => { const b = ev.target.closest('[data-wc]'); if (!b) return; setDrawColor(b.dataset.wc); colorWires(b.dataset.wc); closeMenu(); };
+  menuEl.querySelector(`[data-wc="${drawColor}"]`).focus();
+  menuEl.addEventListener('keydown', ev => { if (ev.key === 'Escape') { closeMenu(); ev.stopPropagation(); } });
+}
+
+function render() {
+  $('layerFrame').innerHTML = frameSVG(sheet);
+  $('layerParts').innerHTML = sheet.parts.map(p => partSVG(p) + labelSVG(p) + pinSVG(p)).join('');
+  const cnt = connectivity();
+  let ws = sheet.wires.map(w => `<polyline class="wire"${wstyle(w)} points="${w.pts.map(p => p.join(',')).join(' ')}"/>`).join('');
+  const dots = new Set();
+  for (const w of sheet.wires) for (const e of [w.pts[0], w.pts[w.pts.length - 1]]) if ((cnt.get(key(e)) || 0) >= 3) dots.add(key(e));
+  for (const h of allHooks()) if ((cnt.get(key(h.pos)) || 0) >= 3 && sheet.wires.some(w => [w.pts[0], w.pts.at(-1)].some(e => key(e) === key(h.pos)))) dots.add(key(h.pos));
+  const dotColor = k => { const w = sheet.wires.find(w => w.color && w.pts.some(q => key(q) === k)); return w ? ` style="fill:${wcol(w.color)}"` : ''; };
+  ws += [...dots].map(k => { const [x, y] = k.split(','); return `<circle class="jdot"${dotColor(k)} cx="${x}" cy="${y}" r="3"/>`; }).join('');
+  $('layerWires').innerHTML = ws;
+  $('layerText').innerHTML = sheet.texts.map(textSVG).join('');
+  renderSel(); renderHooks(cnt); renderDoc(); applyView();
+  $('stCount').textContent = `${sheet.parts.length} part${sheet.parts.length === 1 ? '' : 's'} · ${sheet.wires.length} wire${sheet.wires.length === 1 ? '' : 's'}`;
+  renderSheets();
+}
+function renderHooks(cnt = connectivity()) {
+  if (!showHooks) { $('layerHooks').innerHTML = ''; return; }
+  const hot = hoverHook ? key(hoverHook.pos) : '';
+  $('layerHooks').innerHTML = allHooks().map(h => {
+    const k = key(h.pos), connected = (cnt.get(k) || 0) >= 2;
+    if (connected && k !== hot) return '';
+    return `<circle class="hookc${k === hot ? ' hot' : ''}" cx="${h.pos[0]}" cy="${h.pos[1]}" r="${k === hot ? 4.5 : 3.2}"/>`;
+  }).join('');
+}
+function renderSel() {
+  let s = '';
+  for (const p of sheet.parts) if (sel.has(p.id)) { const b = partBB(p); s += `<rect class="selbox" x="${b[0] - 4}" y="${b[1] - 4}" width="${b[2] - b[0] + 8}" height="${b[3] - b[1] + 8}" rx="3"/>`; }
+  for (const w of sheet.wires) if (sel.has(w.id)) s += `<polyline class="selwire" points="${w.pts.map(p => p.join(',')).join(' ')}"/>`;
+  for (const t of sheet.texts) if (sel.has(t.id)) { const b = textBB(t); s += `<rect class="selbox" x="${b[0] - 2}" y="${b[1] - 2}" width="${b[2] - b[0] + 4}" height="${b[3] - b[1] + 4}" rx="2"/>`; }
+  if (selLabel) { const q = sheet.parts.find(x => x.id === selLabel.id), l = q && labelLines(q).find(x => x.field === selLabel.field);
+    if (l) s += `<rect class="selbox" style="stroke-dasharray:none;stroke-width:1.4" x="${l.x0 - 3}" y="${l.top - 2}" width="${l.x1 - l.x0 + 6}" height="${l.bottom - l.top + 4}" rx="2"/>`; else selLabel = null; }
+  $('layerSel').innerHTML = s;
+  renderProps();
+  updateButtons();
+}
+let cutHover = null;
+function cutAt(raw, segOnly) {
+  const t = hit(raw); cutHover = null;
+  if (!t) { setMsg('Nothing to cut here. Click a part, a wire or some text.'); renderOver(); return; }
+  if (t.k === 'pin') { setMsg('Pin numbers are turned off from the part\'s right-click menu.'); return; }
+  if (t.k === 'label') { hideLabel(t.o.id, t.field); renderOver(); return; }
+  snapshot();
+  let what;
+  if (t.k === 'part') { sheet.parts = sheet.parts.filter(q => q !== t.o); what = t.o.ref || LIB[t.o.type].name; }
+  else if (t.k === 'wire' && segOnly && t.o.pts.length > 2) {
+    // cut one segment: what is left on either side stays as its own wire
+    const a = t.o.pts.slice(0, t.seg + 1), b = t.o.pts.slice(t.seg + 1);
+    const i = sheet.wires.indexOf(t.o), keep = [];
+    if (a.length >= 2) keep.push({ ...t.o, pts: a });
+    if (b.length >= 2) keep.push({ ...t.o, id: uid(), pts: b });
+    sheet.wires.splice(i, 1, ...keep); what = 'one wire segment';
+  }
+  else if (t.k === 'wire') { sheet.wires = sheet.wires.filter(w => w !== t.o); what = segOnly ? 'one wire segment' : 'wire'; }
+  else { sheet.texts = sheet.texts.filter(x => x !== t.o); what = 'text'; }
+  sel.delete(t.o.id); render(); renderOver(); changed();
+  setMsg(`Cut ${what}. Ctrl+Z brings it back.`);
+}
+function renderOver() {
+  let s = '';
+  if ((mode === 'cut' || mode === 'snip') && cutHover) {
+    const t = cutHover;
+    if (mode === 'snip' && t.k === 'wire') { const a = t.o.pts[t.seg], b = t.o.pts[t.seg + 1]; s += `<line class="cutwire" x1="${a[0]}" y1="${a[1]}" x2="${b[0]}" y2="${b[1]}"/>`; }
+    else
+    if (t.k === 'part') { const b = partBB(t.o); s += `<rect class="cutmark" x="${b[0] - 4}" y="${b[1] - 4}" width="${b[2] - b[0] + 8}" height="${b[3] - b[1] + 8}" rx="3"/>`; }
+    else if (t.k === 'wire') s += `<polyline class="cutwire" points="${t.o.pts.map(q => q.join(',')).join(' ')}"/>`;
+    else if (t.k === 'text') { const b = textBB(t.o); s += `<rect class="cutmark" x="${b[0] - 2}" y="${b[1] - 2}" width="${b[2] - b[0] + 4}" height="${b[3] - b[1] + 4}" rx="2"/>`; }
+    else if (t.k === 'label') { const l = labelLines(t.o).find(x => x.field === t.field); if (l) s += `<rect class="cutmark" x="${l.x0 - 3}" y="${l.top - 2}" width="${l.x1 - l.x0 + 6}" height="${l.bottom - l.top + 4}" rx="2"/>`; }
+  }
+  if (mode === 'place' && placeType) {
+    s += `<g class="ghost">${partSVG({ type: placeType, x: mouse[0], y: mouse[1], rot: placeRot, flip: placeFlip })}</g>`;
+  }
+  if (mode === 'wire') {
+    s += `<line class="cursor-x" x1="${mouse[0] - 6}" y1="${mouse[1]}" x2="${mouse[0] + 6}" y2="${mouse[1]}"/><line class="cursor-x" x1="${mouse[0]}" y1="${mouse[1] - 6}" x2="${mouse[0]}" y2="${mouse[1] + 6}"/>`;
+    if (wireDraft) { const pts = draftPreview(); s += `<polyline class="wire"${wstyle({ color: drawColor })} points="${wireDraft.pts.map(p => p.join(',')).join(' ')}"/><polyline class="preview" points="${pts.map(p => p.join(',')).join(' ')}"/>`; }
+  }
+  if (band) s += `<rect class="band" x="${Math.min(band.a[0], band.b[0])}" y="${Math.min(band.a[1], band.b[1])}" width="${Math.abs(band.b[0] - band.a[0])}" height="${Math.abs(band.b[1] - band.a[1])}"/>`;
+  $('layerOver').innerHTML = s;
+}
+
+/* =====================================================================
+   PANEL: sheets, parts library, properties
+   ===================================================================== */
+let renaming = null, confirmDel = null, treeOpen = true;
+const slugFile = n => (String(n || 'sheet').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'sheet') + '.sch';
+const cleanFile = n => String(n).replace(/[\\/:*?"<>|]+/g, '').trim();
+const ICON_PROJ = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"><path d="M1.5 4h5l1.5 1.5h6.5v8h-13z"/><path d="M1.5 4V2.5h5"/></svg>';
+const ICON_SCH = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"><path d="M3 1.5h7l3 3v10H3z"/><path d="M5.5 10.5h1.5l1-2 1 3 .8-1.5h1.2"/></svg>';
+function renderSheets() {
+  const el = $('sheets');
+  const rootName = renaming === 'root' ? `<input id="renameIn" value="${esc(project.name)}" aria-label="Project name">` : `<span class="nm">${esc(project.name)}</span><span class="ct">${project.sheets.length}</span>`;
+  const kids = project.sheets.map(s => {
+    if (confirmDel === s.id) return `<div class="confirm">Delete ${esc(s.file)}? <button class="yes" data-yes="${s.id}">Delete</button><button data-no="1">Keep</button></div>`;
+    const on = s.id === sheet.id ? ' on' : '';
+    const name = renaming === s.id ? `<input id="renameIn" value="${esc(s.file)}" aria-label="File name">`
+      : `<span class="nm">${esc(s.file)}</span><span class="ct" title="${SIZES[s.size || 'A'].name}, ${s.orient === 'P' ? 'portrait' : 'landscape'}">${s.size || 'A'}${s.orient === 'P' ? '·P' : '·L'}</span>`;
+    return `<div class="tnode${on}" role="treeitem" aria-selected="${!!on}" data-sheet="${s.id}" title="${esc(s.name)} · double-click to rename the file">${ICON_SCH}${name}${project.sheets.length > 1 && renaming !== s.id ? `<button class="x" data-del="${s.id}" title="Delete this schematic" aria-label="Delete ${esc(s.file)}">×</button>` : ''}</div>`;
+  }).join('');
+  el.innerHTML = `<div class="tnode root" role="treeitem" aria-expanded="${treeOpen}" data-root="1" title="Double-click to rename the project"><button class="car${treeOpen ? ' open' : ''}" data-tog="1" aria-label="${treeOpen ? 'Collapse' : 'Expand'}">▶</button>${ICON_PROJ}${rootName}</div>`
+    + (treeOpen ? `<div class="tkids" role="group">${kids}</div>` : '');
+  el.tabIndex = 0;
+  const ri = $('renameIn');
+  if (ri) {
+    ri.focus();
+    const dot = ri.value.lastIndexOf('.'); if (renaming !== 'root' && dot > 0) ri.setSelectionRange(0, dot); else ri.select();
+    const done = ok => {
+      if (!renaming) return;
+      const v = ok ? (renaming === 'root' ? ri.value.trim() : cleanFile(ri.value)) : '';
+      if (v) {
+        if (renaming === 'root') { if (v !== project.name) { snapshot(); project.name = v; changed(); } }
+        else { const t = project.sheets.find(q => q.id === renaming); if (t && v !== t.file) { snapshot(); t.file = /\.[a-z0-9]+$/i.test(v) ? v : v + '.sch'; changed(); setMsg(`Renamed to ${t.file}`); } }
+      }
+      renaming = null; renderSheets(); $('layerFrame').innerHTML = frameSVG(sheet); renderDoc();
+    };
+    ri.onkeydown = e => { if (e.key === 'Enter') done(true); if (e.key === 'Escape') done(false); e.stopPropagation(); };
+    ri.onblur = () => done(true);
+    ri.onclick = e => e.stopPropagation(); ri.ondblclick = e => e.stopPropagation();
+  }
+}
+$('sheets').addEventListener('click', e => {
+  const t = e.target.closest('[data-del],[data-yes],[data-no],[data-sheet],[data-tog]'); if (!t) return;
+  if (t.dataset.tog) { treeOpen = !treeOpen; renderSheets(); return; }
+  if (t.dataset.del) { confirmDel = t.dataset.del; renderSheets(); e.stopPropagation(); return; }
+  if (t.dataset.yes) { snapshot(); project.sheets = project.sheets.filter(q => q.id !== t.dataset.yes); confirmDel = null; switchSheet(project.sheets[0].id); changed(); return; }
+  if (t.dataset.no) { confirmDel = null; renderSheets(); return; }
+  if (t.dataset.sheet && t.dataset.sheet !== sheet.id) switchSheet(t.dataset.sheet);
+});
+$('sheets').addEventListener('dblclick', e => {
+  if (e.target.closest('[data-tog],[data-del],input')) return;
+  const r = e.target.closest('[data-sheet],[data-root]'); if (!r) return;
+  renaming = r.dataset.root ? 'root' : r.dataset.sheet; renderSheets();
+});
+$('sheets').addEventListener('keydown', e => {
+  if (e.target.matches('input')) return;
+  const i = project.sheets.indexOf(sheet);
+  if (e.key === 'ArrowDown' && i < project.sheets.length - 1) { e.preventDefault(); switchSheet(project.sheets[i + 1].id); }
+  else if (e.key === 'ArrowUp' && i > 0) { e.preventDefault(); switchSheet(project.sheets[i - 1].id); }
+  else if (e.key === 'F2' || e.key === 'Enter') { e.preventDefault(); renaming = sheet.id; renderSheets(); }
+  else if (e.key === 'ArrowLeft' && treeOpen) { treeOpen = false; renderSheets(); }
+  else if (e.key === 'ArrowRight' && !treeOpen) { treeOpen = true; renderSheets(); }
+  e.stopPropagation();
+});
+$('bAddSheet').onclick = () => {
+  snapshot(); treeOpen = true;
+  let n = project.sheets.length + 1, f; const used = new Set(project.sheets.map(q => q.file));
+  do { f = `sheet-${n++}.sch`; } while (used.has(f));
+  const s = newSheet('Sheet ' + (project.sheets.length + 1), sheet); s.file = f;
+  project.sheets.push(s); switchSheet(s.id); renaming = s.id; renderSheets(); changed();
+};
+function switchSheet(id) { sheet = project.sheets.find(s => s.id === id) || project.sheets[0]; project.active = sheet.id; sel.clear(); wireDraft = null; render(); fit(); }
+
+let docFocus = null;
+function cornerPick(which, label) {
+  const cur = (sheet[which + 'Pos'] || {}).c || BLOCK_DEFAULT[which];
+  const b = (c, t, title) => `<button data-pick="${which}:${c}" aria-pressed="${cur === c}" title="${title}"><b>${t}</b></button>`;
+  return `<div class="field" style="grid-template-columns:62px minmax(0,1fr)"><label>${label}</label><div class="seg" style="grid-template-columns:repeat(5,1fr)" role="group" aria-label="${label} position">${b('TL', '↖', 'Top-left corner')}${b('TR', '↗', 'Top-right corner')}${b('BL', '↙', 'Bottom-left corner')}${b('BR', '↘', 'Bottom-right corner')}${b('F', 'Free', 'Stay where it is')}</div></div>`;
+}
+function renderDoc() {
+  const b = $('docBody'); if (!b) return;
+  if (b.contains(document.activeElement) && document.activeElement.matches('input:not([type=checkbox])')) { $('docSize').textContent = sheet.size + (sheet.orient === 'P' ? ' portrait' : ' landscape'); return; }
+  const d = project.doc, z = SIZES[sheet.size];
+  $('docSize').textContent = sheet.size + (sheet.orient === 'P' ? ' portrait' : ' landscape');
+  const f = (id, label, v, ph = '') => `<div class="field"><label for="${id}">${label}</label><input type="text" id="${id}" value="${esc(v || '')}" placeholder="${esc(ph)}" autocomplete="off"></div>`;
+  b.innerHTML = `
+    ${f('dSheetT', 'Sheet title', sheet.name)}
+    ${f('dFile', 'File name', sheet.file)}
+    <div class="dnote">Sheet size</div>
+    <div class="seg" role="group" aria-label="Sheet size">${Object.entries(SIZES).map(([k, v]) => `<button data-size="${k}" aria-pressed="${sheet.size === k}" title="${v.name}${v.note ? ' (' + v.note + ')' : ''}"><b>${k}</b><small>${v.note || v.name.replace(' in', '')}</small></button>`).join('')}</div>
+    <div class="dnote">${sheet.size} · ${z.name}${z.note ? ' (' + z.note + ')' : ''}</div>
+    <div class="seg two" role="group" aria-label="Orientation"><button data-or="L" aria-pressed="${sheet.orient !== 'P'}"><b>Landscape</b></button><button data-or="P" aria-pressed="${sheet.orient === 'P'}"><b>Portrait</b></button></div>
+    <div class="checks">
+      <label><input type="checkbox" id="dBorder"${sheet.border ? ' checked' : ''}> Border with zones</label>
+      <label><input type="checkbox" id="dRevs"${sheet.revs ? ' checked' : ''}> Revision chart</label>
+      <label><input type="checkbox" id="dTitle"${sheet.title ? ' checked' : ''}> Title block</label>
+    </div>
+    ${sheet.revs ? cornerPick('rv', 'Revision chart') : ''}
+    ${sheet.title ? cornerPick('tb', 'Title block') : ''}
+    <div class="dnote">Drag either block on the sheet; it sticks to a corner when you drop it close to one.</div>
+    <div class="dsub">Title block · every sheet</div>
+    <div class="logo-row">${d.logo ? `<img src="${d.logo}" alt="Company logo">` : '<span class="ph">LOGO</span>'}<button id="dLogo">${d.logo ? 'Replace logo' : 'Add logo'}</button>${d.logo ? '<button id="dLogoX">Remove</button>' : ''}</div>
+    ${f('dCo', 'Company', d.company)}
+    <div class="dnote">Project name: <b>${esc(project.name)}</b> (double-click it in the tree to rename)</div>
+    ${f('dPart', 'Part no.', d.part, 'GR-001-SCH-01')}
+    ${f('dRev', 'Rev', d.rev, 'latest in chart: ' + ((d.revisions || []).filter(r => r.rev).slice(-1)[0] || { rev: '—' }).rev)}
+    ${f('dDrawn', 'Drawn by', d.drawnBy)}
+    ${f('dChk', 'Checked by', d.checkedBy)}
+    ${f('dAppr', 'Approved by', d.approvedBy)}
+    <div class="dnote">Sheet ${project.sheets.indexOf(sheet) + 1} of ${project.sheets.length}, numbered in tree order.</div>
+    <div class="dsub">Revisions</div>
+    <div class="revs" id="dRevList">
+      <div class="revrow head"><span>Rev</span><span>Description</span><span>Date</span><span>Appr.</span><span></span></div>
+      ${(d.revisions || []).map((r, i) => `<div class="revrow" data-i="${i}"><input data-k="rev" value="${esc(r.rev)}" aria-label="Revision"><input data-k="desc" value="${esc(r.desc)}" aria-label="Description"><input data-k="date" value="${esc(r.date)}" aria-label="Date" placeholder="YYYY-MM-DD"><input data-k="by" value="${esc(r.by)}" aria-label="Approved by"><button data-rm="${i}" title="Remove this revision" aria-label="Remove revision">×</button></div>`).join('')}
+    </div>
+    <div><button class="addrev" id="dAddRev">+ Add revision</button></div>`;
+  const bindTxt = (id, key) => { const e = $(id); e.addEventListener('focus', () => snapshot(), { once: true }); e.addEventListener('input', () => { d[key] = e.value; $('layerFrame').innerHTML = frameSVG(sheet); changedSoon(); }); e.addEventListener('keydown', ev => { ev.stopPropagation(); if (ev.key === 'Enter') e.blur(); }); e.addEventListener('blur', () => renderDoc()); };
+  const bindSheet = (id, key, clean) => { const e = $(id); e.addEventListener('focus', () => snapshot(), { once: true }); e.addEventListener('input', () => { sheet[key] = clean ? clean(e.value) : e.value; $('layerFrame').innerHTML = frameSVG(sheet); renderSheets(); changedSoon(); }); e.addEventListener('keydown', ev => { ev.stopPropagation(); if (ev.key === 'Enter') e.blur(); }); e.addEventListener('blur', () => { if (key === 'file' && sheet.file && !/\.[a-z0-9]+$/i.test(sheet.file)) { sheet.file += '.sch'; render(); } if (key === 'file' && !sheet.file) { sheet.file = slugFile(sheet.name); render(); } renderDoc(); }); };
+  bindSheet('dSheetT', 'name'); bindSheet('dFile', 'file', cleanFile);
+  bindTxt('dCo', 'company'); bindTxt('dPart', 'part'); bindTxt('dRev', 'rev'); bindTxt('dDrawn', 'drawnBy'); bindTxt('dChk', 'checkedBy'); bindTxt('dAppr', 'approvedBy');
+  for (const [id, k] of [['dBorder', 'border'], ['dRevs', 'revs'], ['dTitle', 'title']]) $(id).onchange = e => { snapshot(); sheet[k] = e.target.checked; render(); changed(); };
+  b.querySelectorAll('[data-size]').forEach(x => x.onclick = () => { if (sheet.size === x.dataset.size) return; snapshot(); sheet.size = x.dataset.size; render(); fit(); changed(); setMsg(`Sheet size ${sheet.size}: ${SIZES[sheet.size].name}${SIZES[sheet.size].note ? ' (' + SIZES[sheet.size].note + ')' : ''}`); });
+  b.querySelectorAll('[data-or]').forEach(x => x.onclick = () => { if ((sheet.orient || 'L') === x.dataset.or) return; snapshot(); sheet.orient = x.dataset.or; render(); fit(); changed(); });
+  b.querySelectorAll('[data-pick]').forEach(x => x.onclick = () => { const [w, c] = x.dataset.pick.split(':'); stickBlock(w, c); });
+  $('dLogo').onclick = () => $('logoIn').click();
+  if ($('dLogoX')) $('dLogoX').onclick = () => { snapshot(); d.logo = ''; render(); changed(); };
+  $('dAddRev').onclick = () => { snapshot(); const prev = (d.revisions || []).slice(-1)[0]; const next = prev && /^[A-Z]$/.test(prev.rev) ? String.fromCharCode(prev.rev.charCodeAt(0) + (prev.rev === 'H' || prev.rev === 'N' ? 2 : 1)) : ''; d.revisions = [...(d.revisions || []), { rev: next, desc: '', date: new Date().toISOString().slice(0, 10), by: '' }]; render(); changed(); const rows = $('dRevList').querySelectorAll('.revrow'); const last = rows[rows.length - 1]; if (last) last.querySelector('[data-k=desc]').focus(); };
+  $('dRevList').addEventListener('click', e => { const r = e.target.closest('[data-rm]'); if (!r) return; snapshot(); d.revisions.splice(+r.dataset.rm, 1); render(); changed(); });
+  $('dRevList').querySelectorAll('input').forEach(inp => {
+    inp.addEventListener('focus', () => snapshot(), { once: true });
+    inp.addEventListener('input', () => { const i = +inp.closest('[data-i]').dataset.i; d.revisions[i][inp.dataset.k] = inp.value; $('layerFrame').innerHTML = frameSVG(sheet); changedSoon(); });
+    inp.addEventListener('keydown', ev => { ev.stopPropagation(); if (ev.key === 'Enter') inp.blur(); });
+    inp.addEventListener('blur', () => setTimeout(() => { if (!$('dRevList') || !$('dRevList').contains(document.activeElement)) renderDoc(); }, 0));
+  });
+  if (docFocus && $(docFocus)) { $(docFocus).focus(); docFocus = null; }
+}
+$('docSec').addEventListener('toggle', () => lsSet('gs.docOpen', $('docSec').open));
+$('logoIn').onchange = async e => {
+  const file = e.target.files[0]; e.target.value = ''; if (!file) return;
+  const url = await new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = rej; r.readAsDataURL(file); }).catch(() => null);
+  if (!url) { setMsg('Could not read that image.', true); return; }
+  const img = new Image();
+  img.onload = () => {
+    // shrink to fit the title block's logo cell so the project stays small enough to save
+    const k = Math.min(1, 360 / img.width, 300 / img.height), c = document.createElement('canvas');
+    c.width = Math.max(1, Math.round(img.width * k)); c.height = Math.max(1, Math.round(img.height * k));
+    c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+    let data = c.toDataURL('image/png');
+    if (data.length > 120000) { const g = c.getContext('2d'); g.globalCompositeOperation = 'destination-over'; g.fillStyle = '#FBF8F3'; g.fillRect(0, 0, c.width, c.height); data = c.toDataURL('image/jpeg', 0.85); }
+    snapshot(); project.doc.logo = data; render(); changed(); setMsg(`Logo added (${Math.round(data.length / 1024)} KB)`);
+  };
+  img.onerror = () => setMsg('That file is not an image this browser can read.', true);
+  img.src = url;
+};
+
+function thumb(type) {
+  // A minimum window keeps small parts from being blown up; line weights are fixed in screen
+  // pixels (see .tile svg rules) so a resistor's leads match a pentode's.
+  const L = LIB[type], b = L.bb, pad = 4;
+  const w = Math.max(100, b[2] - b[0] + 2 * pad), h = Math.max(62, b[3] - b[1] + 2 * pad);
+  const cx = (b[0] + b[2]) / 2, cy = (b[1] + b[3]) / 2;
+  return `<svg viewBox="${cx - w / 2} ${cy - h / 2} ${w} ${h}" preserveAspectRatio="xMidYMid meet" aria-hidden="true">${L.draw()}</svg>`;
+}
+const isDirect = L => /_dh$/.test(L.type) || L.type === 'm_rect';
+function renderLib() {
+  const q = $('search').value.trim().toLowerCase();
+  let total = 0;
+  $('lib').innerHTML = CATS.map(cat => {
+    const items = Object.values(LIB).filter(L => L.cat === cat && (!q || (L.name + ' ' + L.cat + ' ' + L.tags + ' ' + L.value).toLowerCase().includes(q)));
+    total += items.length;
+    if (!items.length) return '';
+    const open = q || !libClosed.has(cat) ? ' open' : '';
+    const tile = L => `<button class="tile${placeType === L.type && mode === 'place' ? ' armed' : ''}" data-type="${L.type}" title="${esc(L.name)} · ${Object.keys(L.hooks).length} hooks">${thumb(L.type)}<span>${esc(L.name)}</span></button>`;
+    let body;
+    if (cat === 'Tube, modern') {
+      // filament (directly heated) tubes first, in their own group, then everything with a cathode
+      const isGas = L => /^m_gas/.test(L.type), isSp = L => /^m_sp_/.test(L.type), vac = items.filter(L => !isGas(L) && !isSp(L)), gas = items.filter(isGas), sp = items.filter(isSp);
+      const direct = vac.filter(isDirect), withHtr = vac.filter(L => !isDirect(L) && /_ih$/.test(L.type)), kOnly = vac.filter(L => !isDirect(L) && !/_ih$/.test(L.type));
+      const grp = (label, list) => list.length ? `<div class="subcat">${label}</div><div class="tiles">${list.map(tile).join('')}</div>` : '';
+      body = grp('Filament (direct)', direct) + grp('Cathode only', kOnly) + grp('Cathode + filament', withHtr) + grp('Gas-filled', gas) + grp('Specialized', sp);
+    } else if (cat === 'Semiconductors') {
+      // diodes, then bipolar transistors, then FETs, each group starting a fresh row
+      const dio = items.filter(L => /^diode/.test(L.type)), bjt = items.filter(L => /^(npn|pnp)/.test(L.type));
+      const fet = items.filter(L => !dio.includes(L) && !bjt.includes(L));
+      body = [dio, bjt, fet].filter(l => l.length).map(l => `<div class="tiles">${l.map(tile).join('')}</div>`).join('');
+    } else body = `<div class="tiles">${items.map(tile).join('')}</div>`;
+    return `<details class="cat" data-cat="${cat}"${open}><summary>${cat}<small>${items.length}</small></summary>${body}</details>`;
+  }).join('') || `<p class="props empty" style="padding:8px">No part matches “${esc(q)}”.</p>`;
+  $('partCount').textContent = total + ' parts';
+}
+const libClosed = new Set(lsGet('gs.closed', ['Tube, 1920s']));
+$('lib').addEventListener('toggle', e => { const d = e.target; if (!d.dataset || !d.dataset.cat || $('search').value) return; d.open ? libClosed.delete(d.dataset.cat) : libClosed.add(d.dataset.cat); lsSet('gs.closed', [...libClosed]); }, true);
+$('lib').addEventListener('click', e => { const t = e.target.closest('[data-type]'); if (!t) return; armPlace(t.dataset.type); });
+$('search').addEventListener('input', renderLib);
+$('search').addEventListener('keydown', e => e.stopPropagation());
+
+function armPlace(type) { placeType = type; placeRot = 0; placeFlip = false; setMode('place'); renderLib(); setMsg(`Placing ${LIB[type].name}. Click to drop; R rotates, X/Y flip, Esc stops.`); }
+
+function renderProps() {
+  const b = $('propBody'), items = selItems();
+  if (!items.length) { b.innerHTML = `<div class="empty">Select a part, wire or text to edit it. Click a part in the library to place it; click any hook to start a wire.</div>`; return; }
+  if (items.length > 1) {
+    b.innerHTML = `<div class="what">${items.length} items selected<small>${items.filter(i => i.k === 'part').length} parts · ${items.filter(i => i.k === 'wire').length} wires · ${items.filter(i => i.k === 'text').length} texts</small></div>
+      ${items.some(i => i.k === 'wire') ? `<div class="field"><label>Wire color</label>${swatchRow((() => { const cs = new Set(items.filter(i => i.k === 'wire').map(i => i.o.color || 'ink')); return cs.size === 1 ? [...cs][0] : ''; })())}</div>` : ''}
+      <div class="row-btns"><button data-act="rot">Rotate</button><button data-act="dup">Duplicate</button><button class="del" data-act="del">Delete</button></div>`; return;
+  }
+  const it = items[0];
+  if (it.k === 'part') {
+    const p = it.o, L = LIB[p.type], HK = shapeOf(p).hooks;
+    const pins = Object.keys(HK).join(' · ');
+    b.innerHTML = `<div class="what">${esc(L.name)}<small>${esc(L.cat)} · ${Object.keys(HK).length} hook${Object.keys(HK).length > 1 ? 's' : ''}</small></div>
+      ${L.vary ? `<div class="field"><label for="pVary">${L.vary.label}</label><select id="pVary">${Array.from({ length: L.vary.max - L.vary.min + 1 }, (_, i) => L.vary.min + i).map(n => `<option${n === varyN(p) ? ' selected' : ''}>${n}</option>`).join('')}</select></div>` : ''}
+      <div class="field"><label for="pRef">Ref des</label><input type="text" id="pRef" value="${esc(p.ref)}" spellcheck="false"></div>
+      <div class="field"><label for="pVal">Value</label><input type="text" id="pVal" value="${esc(p.value)}"></div>
+      <div class="field"><label>Show</label><span style="display:flex;gap:12px;flex-wrap:wrap"><label style="display:flex;gap:5px;align-items:center;color:inherit"><input type="checkbox" id="pShowR"${fieldShown(p, 'ref') ? ' checked' : ''}> ref des</label><label style="display:flex;gap:5px;align-items:center;color:inherit"><input type="checkbox" id="pShowV"${fieldShown(p, 'value') ? ' checked' : ''}> value</label></span></div>
+      <div class="pins">Hooks: ${esc(pins)}</div>
+      <div class="row-btns"><button data-act="rot">Rotate</button><button data-act="flip">Flip H</button><button data-act="flipv">Flip V</button><button data-act="dup">Duplicate</button>${(p.lx || p.ly || p.rdx || p.rdy || p.vdx || p.vdy) ? '<button data-act="lreset">Reset labels</button>' : ''}<button class="del" data-act="del">Delete</button></div>`;
+    const bind = (id, f) => { const e = $(id); if (!e) return; e.addEventListener('focus', () => snapshot(), { once: true }); e.addEventListener('input', () => { f(e); render(); changedSoon(); }); e.addEventListener('keydown', ev => { ev.stopPropagation(); if (ev.key === 'Enter') e.blur(); }); };
+    bind('pRef', e => p.ref = e.value); bind('pVal', e => p.value = e.value);
+    if ($('pVary')) $('pVary').onchange = e => setVary(p, +e.target.value);
+    $('pShowR').onchange = e => { snapshot(); p.showRef = e.target.checked; render(); changed(); };
+    $('pShowV').onchange = e => { snapshot(); p.showVal = e.target.checked; render(); changed(); };
+  } else if (it.k === 'wire') {
+    const w = it.o, len = w.pts.slice(1).reduce((a, p, i) => a + Math.abs(p[0] - w.pts[i][0]) + Math.abs(p[1] - w.pts[i][1]), 0);
+    b.innerHTML = `<div class="what">Wire<small>${w.pts.length - 1} segment${w.pts.length > 2 ? 's' : ''} · ${len / G} grid units</small></div>
+      <div class="field"><label>Color</label>${swatchRow(w.color || 'ink')}</div>
+      <div class="empty">Drag a segment to move it; the ends stay put. Drag with Shift held to move the whole wire.</div>
+      <div class="row-btns"><button class="del" data-act="del">Delete</button></div>`;
+  } else {
+    const t = it.o;
+    b.innerHTML = `<div class="what">Text</div>
+      <div class="field"><label for="tTxt">Text</label><textarea id="tTxt" rows="2">${esc(t.text)}</textarea></div>
+      <div class="field"><label for="tSize">Size</label><select id="tSize">${[9, 10, 11, 12, 14, 15, 18, 24].map(s => `<option${s === t.size ? ' selected' : ''}>${s}</option>`).join('')}</select></div>
+      <div class="field"><label for="tTone">Color</label><select id="tTone"><option value="ink"${t.tone === 'ink' ? ' selected' : ''}>Ink</option><option value="glow"${t.tone === 'glow' ? ' selected' : ''}>Glow (callouts)</option><option value="muted"${t.tone === 'muted' ? ' selected' : ''}>Muted</option></select></div>
+      <div class="row-btns"><button data-act="dup">Duplicate</button><button class="del" data-act="del">Delete</button></div>`;
+    const ta = $('tTxt'); ta.addEventListener('focus', () => snapshot(), { once: true });
+    ta.addEventListener('input', () => { t.text = ta.value; render(); changedSoon(); }); ta.addEventListener('keydown', e => e.stopPropagation());
+    $('tSize').onchange = e => { snapshot(); t.size = +e.target.value; render(); changed(); };
+    $('tTone').onchange = e => { snapshot(); t.tone = e.target.value; render(); changed(); };
+  }
+}
+$('propBody').addEventListener('click', e => {
+  const wc = e.target.closest('[data-wc]'); if (wc) { colorWires(wc.dataset.wc); return; }
+  const a = e.target.closest('[data-act]'); if (!a) return;
+  ({ rot: rotateSel, flip: () => flipSel('h'), flipv: () => flipSel('v'), dup: duplicate, del: deleteSel, lreset: () => { snapshot(); for (const it of selItems()) if (it.k === 'part') { Object.assign(it.o, { lx: 0, ly: 0, rdx: 0, rdy: 0, vdx: 0, vdy: 0 }); } render(); changed(); } })[a.dataset.act]();
+});
+
+/* =====================================================================
+   EDITING
+   ===================================================================== */
+function selItems() {
+  const r = [];
+  for (const p of sheet.parts) if (sel.has(p.id)) r.push({ k: 'part', o: p });
+  for (const w of sheet.wires) if (sel.has(w.id)) r.push({ k: 'wire', o: w });
+  for (const t of sheet.texts) if (sel.has(t.id)) r.push({ k: 'text', o: t });
+  return r;
+}
+function snapshot() { undoStack.push(JSON.stringify(project)); if (undoStack.length > 150) undoStack.shift(); redoStack = []; updateButtons(); }
+function restore(json) { const act = sheet && sheet.id; project = JSON.parse(json); sheet = project.sheets.find(s => s.id === act) || project.sheets[0]; sel.clear(); render(); changed(); }
+function undo() { if (!undoStack.length) return; redoStack.push(JSON.stringify(project)); restore(undoStack.pop()); setMsg('Undone'); }
+function redo() { if (!redoStack.length) return; undoStack.push(JSON.stringify(project)); restore(redoStack.pop()); setMsg('Redone'); }
+function updateButtons() {
+  $('bUndo').disabled = !undoStack.length; $('bRedo').disabled = !redoStack.length;
+  const any = sel.size > 0;
+  $('bDel').disabled = !any; $('bFlip').disabled = $('bFlipV').disabled = !selItems().some(i => i.k === 'part') && mode !== 'place';
+  $('bRot').disabled = !selItems().some(i => i.k === 'part') && mode !== 'place';
+}
+
+function simplify(pts) {
+  const out = [];
+  for (const p of pts) { const q = out[out.length - 1]; if (q && q[0] === p[0] && q[1] === p[1]) continue; out.push([p[0], p[1]]); }
+  for (let i = out.length - 2; i > 0; i--) {
+    const a = out[i - 1], b = out[i], c = out[i + 1];
+    if ((a[0] === b[0] && b[0] === c[0]) || (a[1] === b[1] && b[1] === c[1])) out.splice(i, 1);
+  }
+  return out;
+}
+// Keep wires attached when parts move: an end sitting on a moved hook follows it, and its neighbour keeps the segment orthogonal.
+function dragWiresWithHooks(moves) {   // moves: Map key(oldPos) -> [dx,dy]
+  const moveEnd = (w, end, m) => {
+    const nb = end === 0 ? 1 : w.pts.length - 2, p = w.pts[end], q = w.pts[nb];
+    const horiz = p[1] === q[1], vert = p[0] === q[0];
+    if (w.pts.length === 2) {
+      if ((horiz && m[1] === 0) || (vert && m[0] === 0)) { p[0] += m[0]; p[1] += m[1]; return; }
+      const np = [p[0] + m[0], p[1] + m[1]], corner = horiz ? [q[0], np[1]] : [np[0], q[1]];
+      w.pts = end === 0 ? [np, corner, [...q]] : [[...q], corner, np];
+      return;
+    }
+    p[0] += m[0]; p[1] += m[1];
+    if (horiz) q[1] += m[1]; else if (vert) q[0] += m[0];
+  };
+  for (const w of sheet.wires) {
+    if (sel.has(w.id)) continue;
+    const a = moves.get(key(w.pts[0])), b = moves.get(key(w.pts[w.pts.length - 1]));
+    if (a && b && a[0] === b[0] && a[1] === b[1]) { w.pts = w.pts.map(p => [p[0] + a[0], p[1] + a[1]]); continue; }
+    if (a) moveEnd(w, 0, a);
+    if (b) moveEnd(w, w.pts.length - 1, b);
+  }
+}
+function moveSelection(dx, dy, base) {
+  // base: deep copy of the sheet before the drag started
+  const b = JSON.parse(base); sheet.parts = b.parts; sheet.wires = b.wires; sheet.texts = b.texts;
+  const moves = new Map();
+  for (const p of sheet.parts) if (sel.has(p.id)) { for (const h of hooksOf(p)) moves.set(key(h.pos), [dx, dy]); p.x += dx; p.y += dy; }
+  for (const w of sheet.wires) if (sel.has(w.id)) w.pts = w.pts.map(p => [p[0] + dx, p[1] + dy]);
+  for (const t of sheet.texts) if (sel.has(t.id)) { t.x += dx; t.y += dy; }
+  if (moves.size && (dx || dy)) dragWiresWithHooks(moves);
+}
+function finishWires() { sheet.wires = sheet.wires.filter(w => w && Array.isArray(w.pts)); for (const w of sheet.wires) w.pts = simplify(w.pts); sheet.wires = sheet.wires.filter(w => w.pts.length >= 2); }
+
+// Change a variable part's setting (e.g. dynode count). Hooks that survive keep their wires; a hook that
+// moves (the anode) drags its wires along; wires left on a removed dynode stay where they were.
+function setVary(p, n) {
+  const L = LIB[p.type]; if (!L.vary) return;
+  n = Math.min(L.vary.max, Math.max(L.vary.min, n)); if (n === varyN(p)) return;
+  snapshot();
+  const before = Object.fromEntries(hooksOf(p).map(h => [h.name, h.pos]));
+  p[L.vary.key] = n;
+  const moves = new Map();
+  for (const h of hooksOf(p)) { const b = before[h.name]; if (b && (b[0] !== h.pos[0] || b[1] !== h.pos[1])) moves.set(key(b), [h.pos[0] - b[0], h.pos[1] - b[1]]); }
+  if (moves.size) dragWiresWithHooks(moves);
+  if (p.pins) { for (const k of Object.keys(p.pins)) if (!(k in shapeOf(p).hooks)) delete p.pins[k]; if (p.showPins) for (const k of Object.keys(shapeOf(p).hooks)) p.pins[k] = p.pins[k] || { t: 'p?' }; }
+  finishWires(); render(); changed(); setMsg(`${p.ref || L.name}: ${n} ${L.vary.label.toLowerCase()}`);
+}
+function rotateSel() {
+  if (mode === 'place') { placeRot = (placeRot + 1) % 4; renderOver(); return; }
+  const parts = selItems().filter(i => i.k === 'part'); if (!parts.length) return;
+  snapshot();
+  const base = JSON.stringify(sheet);
+  for (const it of parts) {
+    const p = it.o, before = hooksOf(p).map(h => h.pos);
+    p.rot = ((p.rot || 0) + (p.flip ? 3 : 1)) % 4;
+    const after = hooksOf(p).map(h => h.pos), moves = new Map();
+    before.forEach((b, i) => moves.set(key(b), [after[i][0] - b[0], after[i][1] - b[1]]));
+    dragWiresWithHooks(moves);
+  }
+  finishWires(); render(); changed();
+}
+// Flip horizontal ('h') or vertical ('v') in sheet space. The part is redrawn reversed in place:
+// it mirrors about the centre of its own hooks, so a two-ended part keeps its footprint and its
+// ends trade places. Wires stay where they are wherever a hook still lands; other hooks drag theirs.
+function flipOrient(rot, flip, axis) { return { rot: ((axis === 'h' ? 4 : 6) - (rot || 0)) % 4, flip: !flip }; }
+function flipSel(axis = 'h') {
+  if (mode === 'place') { const o = flipOrient(placeRot, placeFlip, axis); placeRot = o.rot; placeFlip = o.flip; renderOver(); return; }
+  const parts = selItems().filter(i => i.k === 'part'); if (!parts.length) return;
+  snapshot();
+  for (const it of parts) {
+    const p = it.o, before = hooksOf(p).map(h => h.pos);
+    const xs = before.map(b => b[0]), ys = before.map(b => b[1]);
+    const cx = (Math.min(...xs) + Math.max(...xs)) / 2, cy = (Math.min(...ys) + Math.max(...ys)) / 2;
+    Object.assign(p, flipOrient(p.rot, p.flip, axis));
+    // reflecting about the part origin puts the hook centre at 2*origin - c; shift it back to c
+    if (axis === 'h') p.x += 2 * (cx - p.x); else p.y += 2 * (cy - p.y);
+    const after = hooksOf(p).map(h => h.pos), still = new Set(after.map(key)), moves = new Map();
+    before.forEach((b, i) => { if (!still.has(key(b))) moves.set(key(b), [after[i][0] - b[0], after[i][1] - b[1]]); });
+    if (moves.size) dragWiresWithHooks(moves);
+  }
+  finishWires(); render(); changed();
+}
+function hideLabel(id, field) {
+  const q = sheet.parts.find(x => x.id === id); if (!q) return;
+  snapshot(); if (field === 'ref') q.showRef = false; else q.showVal = false;
+  selLabel = null; render(); changed();
+  setMsg(`Hid the ${FIELD_NAME[field]} of ${q.ref || LIB[q.type].name}. Turn it back on in Properties or by double-clicking the part.`);
+}
+function deleteSel() {
+  if (selLabel) { hideLabel(selLabel.id, selLabel.field); return; }
+  if (!sel.size) return; snapshot();
+  const n = sel.size;
+  sheet.parts = sheet.parts.filter(p => !sel.has(p.id)); sheet.wires = sheet.wires.filter(w => !sel.has(w.id)); sheet.texts = sheet.texts.filter(t => !sel.has(t.id));
+  sel.clear(); render(); changed(); setMsg(`Deleted ${n} item${n > 1 ? 's' : ''}`);
+}
+function copySel() {
+  const items = selItems(); if (!items.length) return;
+  clip = JSON.stringify({ parts: items.filter(i => i.k === 'part').map(i => i.o), wires: items.filter(i => i.k === 'wire').map(i => i.o), texts: items.filter(i => i.k === 'text').map(i => i.o) });
+  setMsg(`Copied ${items.length} item${items.length > 1 ? 's' : ''}`);
+}
+function paste(dx = 20, dy = 20) {
+  if (!clip) return; snapshot();
+  const c = JSON.parse(clip); sel.clear();
+  for (const p of c.parts) { p.id = uid(); p.x += dx; p.y += dy; if (p.ref) p.ref = nextRef(LIB[p.type].pre); sheet.parts.push(p); sel.add(p.id); }
+  for (const w of c.wires) { w.id = uid(); w.pts = w.pts.map(q => [q[0] + dx, q[1] + dy]); sheet.wires.push(w); sel.add(w.id); }
+  for (const t of c.texts) { t.id = uid(); t.x += dx; t.y += dy; sheet.texts.push(t); sel.add(t.id); }
+  clip = JSON.stringify({ parts: c.parts, wires: c.wires, texts: c.texts });
+  render(); changed();
+}
+function duplicate() { copySel(); paste(); }
+
+/* =====================================================================
+   POINTER INTERACTION
+   ===================================================================== */
+let drag = null, band = null, hoverHook = null, panning = null, spaceDown = false;
+function toWorld(e) { const r = svg.getBoundingClientRect(); return [(e.clientX - r.left - view.x) / view.z, (e.clientY - r.top - view.y) / view.z]; }
+function hookAt(p, tol = 6) {
+  let best = null, bd = tol / Math.max(view.z, .6) + 2;
+  for (const h of allHooks()) { const d = Math.hypot(h.pos[0] - p[0], h.pos[1] - p[1]); if (d < bd) { bd = d; best = h; } }
+  return best;
+}
+function distSeg(p, a, b) {
+  const dx = b[0] - a[0], dy = b[1] - a[1], L = dx * dx + dy * dy;
+  let t = L ? ((p[0] - a[0]) * dx + (p[1] - a[1]) * dy) / L : 0; t = Math.max(0, Math.min(1, t));
+  return Math.hypot(p[0] - a[0] - t * dx, p[1] - a[1] - t * dy);
+}
+function hit(p) {
+  const tol = 5 / view.z + 1;
+  for (let i = sheet.texts.length - 1; i >= 0; i--) { const b = textBB(sheet.texts[i]); if (p[0] >= b[0] && p[0] <= b[2] && p[1] >= b[1] && p[1] <= b[3]) return { k: 'text', o: sheet.texts[i] }; }
+  for (let i = sheet.parts.length - 1; i >= 0; i--) {   // pin numbers
+    const q = sheet.parts[i];
+    for (const g of pinGeom(q)) if (p[0] >= g.x0 - 1 && p[0] <= g.x1 + 1 && p[1] >= g.top - 1 && p[1] <= g.bottom + 1) return { k: 'pin', o: q, pin: g.name };
+  }
+  for (let i = sheet.parts.length - 1; i >= 0; i--) {   // label lines
+    const q = sheet.parts[i];
+    for (const l of labelLines(q)) if (p[0] >= l.x0 - 2 && p[0] <= l.x1 + 2 && p[1] >= l.top - 1 && p[1] <= l.bottom + 1) return { k: 'label', o: q, field: l.field };
+  }
+  for (const w of sheet.wires) for (let i = 0; i < w.pts.length - 1; i++) if (distSeg(p, w.pts[i], w.pts[i + 1]) < tol) return { k: 'wire', o: w, seg: i };
+  for (let i = sheet.parts.length - 1; i >= 0; i--) { const b = partBB(sheet.parts[i]); if (p[0] >= b[0] - 2 && p[0] <= b[2] + 2 && p[1] >= b[1] - 2 && p[1] <= b[3] + 2) return { k: 'part', o: sheet.parts[i] }; }
+  return null;
+}
+
+svg.addEventListener('pointerdown', e => {
+  if (!sheet) return;
+  svg.setPointerCapture(e.pointerId);
+  const raw = toWorld(e), p = [snap(raw[0]), snap(raw[1])];
+  if (e.button !== 2) closeMenu();
+  if (editing) finishEdit(true);
+  if (e.button === 1 || (e.button === 0 && spaceDown)) { panning = { sx: e.clientX, sy: e.clientY, vx: view.x, vy: view.y }; $('view').classList.add('panning'); return; }
+  if (e.button === 2) { if (mode === 'wire' && wireDraft) finishDraft(); else if (mode === 'place') setMode('select'); else if (mode === 'select') partMenu(e, raw); return; }
+  const dbl = e.button === 0 && isDouble(e);
+  if (dbl && (mode === 'select' || (mode === 'wire' && wireDraft))) { e.preventDefault(); if (drag) drag = null; onDouble(raw); return; }
+  if (mode === 'place') { placePart(p); return; }
+  if (mode === 'text') { addText(p); return; }
+  if (mode === 'cut' || mode === 'snip') { cutAt(raw, mode === 'snip'); return; }
+  if (mode === 'wire') { wireClick(p, raw); return; }
+  // select mode
+  const h = hookAt(raw);
+  const target = hit(raw);
+  if (h && !(target && target.k === 'label')) { setMode('wire'); wireClick(h.pos, raw); return; }
+  if (!target) selLabel = null;
+  const blk = !target && blockAt(raw);
+  if (blk) {
+    const [w, h] = BLOCK_SIZE(sheet)[blk], [x, y] = blockXY(sheet, blk, w, h);
+    drag = { kind: 'block', which: blk, start: raw, x, y, w, h, before: JSON.stringify(sheet[blk + 'Pos']), moved: false };
+    return;
+  }
+  if (!target) {
+    if (!e.shiftKey) sel.clear();
+    band = { a: raw, b: raw, add: e.shiftKey }; renderSel(); renderOver(); return;
+  }
+  selLabel = null;
+  if (target && target.k === 'label') { selLabel = { id: target.o.id, field: target.field }; }
+  if (target.k === 'pin') {
+    snapshot(); const q = target.o; q.pins = q.pins || {}; const pn = q.pins[target.pin] = q.pins[target.pin] || {};
+    if (!sel.has(q.id)) { sel.clear(); sel.add(q.id); renderSel(); }
+    drag = { kind: 'pin', o: q, pin: target.pin, start: [snapL(raw[0]), snapL(raw[1])], ox: pn.dx || 0, oy: pn.dy || 0, moved: false }; return;
+  }
+  if (target.k === 'label') { snapshot(); const k = target.field === 'ref' ? 'r' : 'v'; if (!sel.has(target.o.id)) { sel.clear(); sel.add(target.o.id); renderSel(); } renderSel(); drag = { kind: 'label', o: target.o, k, start: [snapL(raw[0]), snapL(raw[1])], ox: target.o[k + 'dx'] || 0, oy: target.o[k + 'dy'] || 0, moved: false }; return; }
+  const id = target.o.id;
+  if (e.shiftKey) { sel.has(id) ? sel.delete(id) : sel.add(id); renderSel(); return; }
+  if (!sel.has(id)) { sel.clear(); sel.add(id); renderSel(); }
+  snapshot();
+  if (target.k === 'wire' && sel.size === 1 && !e.altKey && !e.ctrlKey) {
+    // segment drag: move one segment at right angles, ends stay fixed
+    const w = target.o; let pts = w.pts.map(q => [...q]), i = target.seg;
+    if (i === 0) { pts.unshift([...pts[0]]); i = 1; }
+    if (i === pts.length - 2) { pts.push([...pts[pts.length - 1]]); }
+    drag = { kind: 'seg', w, pts, i, horiz: pts[i][1] === pts[i + 1][1], start: p, shift: e.shiftKey };
+    return;
+  }
+  drag = { kind: 'move', start: p, base: JSON.stringify(sheet), moved: false };
+});
+svg.addEventListener('pointermove', e => {
+  if (!sheet) return;
+  const raw = toWorld(e), p = [snap(raw[0]), snap(raw[1])];
+  mouseRaw = raw; mouse = p;
+  $('stXY').textContent = `x ${p[0] / G} y ${p[1] / G}`;
+  if (panning) { view.x = panning.vx + e.clientX - panning.sx; view.y = panning.vy + e.clientY - panning.sy; applyView(); return; }
+  if (drag) {
+    const dx = p[0] - drag.start[0], dy = p[1] - drag.start[1];
+    if (drag.kind === 'move') { if (dx || dy || drag.moved) { drag.moved = true; moveSelection(dx, dy, drag.base); render(); } }
+    else if (drag.kind === 'block') {
+      const ddx = raw[0] - drag.start[0], ddy = raw[1] - drag.start[1];
+      if (!drag.moved && Math.hypot(ddx, ddy) * view.z < 4) return;
+      if (!drag.moved) { snapshot(); drag.moved = true; }
+      const nx = drag.x + ddx, ny = drag.y + ddy, [ix0, iy0, ix1, iy1] = innerBox(sheet), w = drag.w, h = drag.h;
+      const near = 40 / Math.min(view.z, 1.5) + 10;
+      const cs = { TL: [ix0, iy0], TR: [ix1 - w, iy0], BL: [ix0, iy1 - h], BR: [ix1 - w, iy1 - h] };
+      let best = null, bd = near;
+      for (const [c, [cx, cy]] of Object.entries(cs)) { const dd = Math.hypot(nx - cx, ny - cy); if (dd < bd) { bd = dd; best = c; } }
+      sheet[drag.which + 'Pos'] = best ? { c: best } : { c: 'F', x: snap(nx), y: snap(ny) };
+      $('layerFrame').innerHTML = frameSVG(sheet);
+      setMsg(best ? `${drag.which === 'tb' ? 'Title block' : 'Revision chart'} sticks to the ${CORNERS[best]} corner` : `${drag.which === 'tb' ? 'Title block' : 'Revision chart'} placed freely. Drag near a corner to stick it there.`);
+      return;
+    }
+    else if (drag.kind === 'pin') { const dx = snapL(raw[0]) - drag.start[0], dy = snapL(raw[1]) - drag.start[1]; if (dx || dy) drag.moved = true; const pn = drag.o.pins[drag.pin]; pn.dx = drag.ox + dx; pn.dy = drag.oy + dy; render(); }
+    else if (drag.kind === 'label') { const dx = snapL(raw[0]) - drag.start[0], dy = snapL(raw[1]) - drag.start[1]; if (dx || dy) drag.moved = true; drag.o[drag.k + 'dx'] = drag.ox + dx; drag.o[drag.k + 'dy'] = drag.oy + dy; render(); }
+    else if (drag.kind === 'seg') {
+      const pts = drag.pts.map(q => [...q]);
+      if (drag.horiz) { pts[drag.i][1] += dy; pts[drag.i + 1][1] += dy; } else { pts[drag.i][0] += dx; pts[drag.i + 1][0] += dx; }
+      drag.w.pts = pts; render();
+    }
+    return;
+  }
+  if (band) { band.b = raw; renderOver(); return; }
+  const h = (mode === 'select' || mode === 'wire') ? hookAt(raw) : null;
+  if ((h && key(h.pos)) !== (hoverHook && key(hoverHook.pos))) { hoverHook = h; renderHooks(); }
+  if (mode === 'select') {
+    const t = h ? null : hit(raw);
+    svg.style.cursor = h ? 'crosshair' : (!t && blockAt(raw)) ? 'grab' : t ? (t.k === 'wire' ? (t.o.pts[t.seg][1] === t.o.pts[t.seg + 1][1] ? 'ns-resize' : 'ew-resize') : 'move') : 'default';
+  } else svg.style.cursor = '';
+  if (mode === 'cut' || mode === 'snip') { const t = hit(raw); cutHover = t; $('stMsg').textContent = t ? (t.k === 'label' ? `Click to hide this ${FIELD_NAME[t.field]}` : `Click to cut ${t.k === 'part' ? (t.o.ref || LIB[t.o.type].name) : t.k === 'wire' && mode === 'snip' ? 'this segment' : t.k}`) : ''; }
+  renderOver();
+});
+svg.addEventListener('pointerup', e => {
+  if (panning) { panning = null; $('view').classList.remove('panning'); return; }
+  if (drag) {
+    if (drag.kind === 'block') { const moved = drag.moved; drag = null; if (moved) { render(); changed(); } return; }
+    if ((drag.kind === 'move' || drag.kind === 'label' || drag.kind === 'pin') && !drag.moved) undoStack.pop();
+    if (drag.kind === 'seg') { if (drag.w.pts.length === drag.pts.length && drag.w.pts.every((q, i) => q[0] === drag.pts[i][0] && q[1] === drag.pts[i][1])) { drag.w.pts = simplify(drag.pts); undoStack.pop(); } else drag.w.pts = simplify(drag.w.pts); }
+    finishWires(); drag = null; render(); changed(); return;
+  }
+  if (band) {
+    const x0 = Math.min(band.a[0], band.b[0]), x1 = Math.max(band.a[0], band.b[0]), y0 = Math.min(band.a[1], band.b[1]), y1 = Math.max(band.a[1], band.b[1]);
+    if (x1 - x0 > 2 || y1 - y0 > 2) {
+      const inside = b => b[0] >= x0 && b[2] <= x1 && b[1] >= y0 && b[3] <= y1;
+      for (const p of sheet.parts) if (inside(partBB(p))) sel.add(p.id);
+      for (const t of sheet.texts) if (inside(textBB(t))) sel.add(t.id);
+      for (const w of sheet.wires) if (w.pts.every(q => q[0] >= x0 && q[0] <= x1 && q[1] >= y0 && q[1] <= y1)) sel.add(w.id);
+    }
+    band = null; renderSel(); renderOver();
+  }
+});
+// double-click is detected from two quick presses, because the sheet re-renders between clicks
+let lastDown = { t: 0, x: 0, y: 0 };
+function isDouble(e) {
+  const now = performance.now(), d = Math.hypot(e.clientX - lastDown.x, e.clientY - lastDown.y);
+  const dbl = now - lastDown.t < 420 && d < 6;
+  lastDown = dbl ? { t: 0, x: 0, y: 0 } : { t: now, x: e.clientX, y: e.clientY };
+  return dbl;
+}
+function onDouble(raw) {
+  if (mode === 'wire' && wireDraft) { finishDraft(); return; }
+  const t = hit(raw);
+  if (!t) {
+    const inBox = b => b && raw[0] >= b[0] && raw[0] <= b[2] && raw[1] >= b[1] && raw[1] <= b[3];
+    if (inBox(tbox.title) || inBox(tbox.revs)) { $('docSec').open = true; docFocus = inBox(tbox.revs) ? null : 'dPart'; renderDoc(); if (inBox(tbox.revs)) { const q = $('dRevList').querySelector('input'); (q || $('dAddRev')).focus(); } $('docSec').scrollIntoView({ block: 'nearest' }); }
+    return;
+  }
+  if (t.k === 'pin') { editPin(t.o, t.pin); return; }
+  if (t.k === 'label') { editInPlace(t.o, t.field); return; }
+  if (t.k === 'part') { partDialog(t.o); return; }
+  if (t.k === 'text') { const f = $('tTxt'); if (f) { f.focus(); f.select(); } }
+}
+function blockAt(p) {
+  const inBox = b => b && p[0] >= b[0] && p[0] <= b[2] && p[1] >= b[1] && p[1] <= b[3];
+  if (sheet.title && inBox(tbox.title)) return 'tb';
+  if (sheet.revs && inBox(tbox.revs)) return 'rv';
+  return null;
+}
+function stickBlock(which, c) {
+  snapshot();
+  if (c === 'F') { const [w, h] = BLOCK_SIZE(sheet)[which], [x, y] = blockXY(sheet, which, w, h); sheet[which + 'Pos'] = { c: 'F', x, y }; }
+  else sheet[which + 'Pos'] = { c };
+  render(); changed();
+  setMsg(`${which === 'tb' ? 'Title block' : 'Revision chart'} ${c === 'F' ? 'unstuck; drag it anywhere' : 'sticks to the ' + CORNERS[c] + ' corner'}`);
+}
+/* ---- edit a designator or value right on the sheet ---- */
+let editing = null;
+function editInPlace(p, field) {
+  closeMenu(); finishEdit(false);
+  sel.clear(); sel.add(p.id); renderSel();
+  const l = labelLines(p).find(x => x.field === field);
+  if (!l) { partDialog(p); return; }
+  editing = { p, field };
+  render();
+  const r = svg.getBoundingClientRect(), vr = $('view').getBoundingClientRect();
+  const inp = document.createElement('input');
+  inp.className = 'inplace'; inp.value = p[field] || ''; inp.setAttribute('aria-label', field === 'ref' ? 'Reference designator' : 'Value');
+  const fs = 11 * view.z, w = Math.max(70, (inp.value.length + 4) * 6.6 * view.z);
+  const sx = r.left - vr.left + view.x + l.x0 * view.z, sy = r.top - vr.top + view.y + l.top * view.z;
+  Object.assign(inp.style, { left: (l.a === 'middle' ? sx - (w - (l.x1 - l.x0) * view.z) / 2 : sx - 4) + 'px', top: (sy - 3) + 'px', width: w + 'px', fontSize: fs + 'px', fontWeight: field === 'ref' ? 600 : 400 });
+  $('view').appendChild(inp); editing.inp = inp;
+  inp.focus(); inp.select();
+  inp.addEventListener('keydown', e => { e.stopPropagation(); if (e.key === 'Enter') finishEdit(true); if (e.key === 'Escape') finishEdit(false); if (e.key === 'Tab') { e.preventDefault(); const nf = field === 'ref' ? 'value' : 'ref'; finishEdit(true); editInPlace(p, nf); } });
+  inp.addEventListener('input', () => { inp.style.width = Math.max(70, (inp.value.length + 4) * 6.6 * view.z) + 'px'; });
+  inp.addEventListener('blur', () => finishEdit(true));
+}
+function editPin(p, name) {
+  closeMenu(); finishEdit(false);
+  const g = pinGeom(p).find(x => x.name === name); if (!g) return;
+  editing = { p, field: 'pin:' + name }; render();
+  const r = svg.getBoundingClientRect(), vr = $('view').getBoundingClientRect();
+  const inp = document.createElement('input');
+  inp.className = 'inplace'; inp.value = g.t; inp.setAttribute('aria-label', 'Pin number for ' + name);
+  const w = Math.max(44, (g.t.length + 3) * 6.5 * view.z);
+  Object.assign(inp.style, { left: (r.left - vr.left + view.x + g.x * view.z - w / 2) + 'px', top: (r.top - vr.top + view.y + g.top * view.z - 4) + 'px', width: w + 'px', fontSize: Math.max(10, 9 * view.z) + 'px' });
+  $('view').appendChild(inp); editing.inp = inp; inp.focus(); inp.select();
+  inp.addEventListener('keydown', e => { e.stopPropagation(); if (e.key === 'Enter') finishEdit(true); if (e.key === 'Escape') finishEdit(false);
+    if (e.key === 'Tab') { e.preventDefault(); const names = Object.keys(shapeOf(p).hooks), i = names.indexOf(name); finishEdit(true); editPin(p, names[(i + (e.shiftKey ? names.length - 1 : 1)) % names.length]); } });
+  inp.addEventListener('blur', () => finishEdit(true));
+}
+function finishEdit(ok) {
+  if (!editing) return;
+  const { p, field, inp } = editing; editing = null;
+  if (inp) inp.remove();
+  if (field.startsWith('pin:')) {
+    const n = field.slice(4); p.pins = p.pins || {}; const pn = p.pins[n] = p.pins[n] || {};
+    if (ok && inp && inp.value.trim() !== (pn.t != null ? pn.t : 'p?')) { snapshot(); pn.t = inp.value.trim() || 'p?'; changed(); setMsg(`Pin ${n} set to ${pn.t}`); }
+    render(); return;
+  }
+  if (ok && inp && inp.value !== (p[field] || '')) { snapshot(); p[field] = inp.value.trim(); changed(); setMsg(`${field === 'ref' ? 'Designator' : 'Value'} set to ${p[field] || '(blank)'}`); }
+  render();
+}
+/* ---- edit both in one dialog ---- */
+function partDialog(p) {
+  closeMenu(); finishEdit(false);
+  sel.clear(); sel.add(p.id); renderSel();
+  const L = LIB[p.type];
+  const back = document.createElement('div'); back.className = 'dlg-back';
+  back.innerHTML = `<form class="dlg" role="dialog" aria-modal="true" aria-labelledby="pdT" style="width:min(360px,100%)">
+    <h2 id="pdT">${esc(L.name)}</h2><p>${esc(L.cat)} · hooks ${esc(Object.keys(shapeOf(p).hooks).join(', '))}</p>
+    <div style="display:grid;gap:10px;padding:0 16px">
+      <div class="field"><label for="pdRef">Ref des</label><input type="text" id="pdRef" value="${esc(p.ref)}" spellcheck="false" autocomplete="off"></div>
+      <div class="field"><label for="pdVal">Value</label><input type="text" id="pdVal" value="${esc(p.value)}" autocomplete="off"></div>
+      <div class="field"><label>Show</label><span style="display:flex;gap:14px"><label style="display:flex;gap:5px;align-items:center;color:inherit"><input type="checkbox" id="pdShowR"${fieldShown(p, 'ref') ? ' checked' : ''}> ref des</label><label style="display:flex;gap:5px;align-items:center;color:inherit"><input type="checkbox" id="pdShowV"${fieldShown(p, 'value') ? ' checked' : ''}> value</label></span></div>
+    </div>
+    <div class="foot"><button type="button" id="pdCancel">Cancel</button><button type="submit" class="pri">Apply</button></div></form>`;
+  document.body.appendChild(back);
+  const close = () => back.remove();
+  back.addEventListener('pointerdown', e => { if (e.target === back) close(); });
+  back.addEventListener('keydown', e => { if (e.key === 'Escape') close(); e.stopPropagation(); });
+  $('pdCancel').onclick = close;
+  back.querySelector('form').addEventListener('submit', e => {
+    e.preventDefault();
+    const r = $('pdRef').value.trim(), v = $('pdVal').value.trim(), sr = $('pdShowR').checked, sv = $('pdShowV').checked;
+    if (r !== p.ref || v !== p.value || sr !== fieldShown(p, 'ref') || sv !== fieldShown(p, 'value')) { snapshot(); p.ref = r; p.value = v; p.showRef = sr; p.showVal = sv; render(); changed(); setMsg(`Updated ${r || L.name}`); }
+    close();
+  });
+  $('pdRef').focus(); $('pdRef').select();
+}
+svg.addEventListener('contextmenu', e => e.preventDefault());
+function blockMenu(e, which) {
+  const cur = (sheet[which + 'Pos'] || {}).c || BLOCK_DEFAULT[which];
+  menuEl = document.createElement('div'); menuEl.className = 'menu'; menuEl.setAttribute('role', 'menu');
+  menuEl.innerHTML = `<div style="padding:5px 10px 6px;font:500 10.5px var(--font-mono);letter-spacing:.1em;text-transform:uppercase;color:var(--muted)">${which === 'tb' ? 'Title block' : 'Revision chart'} · stick to</div>`
+    + ['TL', 'TR', 'BL', 'BR'].map(c => `<button role="menuitemradio" aria-checked="${cur === c}" data-c="${c}"><span>${cur === c ? '● ' : ''}${CORNERS[c][0].toUpperCase() + CORNERS[c].slice(1)} corner</span><span></span></button>`).join('')
+    + `<button role="menuitemradio" aria-checked="${cur === 'F'}" data-c="F"><span>${cur === 'F' ? '● ' : ''}Free (stay where it is)</span><span></span></button>`
+    + `<button role="menuitem" data-c="edit"><span>Edit fields…</span><span>dbl-click</span></button>`
+    + `<button role="menuitem" data-c="hide" style="color:var(--danger)"><span>Hide ${which === 'tb' ? 'title block' : 'revision chart'}</span><span></span></button>`;
+  document.body.appendChild(menuEl);
+  const mw = menuEl.offsetWidth, mh = menuEl.offsetHeight;
+  menuEl.style.left = Math.min(e.clientX, window.innerWidth - mw - 8) + 'px'; menuEl.style.top = Math.min(e.clientY, window.innerHeight - mh - 8) + 'px';
+  menuEl.onclick = ev => { const b = ev.target.closest('[data-c]'); if (!b) return; const c = b.dataset.c; closeMenu();
+    if (c === 'edit') { $('docSec').open = true; renderDoc(); $(which === 'tb' ? 'dPart' : 'dAddRev').focus(); return; }
+    if (c === 'hide') { snapshot(); sheet[which === 'tb' ? 'title' : 'revs'] = false; render(); changed(); return; }
+    stickBlock(which, c); };
+  menuEl.querySelector('button').focus({ preventScroll: true });
+}
+// Right-click menu: rotate, mirror, duplicate, delete for the item under the pointer (or the whole selection)
+function partMenu(e, raw) {
+  closeMenu();
+  const t = hit(raw);
+  if (!t) { const b = blockAt(raw); if (b) blockMenu(e, b); return; }
+  const target = t.o;
+  if (!sel.has(target.id)) { sel.clear(); sel.add(target.id); }
+  selLabel = t.k === 'label' ? { id: target.id, field: t.field } : null; renderSel();
+  const items = selItems(), hasPart = items.some(i => i.k === 'part');
+  const many = items.length > 1 ? ` ${items.length} items` : '';
+  const what = items.length > 1 ? `${items.length} items` : items[0].k === 'part' ? (items[0].o.ref || LIB[items[0].o.type].name) : items[0].k === 'wire' ? 'Wire' : 'Text';
+  menuEl = document.createElement('div'); menuEl.className = 'menu'; menuEl.setAttribute('role', 'menu');
+  menuEl.innerHTML = `<div style="padding:5px 10px 6px;font:500 10.5px var(--font-mono);letter-spacing:.1em;text-transform:uppercase;color:var(--muted)">${esc(what)}</div>`
+    + (hasPart ? `<button role="menuitem" data-m="rot"><span>Rotate 90°</span><span>R</span></button><button role="menuitem" data-m="flip"><span>Flip horizontal</span><span>X</span></button><button role="menuitem" data-m="flipv"><span>Flip vertical</span><span>Y</span></button>` : '')
+    + (selLabel ? `<button role="menuitem" data-m="edit"><span>Edit ${FIELD_NAME[selLabel.field]}</span><span>dbl-click</span></button>` : '')
+    + (items.length === 1 && items[0].k === 'part' ? ['ref', 'value'].filter(f => !fieldShown(items[0].o, f)).map(f => `<button role="menuitem" data-m="show-${f}"><span>Show ${FIELD_NAME[f]}</span><span></span></button>`).join('') : '')
+    + (items.length === 1 && items[0].k === 'part' && isTube(items[0].o) ? `<button role="menuitem" data-m="pins"><span>${items[0].o.showPins ? 'Hide' : 'Show'} pin numbers</span><span></span></button>` : '')
+    + (t.k === 'pin' ? `<button role="menuitem" data-m="editpin"><span>Edit pin number</span><span>dbl-click</span></button>` + (((t.o.pins || {})[t.pin] || {}).dx || ((t.o.pins || {})[t.pin] || {}).dy ? `<button role="menuitem" data-m="resetpin"><span>Put pin number back</span><span></span></button>` : '') : '')
+    + (items.length === 1 && items[0].k === 'part' && LIB[items[0].o.type].vary ? (() => { const q = items[0].o, v = LIB[q.type].vary, cur = varyN(q);
+        return `<div class="mlabel">${v.label}</div><div class="chips">${Array.from({ length: v.max - v.min + 1 }, (_, i) => v.min + i).map(n => `<button class="chip" data-vary="${n}" aria-pressed="${n === cur}">${n}</button>`).join('')}</div>`; })() : '')
+    + (items.some(i => i.k === 'wire') ? `<div class="mlabel">Wire color</div>${swatchRow((() => { const cs = new Set(items.filter(i => i.k === 'wire').map(i => i.o.color || 'ink')); return cs.size === 1 ? [...cs][0] : ''; })())}` : '')
+    + `<button role="menuitem" data-m="dup"><span>Duplicate</span><span>Ctrl+D</span></button>`
+    + (selLabel ? `<button role="menuitem" data-m="del"><span>Hide ${FIELD_NAME[selLabel.field]}</span><span>Del</span></button>`
+                : `<button role="menuitem" data-m="del" style="color:var(--danger)"><span>Delete${many}</span><span>Del</span></button>`);
+  document.body.appendChild(menuEl);
+  const mw = menuEl.offsetWidth, mh = menuEl.offsetHeight;
+  menuEl.style.left = Math.min(e.clientX, window.innerWidth - mw - 8) + 'px';
+  menuEl.style.top = Math.min(e.clientY, window.innerHeight - mh - 8) + 'px';
+  menuEl.onclick = ev => { const wc = ev.target.closest('[data-wc]'); if (wc) { closeMenu(); colorWires(wc.dataset.wc); return; }
+    const vy = ev.target.closest('[data-vary]'); if (vy) { closeMenu(); setVary(items[0].o, +vy.dataset.vary); return; }
+    const b = ev.target.closest('[data-m]'); if (!b) return; const m = b.dataset.m; closeMenu();
+    if (m === 'edit') { const L0 = selLabel; if (L0) editInPlace(sheet.parts.find(x => x.id === L0.id), L0.field); return; }
+    if (m === 'pins') { const q = items[0].o; snapshot(); q.showPins = !q.showPins; if (q.showPins) { q.pins = q.pins || {}; for (const n of Object.keys(shapeOf(q).hooks)) q.pins[n] = q.pins[n] || { t: 'p?' }; } render(); changed(); setMsg(q.showPins ? 'Pin numbers shown. Double-click one to edit it; drag it to move it.' : 'Pin numbers hidden. Their text is kept.'); return; }
+    if (m === 'editpin') { editPin(t.o, t.pin); return; }
+    if (m === 'resetpin') { snapshot(); const pn = t.o.pins[t.pin]; pn.dx = 0; pn.dy = 0; render(); changed(); return; }
+    if (m.startsWith('show-')) { const q = items[0].o; snapshot(); if (m === 'show-ref') q.showRef = true; else q.showVal = true; render(); changed(); return; }
+    ({ rot: rotateSel, flip: () => flipSel('h'), flipv: () => flipSel('v'), dup: duplicate, del: deleteSel })[m](); };
+  menuEl.addEventListener('keydown', ev => {
+    const bs = [...menuEl.querySelectorAll('button')], i = bs.indexOf(document.activeElement);
+    if (ev.key === 'Escape') { closeMenu(); ev.stopPropagation(); }
+    if (ev.key === 'ArrowDown') { bs[(i + 1) % bs.length].focus(); ev.preventDefault(); }
+    if (ev.key === 'ArrowUp') { bs[(i - 1 + bs.length) % bs.length].focus(); ev.preventDefault(); }
+  });
+  menuEl.querySelector('button').focus({ preventScroll: true });
+}
+svg.addEventListener('wheel', e => {
+  e.preventDefault();
+  const step = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? 400 : 1;
+  const d = (Math.abs(e.deltaY) >= Math.abs(e.deltaX) ? e.deltaY : e.deltaX) * step;   // some browsers turn Shift+wheel into deltaX
+  if (e.altKey) { view.x -= d; applyView(); return; }          // Alt+wheel: pan left / right
+  if (e.shiftKey) { view.y -= d; applyView(); return; }        // Shift+wheel: pan up / down
+  if (e.ctrlKey || e.metaKey || (Math.abs(e.deltaX) < 1 && (e.deltaMode !== 0 || Math.abs(e.deltaY) >= 50))) zoomAt(e, Math.exp(-e.deltaY * step * 0.0015));
+  else { view.x -= e.deltaX; view.y -= e.deltaY; applyView(); }   // touchpad: two-finger pan
+}, { passive: false });
+function zoomAt(e, f) {
+  const r = svg.getBoundingClientRect(), cx = e ? e.clientX - r.left : r.width / 2, cy = e ? e.clientY - r.top : r.height / 2;
+  const nz = Math.min(6, Math.max(0.25, view.z * f)); f = nz / view.z;
+  view.x = cx - (cx - view.x) * f; view.y = cy - (cy - view.y) * f; view.z = nz; applyView();
+}
+function fit() {
+  const [SW, SH] = sheetDims(sheet), W0 = svg.clientWidth || 800, H0 = svg.clientHeight || 600, m = 24;
+  view.z = Math.min(4, Math.max(0.08, Math.min((W0 - 2 * m) / SW, (H0 - 2 * m) / SH)));
+  view.x = (W0 - SW * view.z) / 2; view.y = (H0 - SH * view.z) / 2; applyView();
+}
+function fitDrawing() {
+  const bbs = [...sheet.parts.map(partBB), ...sheet.texts.map(textBB), ...sheet.wires.map(w => { const xs = w.pts.map(p => p[0]), ys = w.pts.map(p => p[1]); return [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)]; })];
+  const W = svg.clientWidth || 800, H = svg.clientHeight || 600;
+  if (!bbs.length) { view.z = 1.4; view.x = W / 2 - 300 * view.z; view.y = H / 2 - 200 * view.z; applyView(); return; }
+  let x0 = Math.min(...bbs.map(b => b[0])), y0 = Math.min(...bbs.map(b => b[1])), x1 = Math.max(...bbs.map(b => b[2])), y1 = Math.max(...bbs.map(b => b[3]));
+  const pad = 40; x0 -= pad; y0 -= pad; x1 += pad; y1 += pad;
+  view.z = Math.min(3, Math.max(0.3, Math.min(W / (x1 - x0), H / (y1 - y0))));
+  view.x = (W - (x1 - x0) * view.z) / 2 - x0 * view.z; view.y = (H - (y1 - y0) * view.z) / 2 - y0 * view.z; applyView();
+}
+
+function placePart(p) {
+  snapshot();
+  const L = LIB[placeType];
+  const part = { id: uid(), type: placeType, x: p[0], y: p[1], rot: placeRot, flip: placeFlip, ref: nextRef(L.pre), value: L.value, showRef: !L.hideLabel, showVal: !L.hideLabel, lx: 0, ly: 0 };
+  sheet.parts.push(part); sel.clear(); sel.add(part.id); render(); changed();
+  setMsg(`Placed ${part.ref || L.name}. Click to place another, Esc to stop.`);
+}
+function addText(p) {
+  snapshot(); const t = { id: uid(), x: p[0], y: p[1], text: 'Text', size: 12, tone: 'ink' };
+  sheet.texts.push(t); sel.clear(); sel.add(t.id); setMode('select'); render(); changed();
+  const ta = $('tTxt'); if (ta) { ta.focus(); ta.select(); }
+}
+
+/* ---- wires ---- */
+function draftPreview() {
+  const a = wireDraft.pts[wireDraft.pts.length - 1], b = mouse;
+  if (a[0] === b[0] || a[1] === b[1]) return [a, b];
+  const c = wireDraft.hv ? [b[0], a[1]] : [a[0], b[1]];
+  return [a, c, b];
+}
+function pointIsNode(p) {   // hook, wire end or point on an existing wire
+  if (allHooks().some(h => key(h.pos) === key(p))) return true;
+  for (const w of sheet.wires) for (let i = 0; i < w.pts.length - 1; i++) if (key(w.pts[i]) === key(p) || key(w.pts[i + 1]) === key(p) || onSegInterior(p, w.pts[i], w.pts[i + 1])) return true;
+  return false;
+}
+function wireClick(p, raw) {
+  const h = hookAt(raw); if (h) p = h.pos;
+  if (!wireDraft) { wireDraft = { pts: [p], hv: true }; setMsg('Click to add corners. Click a hook or wire to finish; double-click or right-click ends it here. Space flips the corner, Backspace removes the last corner.'); renderOver(); return; }
+  const last = wireDraft.pts[wireDraft.pts.length - 1];
+  if (key(last) === key(p)) { if (wireDraft.pts.length > 1) finishDraft(); return; }
+  mouse = p; const seg = draftPreview(); wireDraft.pts.push(...seg.slice(1));
+  if (pointIsNode(p)) finishDraft(); else renderOver();
+}
+function finishDraft() {
+  if (wireDraft && wireDraft.pts.length >= 2) {
+    snapshot();
+    const w = { id: uid(), pts: simplify(wireDraft.pts) }; if (drawColor !== 'ink') w.color = drawColor;
+    if (w.pts.length >= 2) sheet.wires.push(w);
+    render(); changed(); setMsg('Wire added');
+  }
+  wireDraft = null; renderOver();
+}
+
+/* =====================================================================
+   MODES, KEYS, TOOLBAR
+   ===================================================================== */
+const MODE_LABEL = { select: 'Select', wire: 'Wire', text: 'Text', place: 'Place', cut: 'Cut', snip: 'Snip' };
+const HINT = {
+  select: '<b>Drag</b> to move · <b>Click a hook</b> to wire · <b>Double-click</b> a part or its label to edit · <b>Right-click</b> to rotate, flip or delete · wheel zooms, Shift+wheel pans up/down, Alt+wheel pans left/right',
+  wire: '<b>Click</b> to add corners · end on a <b>hook</b> or wire · <b>Space</b> flips the corner · <b>Backspace</b> removes the last corner · <b>Esc</b> cancels',
+  text: '<b>Click</b> on the sheet to add text',
+  snip: '<b>Click</b> a wire segment to cut just that segment · parts and text are deleted · click a ref des or value to hide it · <b>Esc</b> back to Select',
+  cut: '<b>Click</b> a part, wire or text to delete it · click a ref des or value to hide it · <b>Ctrl+Z</b> undoes · <b>Esc</b> back to Select',
+  place: '<b>Click</b> to drop the part · <b>R</b> rotate · <b>X</b> flip H · <b>Y</b> flip V · <b>Esc</b> stop placing',
+};
+function setMode(m) {
+  if (mode === 'wire' && m !== 'wire' && wireDraft) finishDraft();
+  mode = m; if (m !== 'place') placeType = null;
+  $('mSelect').setAttribute('aria-pressed', m === 'select'); $('mWire').setAttribute('aria-pressed', m === 'wire'); $('mText').setAttribute('aria-pressed', m === 'text'); $('mCut').setAttribute('aria-pressed', m === 'cut'); $('mSnip').setAttribute('aria-pressed', m === 'snip');
+  $('view').className = 'view mode-' + m; $('stMode').textContent = MODE_LABEL[m]; $('hint').innerHTML = HINT[m];
+  renderLib(); renderOver(); updateButtons();
+}
+$('mSelect').onclick = () => setMode('select');
+$('mWColor').onclick = e => { e.stopPropagation(); wireColorMenu($('mWColor')); }; showDrawColor();
+$('mWire').onclick = () => setMode('wire');
+$('mText').onclick = () => setMode('text');
+$('mCut').onclick = () => setMode(mode === 'cut' ? 'select' : 'cut');
+$('mSnip').onclick = () => setMode(mode === 'snip' ? 'select' : 'snip');
+$('bRot').onclick = rotateSel; $('bFlip').onclick = () => flipSel('h'); $('bFlipV').onclick = () => flipSel('v'); $('bDel').onclick = deleteSel;
+$('bUndo').onclick = undo; $('bRedo').onclick = redo;
+$('bZi').onclick = () => zoomAt(null, 1.25); $('bZo').onclick = () => zoomAt(null, 0.8); $('bFit').onclick = fit;
+$('bGrid').onclick = () => { showGrid = !showGrid; $('bGrid').setAttribute('aria-pressed', showGrid); applyView(); lsSet('gs.grid', showGrid); };
+$('bHooks').onclick = () => { showHooks = !showHooks; $('bHooks').setAttribute('aria-pressed', showHooks); renderHooks(); lsSet('gs.hooks', showHooks); };
+$('bPanel').onclick = () => {
+  const app = $('app'), narrow = matchMedia('(max-width: 520px)').matches;
+  if (narrow) { app.classList.toggle('panel-open'); $('bPanel').setAttribute('aria-pressed', app.classList.contains('panel-open')); }
+  else { app.classList.toggle('panel-hidden'); $('bPanel').setAttribute('aria-pressed', !app.classList.contains('panel-hidden')); }
+  setTimeout(applyView, 0);
+};
+
+document.addEventListener('keydown', e => {
+  if (e.target.matches('input, textarea, select')) return;
+  const k = e.key.toLowerCase(), mod = e.ctrlKey || e.metaKey;
+  if (k === ' ' && wireDraft) { e.preventDefault(); if (!e.repeat) { wireDraft.hv = !wireDraft.hv; renderOver(); setMsg(wireDraft.hv ? 'Corner: horizontal first, then vertical' : 'Corner: vertical first, then horizontal'); } return; }
+  if (k === ' ') { if (!e.target.closest('button')) { spaceDown = true; e.preventDefault(); } return; }
+  if (mod && k === 'z') { e.preventDefault(); e.shiftKey ? redo() : undo(); return; }
+  if (mod && k === 'y') { e.preventDefault(); redo(); return; }
+  if (mod && k === 's') { e.preventDefault(); saveNow(); return; }
+  if (mod && k === 'c') { e.preventDefault(); copySel(); return; }
+  if (mod && k === 'x') { e.preventDefault(); copySel(); deleteSel(); return; }
+  if (mod && k === 'v') { e.preventDefault(); paste(); return; }
+  if (mod && k === 'd') { e.preventDefault(); duplicate(); return; }
+  if (mod && k === 'a') { e.preventDefault(); sel = new Set([...sheet.parts, ...sheet.wires, ...sheet.texts].map(o => o.id)); renderSel(); return; }
+  if (mod) return;
+  if (k === 'escape') {
+    if (wireDraft) { wireDraft = null; renderOver(); setMsg('Wire cancelled'); return; }
+    if (mode !== 'select') { setMode('select'); return; }
+    sel.clear(); selLabel = null; renderSel(); return;
+  }
+  if (k === 'delete' || k === 'backspace') {
+    e.preventDefault();
+    if (mode === 'wire' && wireDraft) { wireDraft.pts.pop(); if (!wireDraft.pts.length) wireDraft = null; renderOver(); return; }
+    deleteSel(); return;
+  }
+  if (k === '/' && wireDraft) { wireDraft.hv = !wireDraft.hv; renderOver(); return; }
+  if (k === 'enter' && wireDraft) { finishDraft(); return; }
+  if (k === 'v') setMode('select'); else if (k === 'w') setMode('wire'); else if (k === 't') setMode('text'); else if (k === 'c') setMode(mode === 'cut' ? 'select' : 'cut'); else if (k === 's') setMode(mode === 'snip' ? 'select' : 'snip');
+  else if (k === 'r') rotateSel(); else if (k === 'x') flipSel('h'); else if (k === 'y') flipSel('v'); else if (k === 'f') (e.shiftKey ? fitDrawing() : fit());
+  else if (k === 'g') $('bGrid').click(); else if (k === 'h') $('bHooks').click();
+  else if (k === '+' || k === '=') zoomAt(null, 1.25); else if (k === '-') zoomAt(null, 0.8);
+  else if (k.startsWith('arrow') && sel.size) {
+    e.preventDefault(); snapshot();
+    const d = { arrowleft: [-G, 0], arrowright: [G, 0], arrowup: [0, -G], arrowdown: [0, G] }[k];
+    moveSelection(d[0], d[1], JSON.stringify(sheet)); finishWires(); render(); changed();
+  }
+});
+document.addEventListener('keyup', e => { if (e.key === ' ') spaceDown = false; });
+
+/* ---- panel splitter ---- */
+(() => {
+  const sp = $('split'); let st = null;
+  const setW = w => { w = Math.max(190, Math.min(560, w)); document.documentElement.style.setProperty('--panel-w', w + 'px'); lsSet('gs.panelw', w); applyView(); };
+  const saved = lsGet('gs.panelw', null); if (saved) setW(saved);
+  sp.addEventListener('pointerdown', e => { st = { x: e.clientX, w: $('panel').getBoundingClientRect().width }; sp.setPointerCapture(e.pointerId); sp.classList.add('drag'); });
+  sp.addEventListener('pointermove', e => { if (st) setW(st.w + e.clientX - st.x); });
+  sp.addEventListener('pointerup', () => { st = null; sp.classList.remove('drag'); });
+  sp.addEventListener('keydown', e => { const w = $('panel').getBoundingClientRect().width; if (e.key === 'ArrowLeft') setW(w - 20); if (e.key === 'ArrowRight') setW(w + 20); });
+})();
+
+/* ---- status ---- */
+let msgTimer;
+function setMsg(t, err) { const m = $('stMsg'); m.textContent = t; m.classList.toggle('err', !!err); clearTimeout(msgTimer); if (!err) msgTimer = setTimeout(() => { m.textContent = ''; }, 6000); }
+function setSave(k, t) { $('stSave').dataset.k = k; $('stSaveT').textContent = t; }
+
+/* =====================================================================
+   STORAGE: your projects (db), this browser (fallback), files
+   ===================================================================== */
+function lsGet(k, d) { try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch { return d; } }
+function lsSet(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch { /* storage unavailable */ } }
+let db = null, userId = null, saveTimer = null, saving = false, pendingSave = false, dirty = false;
+function changed() { dirty = true; if (project.example) delete project.example; lsSet('gs.current', project); clearTimeout(saveTimer); saveTimer = setTimeout(saveNow, 1200); setSave('busy', 'Unsaved changes'); }
+function changedSoon() { changed(); }
+async function saveNow() {
+  lsSet('gs.current', project);
+  if (!db || !userId) { setSave('ok', 'Saved in this browser'); dirty = false; return; }
+  if (saving) { pendingSave = true; return; }
+  saving = true; setSave('busy', 'Saving…');
+  try {
+    await db.collection('data/users/' + userId).doc(project.id).set({ name: project.name, updated: new Date().toISOString(), project: JSON.stringify(project) });
+    dirty = false; setSave('ok', 'Saved to your projects');
+  } catch (err) { setSave('err', 'Not saved: ' + (err && err.code === 'invalid_argument' ? 'project too large' : 'try Save again')); }
+  saving = false; if (pendingSave) { pendingSave = false; saveNow(); }
+}
+$('bSave').onclick = saveNow;
+
+function loadProject(p, msg) {
+  project = p; if (!project.sheets || !project.sheets.length) project.sheets = [newSheet('Sheet 1')];
+  if (!project || typeof project !== 'object') project = exampleProject();
+  if (!Array.isArray(project.sheets) || !project.sheets.length) project.sheets = [newSheet('Sheet 1')];
+  if (!project.id) project.id = uid(); if (typeof project.name !== 'string' || !project.name) project.name = 'Untitled project';
+  project.doc = Object.assign(docDefaults(), project.doc || {}); if (!Array.isArray(project.doc.revisions)) project.doc.revisions = [];
+  for (const s of project.sheets) {
+    const okPt = q => Array.isArray(q) && q.length === 2 && isFinite(q[0]) && isFinite(q[1]);
+    s.parts = (Array.isArray(s.parts) ? s.parts : []).filter(q => q && LIB[q.type] && isFinite(q.x) && isFinite(q.y));
+    s.wires = (Array.isArray(s.wires) ? s.wires : []).filter(w => w && Array.isArray(w.pts)).map(w => ({ id: w.id || uid(), pts: simplify(w.pts.filter(okPt).map(q => [snap(+q[0]), snap(+q[1])])), ...(WIRE_COLORS.some(c => c.k === w.color && c.k !== 'ink') ? { color: w.color } : {}) })).filter(w => w.pts.length >= 2);
+    s.texts = (Array.isArray(s.texts) ? s.texts : []).filter(t => t && isFinite(t.x) && isFinite(t.y)).map(t => Object.assign({ text: '', size: 12, tone: 'ink' }, t));
+    if (!s.id) s.id = uid(); if (typeof s.name !== 'string') s.name = 'Sheet';
+    if (!SIZES[s.size]) s.size = 'A'; if (s.orient !== 'P') s.orient = 'L';
+    if (!s.file) s.file = slugFile(s.name);
+    if (!s.tbPos) s.tbPos = { c: 'BR' }; if (!s.rvPos) s.rvPos = { c: 'TR' };
+    for (const k of ['border', 'revs', 'title']) if (typeof s[k] !== 'boolean') s[k] = true;
+  }
+  for (const s of project.sheets) {        // every part carries a ref des and a value
+    const was = sheet; sheet = s;
+    for (const q of s.parts) {
+      if (!q.ref) q.ref = nextRef(LIB[q.type].pre);
+      if (q.value == null || q.value === '') q.value = LIB[q.type].value;
+      const legacy = q.showLabel == null ? !LIB[q.type].hideLabel : q.showLabel !== false;
+      if (q.showRef == null) q.showRef = legacy; if (q.showVal == null) q.showVal = legacy; delete q.showLabel;
+    }
+    sheet = was;
+  }
+  sheet = project.sheets.find(s => s.id === project.active) || project.sheets[0];
+  undoStack = []; redoStack = []; sel.clear(); wireDraft = null;
+  render(); fit(); if (msg) setMsg(msg);
+}
+$('bNew').onclick = () => {
+  const s = newSheet('Sheet 1');
+  if (dirty) saveNow();
+  loadProject({ id: uid(), name: 'Untitled project', sheets: [s], active: s.id }, 'New project. Pick a part from the library to start.');
+  changed(); renaming = 'root'; renderSheets();
+};
+
+/* projects dialog */
+async function openProjects() {
+  const back = document.createElement('div'); back.className = 'dlg-back';
+  back.innerHTML = `<div class="dlg" role="dialog" aria-modal="true" aria-labelledby="dlgT"><h2 id="dlgT">Your projects</h2><p id="dlgP">Loading…</p><div class="list" id="dlgList"></div><div class="foot"><button id="dlgClose">Close</button></div></div>`;
+  document.body.appendChild(back);
+  const close = () => back.remove();
+  back.addEventListener('click', e => { if (e.target === back) close(); });
+  $('dlgClose').onclick = close;
+  back.addEventListener('keydown', e => { if (e.key === 'Escape') close(); e.stopPropagation(); });
+  $('dlgClose').focus();
+  if (!db || !userId) { $('dlgP').textContent = 'Saving projects needs you to be signed in to Claude. This browser keeps your current project only; use Export → Project file to keep a copy.'; return; }
+  let docs = [];
+  try { docs = (await db.collection('data/users/' + userId).get()).docs.filter(d => d.exists); }
+  catch { $('dlgP').textContent = 'Could not load your projects. Check your connection and try again.'; return; }
+  docs.sort((a, b) => String(b.data().updated).localeCompare(String(a.data().updated)));
+  $('dlgP').textContent = docs.length ? 'Click a project to open it.' : 'No saved projects yet. Your current project saves automatically as you work.';
+  let armed = null;
+  const draw = () => {
+    $('dlgList').innerHTML = docs.map(d => { const v = d.data(), cur = d.id === project.id;
+      const when = v.updated ? new Date(v.updated).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : '';
+      return `<div class="item" data-open="${d.id}"><span class="nm">${esc(v.name || 'Untitled')}${cur ? ' · open now' : ''}</span><span class="meta">${when}</span>${cur ? '' : armed === d.id ? `<button class="x" data-kill="${d.id}" style="background:var(--danger);color:#fff;border-color:transparent">Delete</button>` : `<button class="x" data-arm="${d.id}" aria-label="Delete project">×</button>`}</div>`; }).join('');
+  };
+  draw();
+  $('dlgList').onclick = async e => {
+    const t = e.target.closest('[data-arm],[data-kill],[data-open]'); if (!t) return;
+    if (t.dataset.arm) { armed = t.dataset.arm; draw(); return; }
+    if (t.dataset.kill) { try { await db.collection('data/users/' + userId).doc(t.dataset.kill).delete(); docs = docs.filter(d => d.id !== t.dataset.kill); armed = null; draw(); setMsg('Project deleted'); } catch { setMsg('Could not delete that project. Try again.', true); } return; }
+    const d = docs.find(x => x.id === t.dataset.open); if (!d) return;
+    if (dirty) await saveNow();
+    try { loadProject(JSON.parse(d.data().project), `Opened ${d.data().name}`); lsSet('gs.current', project); setSave('ok', 'Saved to your projects'); dirty = false; close(); }
+    catch { setMsg('That project could not be read.', true); }
+  };
+}
+$('bOpen').onclick = openProjects;
+
+/* import / export */
+$('bImport').onclick = () => $('fileIn').click();
+$('fileIn').onchange = async e => {
+  const f = e.target.files[0]; e.target.value = ''; if (!f) return;
+  try { const p = JSON.parse(await f.text()); if (!p.sheets) throw 0; p.id = uid(); loadProject(p, `Opened ${f.name}`); changed(); }
+  catch { setMsg(`${f.name} is not a Glowbug Bench project file.`, true); }
+};
+function sheetSVG(withBg = true, whole = false) {
+  const bbs = [...sheet.parts.map(partBB), ...sheet.texts.map(textBB), ...sheet.parts.flatMap(labelLines).map(l => [l.x0, l.top, l.x1 + 4, l.bottom]),
+    ...sheet.wires.map(w => { const xs = w.pts.map(p => p[0]), ys = w.pts.map(p => p[1]); return [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)]; })];
+  let x0, y0, x1, y1;
+  if (whole) { const [SW, SH] = sheetDims(sheet); x0 = 0; y0 = 0; x1 = SW; y1 = SH; }
+  else { if (!bbs.length) return null; const pad = 16; x0 = Math.min(...bbs.map(b => b[0])) - pad; y0 = Math.min(...bbs.map(b => b[1])) - pad; x1 = Math.max(...bbs.map(b => b[2])) + pad; y1 = Math.max(...bbs.map(b => b[3])) + pad; }
+  const css = `.ink{stroke:#17120E;fill:none;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}.solid{fill:#17120E}.tgt{stroke:#2F8A45;fill:none;stroke-width:1.8;stroke-linecap:round}.env{stroke:#17120E;fill:none;stroke-width:1.8}.htr{stroke:#E8912D;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}.dash{stroke:#17120E;fill:none;stroke-width:1.6;stroke-dasharray:5 3.4}.wire{stroke:#17120E;fill:none;stroke-width:1.4;stroke-linecap:round;stroke-linejoin:round}.jdot{fill:#17120E}.lbl{font-family:'Libre Franklin','Franklin Gothic Book',Arial,sans-serif;font-size:11px;fill:#17120E}.lbl .ref,.lbl.ref{font-weight:600}.pinno{font-family:'Libre Franklin','Franklin Gothic Book',Arial,sans-serif;font-size:8.5px;fill:#17120E}.pinlead{stroke:#5C5248;stroke-width:.8;stroke-dasharray:1.2 2;fill:none}.stxt{font-family:'Libre Franklin','Franklin Gothic Book',Arial,sans-serif;white-space:pre}.fr{stroke:#17120E;fill:none;stroke-width:1.1}.fr-b{stroke:#17120E;fill:none;stroke-width:2}.fr-lab{font-family:'JetBrains Mono',Consolas,monospace;font-size:7.5px;letter-spacing:.08em;fill:#5C5248}.fr-val{font-family:'Libre Franklin','Franklin Gothic Book',Arial,sans-serif;fill:#17120E}.fr-zone{font-family:'JetBrains Mono',Consolas,monospace;font-size:10px;fill:#5C5248}.fr-co{font-family:'Big Shoulders Display','Arial Narrow',sans-serif;font-weight:800;fill:#17120E}`;
+  const body = ((whole ? $('layerFrame').innerHTML : '') + $('layerParts').innerHTML + $('layerWires').innerHTML + $('layerText').innerHTML).replace(/var\(--ink\)/g, '#17120E').replace(/var\(--paper\)/g, '#FBF8F3');
+  return { w: x1 - x0, h: y1 - y0, svg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${x0} ${y0} ${x1 - x0} ${y1 - y0}" width="${x1 - x0}" height="${y1 - y0}"><style>${css}</style>${withBg ? `<rect x="${x0}" y="${y0}" width="${x1 - x0}" height="${y1 - y0}" fill="#FBF8F3"/>` : ''}${body}</svg>` };
+}
+const fileBase = () => (sheet.file || slugFile(sheet.name)).replace(/\.[a-z0-9]+$/i, '') || 'schematic';
+async function offer(filename, data) {
+  const dl = await downloadsP;
+  if (!dl) { setMsg('Saving files is not available in this view.', true); return; }
+  try { await dl.save({ filename, data }); setMsg(`Saved ${filename}`); }
+  catch (e) { if (e && e.code === 'declined') setMsg('Save cancelled'); else setMsg(`Could not save ${filename}.`, true); }
+}
+async function exportAs(kind) {
+  closeMenu();
+  if (kind === 'json') { offer(project.name.replace(/[\\/:*?"<>|]+/g, '') + '.json', JSON.stringify(project, null, 1)); return; }
+  const whole = kind.startsWith('sheet'), png = kind.endsWith('png');
+  const s = sheetSVG(png || whole, whole); if (!s) { setMsg('This sheet has no drawing yet. Add some parts first.', true); return; }
+  const base = fileBase() + (whole ? ` (${sheet.size}${sheet.orient === 'P' ? ' portrait' : ''})` : '');
+  if (!png) { offer(base + '.svg', s.svg); return; }
+  const scale = Math.min(4, 9000 / Math.max(s.w, s.h)), img = new Image();
+  img.onload = () => {
+    const c = document.createElement('canvas'); c.width = Math.ceil(s.w * scale); c.height = Math.ceil(s.h * scale);
+    const g = c.getContext('2d'); g.drawImage(img, 0, 0, c.width, c.height);
+    c.toBlob(b => b ? offer(base + '.png', b) : setMsg('Could not make the PNG.', true), 'image/png');
+  };
+  img.onerror = () => setMsg('Could not make the PNG.', true);
+  img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(s.svg);
+}
+let menuEl = null;
+function closeMenu() { if (menuEl) { menuEl.remove(); menuEl = null; } }
+$('bExport').onclick = e => {
+  if (menuEl) { closeMenu(); return; }
+  const r = $('bExport').getBoundingClientRect();
+  menuEl = document.createElement('div'); menuEl.className = 'menu'; menuEl.setAttribute('role', 'menu');
+  menuEl.innerHTML = `<button role="menuitem" data-x="sheet-svg"><span>Whole sheet as SVG</span><span>${sheet.size} size</span></button><button role="menuitem" data-x="sheet-png"><span>Whole sheet as PNG</span><span>high res</span></button><button role="menuitem" data-x="draw-svg"><span>Drawing only as SVG</span><span>for figures</span></button><button role="menuitem" data-x="draw-png"><span>Drawing only as PNG</span><span>4× size</span></button><button role="menuitem" data-x="json"><span>Project file</span><span>.json</span></button>`;
+  document.body.appendChild(menuEl);
+  menuEl.style.top = (r.bottom + 4) + 'px'; menuEl.style.left = Math.max(8, Math.min(window.innerWidth - 270, r.right - 260)) + 'px';
+  menuEl.onclick = ev => { const b = ev.target.closest('[data-x]'); if (b) exportAs(b.dataset.x); };
+  menuEl.querySelector('button').focus();
+  e.stopPropagation();
+};
+document.addEventListener('click', e => { if (menuEl && !menuEl.contains(e.target) && !e.target.closest('#bExport')) closeMenu(); });
+document.addEventListener('keydown', e => { if (menuEl && e.key === 'Escape') closeMenu(); });
+
+/* =====================================================================
+   START
+   ===================================================================== */
+showGrid = lsGet('gs.grid', true); showHooks = lsGet('gs.hooks', true);
+$('docSec').open = lsGet('gs.docOpen', true);
+$('bGrid').setAttribute('aria-pressed', showGrid); $('bHooks').setAttribute('aria-pressed', showHooks);
+const fresh = location.hash === '#fresh';     // safe start: open the example and skip saved work
+const cur = fresh ? null : lsGet('gs.current', null);
+if (fresh) setTimeout(() => setMsg('Safe start: your saved work was not opened. Use Projects to open it.'), 60);
+try { loadProject(cur && cur.sheets ? cur : exampleProject()); }
+catch (err) {
+  console.error(err);
+  lsSet('gs.broken', cur);                          // keep the copy that would not open
+  loadProject(exampleProject());
+  setTimeout(() => setMsg('Your last project could not be opened, so the example is showing. A copy was kept in this browser.', true), 50);
+}
+setMode('select');
+if (cur && cur.sheets) { setSave('ok', 'Saved in this browser'); setMsg(`Opened ${project.name}`); }
+else setMsg('This example shows the 2A3 filament wiring drawn with the library. Drag anything, or start a New project.');
+new ResizeObserver(() => applyView()).observe($('view'));
+window.addEventListener('beforeunload', () => { if (dirty) lsSet('gs.current', project); });
+
+const claudeUse = n => (window.claude && window.claude.use) ? window.claude.use(n).catch(() => null) : Promise.resolve(null);
+const downloadsP = claudeUse('downloads');
+downloadsP.then(d => { if (!d) $('bExport').title = 'Export is not available in this view'; });
+(async () => {
+  const [d, u] = await Promise.all([claudeUse('db'), claudeUse('user')]);
+  if (!d || !u) { setSave(cur ? 'ok' : 'off', cur ? 'Saved in this browser' : 'Not saved yet'); return; }
+  let id = null; try { id = await u.id(); } catch { /* signed out */ }
+  if (!id) return;
+  db = d; userId = id;
+  if (!fresh && (!cur || !cur.sheets)) {
+    // first visit on this browser: open the most recent saved project, if there is one
+    try {
+      const docs = (await db.collection('data/users/' + userId).get()).docs.filter(x => x.exists);
+      if (docs.length && !dirty) {
+        docs.sort((a, b) => String(b.data().updated).localeCompare(String(a.data().updated)));
+        loadProject(JSON.parse(docs[0].data().project), `Opened ${docs[0].data().name}`); lsSet('gs.current', project); setSave('ok', 'Saved to your projects'); return;
+      }
+    } catch { /* keep the example */ }
+  }
+  if (dirty) saveNow(); else if (cur && cur.sheets) setSave('ok', 'Saved in this browser');
+})();
+})();
+</script>

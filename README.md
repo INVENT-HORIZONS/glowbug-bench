@@ -1,0 +1,47 @@
+# Glowbug Bench
+
+A browser-based schematic editor for **The Glow Report**, a weekly vacuum-tube newsletter. It draws with the newsletter's own symbol library, so schematics made here match the figures in print.
+
+Open `glowbug-bench.html` in any modern browser. Everything is in the one file; no install or build step.
+
+## Features
+
+- **Symbol library (79 parts):** passives, transformers (including ultra-linear and center-tapped), heaters, power, semiconductors (diodes, BJTs, Darlingtons, JFETs and MOSFETs), misc, modern tubes (including gas-filled rectifiers, glow regulators, thyratrons, a photomultiplier and two- and single-section electron-ray "magic eyes"), and 1920s and 1930s period tubes for the Vintage Tube spotlight.
+- **Hooks on a 0.1 in grid:** every connection point lands on the grid, even after rotating or flipping. Ref des and value labels move on a finer 0.05 in grid.
+- **Wiring:** click a hook to start, click to add corners, and finish on a hook or wire. Space flips the corner. Junction dots appear automatically.
+- **Wire colors:** black, red, green, blue, brown and orange. Pick the color for new wires from the swatch under the Wire tool; recolor existing wires from the properties panel or the right-click menu.
+- **Editing:**
+  - Drag parts and the wires follow.
+  - Drag a wire segment to move it.
+  - Right-click to rotate, flip horizontal, flip vertical or delete.
+  - Double-click a part, its ref des or its value to edit.
+  - Delete on a selected label hides it instead of deleting anything.
+- **Pin numbers on tubes:** right-click a tube and choose Show pin numbers. Each hook gets a `p?` label you can double-click to edit (Tab moves to the next pin) and drag anywhere; a moved label is tied back to its pin with a dotted line.
+- **Photomultiplier dynodes:** right-click a photomultiplier (or use the properties panel) to set 2 to 14 dynodes. The photocathode and D1 stay put; the anode's wires follow it.
+- **Toolbox:** Select (V), Wire (W), Text (T), Cut (C, removes a whole part or wire) and Snip (S, removes one wire segment).
+- **Sheets:** ANSI A (Letter), B (Tabloid), C and D, portrait or landscape, with mixed sizes in one project. Each sheet can have:
+  - A zoned border.
+  - A revision chart.
+  - A title block with logo, company, project, sheet title, file name, part number, size, revision, sheet *n* of *m*, and drawn, checked and approved by.
+- **Movable blocks:** the title block and revision chart drag anywhere and stick to any corner.
+- **Project tree:** schematics are listed by file name; double-click to rename.
+- **Export:** whole sheet or drawing only, as SVG or PNG, plus a project file (.json) you can import later.
+
+## Colors
+
+The sheet uses the newsletter's palette: paper `#FBF8F3`, ink `#17120E`, and glow `#E8912D` for heaters and filaments only, and phosphor green `#2F8A45` for the magic-eye targets. Wires are ink unless you color them.
+
+## Keys
+
+| Key | Action |
+| --- | --- |
+| V / W / T / C / S | Select, Wire, Text, Cut, Snip |
+| R / X / Y | Rotate, flip horizontal, flip vertical |
+| Del | Delete the selection (hides a selected label) |
+| Ctrl+Z / Ctrl+Y | Undo, redo |
+| Ctrl+C / Ctrl+V / Ctrl+D | Copy, paste, duplicate |
+| F / Shift+F | Fit sheet, fit drawing |
+| Wheel / Shift+wheel / Alt+wheel | Zoom, pan up/down, pan left/right |
+| Space (while wiring) | Flip the corner |
+
+Add `#fresh` to the end of the address to start on the example sheet without opening saved work.

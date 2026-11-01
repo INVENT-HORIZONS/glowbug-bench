@@ -243,7 +243,6 @@ button, input, select, textarea { font: inherit; color: inherit; box-sizing: bor
 .menu .swatches { padding: 2px 10px 8px; }
 .chips { display: grid; grid-template-columns: repeat(7, 26px); gap: 3px; padding: 2px 10px 8px; }
 .menu button.chip { width: 26px; height: 22px; padding: 0; display: flex; justify-content: center; align-items: center; text-align: center; font: 500 11px var(--font-mono); border: 1px solid var(--line); border-radius: 4px; }
-.menu button.chip:disabled { opacity: .3; cursor: default; }
 /* ---------- configure windings dialog ---------- */
 .dlg.wnd { width: min(760px, 100%); max-height: 92vh; }
 .wnd-body { display: grid; grid-template-columns: 200px 1fr 1fr; gap: 14px; padding: 0 16px; min-height: 0; overflow-y: auto; }
@@ -602,15 +601,6 @@ const VERS_TAPS = 6, VERS_MAX = 40, VERS_DEF = 16;
 const sumL = a => a.reduce((x, y) => x + y, 0);
 // split total loops into k sections as evenly as the grid allows
 const evenSplit = (total, k) => { const c = i => Math.round(i * total / k); return Array.from({ length: k }, (_, i) => c(i + 1) - c(i)); };
-// resize a winding to a new total, keeping its taps in proportion (so asymmetric taps stay asymmetric)
-function scaleSplit(secs, total) {
-  const k = secs.length, old = sumL(secs); total = Math.max(k, Math.min(VERS_MAX, total));
-  const c = [0]; let run = 0; for (const n of secs) { run += n; c.push(Math.round(run * total / old)); }
-  c[k] = total;
-  for (let i = 1; i < k; i++) c[i] = Math.max(c[i], c[i - 1] + 1);
-  for (let i = k - 1; i > 0; i--) c[i] = Math.min(c[i], c[i + 1] - 1);
-  return c.slice(1).map((v, i) => v - c[i]);
-}
 const okWinding = a => Array.isArray(a) && a.length >= 1 && a.length <= VERS_TAPS + 1 && a.every(n => Number.isInteger(n) && n >= 1) && sumL(a) <= VERS_MAX;
 // a part's two windings; parts saved with the older tap counts (pt / st) are read as 16 loops with evenly spread taps
 function windingsOf(p) {
@@ -1498,10 +1488,7 @@ function renderProps() {
     const p = it.o, L = LIB[p.type], HK = shapeOf(p).hooks;
     const pins = Object.keys(HK).join(' · ');
     b.innerHTML = `<div class="what">${esc(L.name)}<small>${esc(L.cat)} · ${Object.keys(HK).length} hook${Object.keys(HK).length > 1 ? 's' : ''}</small></div>
-      ${L.windings ? (() => { const ws = windingsOf(p); return ['pw', 'sw'].map(sd => { const w = ws[sd];
-        return `<div class="field"><label for="pWt${sd}">${WSIDE[sd][0]} taps</label><select id="pWt${sd}">${Array.from({ length: VERS_TAPS + 1 }, (_, n) => `<option${n === w.length - 1 ? ' selected' : ''}>${n}</option>`).join('')}</select></div>`
-          + `<div class="field"><label for="pWl${sd}">${WSIDE[sd][0]} loops</label><select id="pWl${sd}">${Array.from({ length: VERS_MAX - w.length + 1 }, (_, i) => w.length + i).map(n => `<option${n === sumL(w) ? ' selected' : ''}>${n}</option>`).join('')}</select></div>`; }).join('')
-        + `<div class="row-btns"><button data-act="windings">Configure windings…</button></div>`; })() : ''}
+      ${L.windings ? `<div class="row-btns"><button data-act="windings">Configure windings…</button></div>` : ''}
       ${varyList(L).map((v, k) => `<div class="field"><label for="pVary${k}">${v.label}</label><select id="pVary${k}" data-vk="${v.key}">${Array.from({ length: v.max - v.min + 1 }, (_, i) => v.min + i).map(n => `<option${n === varyVal(p, v) ? ' selected' : ''}>${n}</option>`).join('')}</select></div>`).join('')}
       <div class="field"><label for="pRef">Ref des</label><input type="text" id="pRef" value="${esc(p.ref)}" spellcheck="false"></div>
       <div class="field"><label for="pVal">Value</label><input type="text" id="pVal" value="${esc(p.value)}"></div>
@@ -1511,7 +1498,6 @@ function renderProps() {
       <div class="row-btns"><button data-act="rot">Rotate</button><button data-act="flip">Flip H</button><button data-act="flipv">Flip V</button><button data-act="dup">Duplicate</button>${(p.lx || p.ly || p.rdx || p.rdy || p.vdx || p.vdy || p.pdx || p.pdy || p.sdx || p.sdy) ? '<button data-act="lreset">Reset labels</button>' : ''}<button class="del" data-act="del">Delete</button></div>`;
     const bind = (id, f) => { const e = $(id); if (!e) return; e.addEventListener('focus', () => snapshot(), { once: true }); e.addEventListener('input', () => { f(e); render(); changedSoon(); }); e.addEventListener('keydown', ev => { ev.stopPropagation(); if (ev.key === 'Enter') e.blur(); }); };
     bind('pRef', e => p.ref = e.value); bind('pVal', e => p.value = e.value);
-    if (L.windings) for (const sd of ['pw', 'sw']) { $('pWt' + sd).onchange = e => setWindTaps(p, sd, +e.target.value); $('pWl' + sd).onchange = e => setWindLoops(p, sd, +e.target.value); }
     varyList(L).forEach((v, k) => { $('pVary' + k).onchange = e => setVary(p, +e.target.value, v.key); });
     $('pShowR').onchange = e => { snapshot(); p.showRef = e.target.checked; render(); changed(); };
     $('pShowV').onchange = e => { snapshot(); p.showVal = e.target.checked; render(); changed(); };
@@ -1622,19 +1608,6 @@ function reshape(p, mutate, rename = {}, msg = '') {
   finishWires(); render(); changed(); if (msg) setMsg(msg);
 }
 const WSIDE = { pw: ['Primary', 'PT'], sw: ['Secondary', 'ST'] };
-// quick settings: a tap count spreads the taps evenly; a loop count keeps the taps in proportion
-function setWindTaps(p, side, n) {
-  const w = windingsOf(p)[side]; n = Math.max(0, Math.min(VERS_TAPS, n)); if (n === w.length - 1) return;
-  const total = Math.max(sumL(w), n + 1);
-  reshape(p, q => { const ws = windingsOf(q); q.pw = ws.pw; q.sw = ws.sw; q[side] = evenSplit(total, n + 1); delete q.pt; delete q.st; }, {},
-    `${p.ref || 'Transformer'}: ${n} ${WSIDE[side][0].toLowerCase()} tap${n === 1 ? '' : 's'}`);
-}
-function setWindLoops(p, side, total) {
-  const w = windingsOf(p)[side]; total = Math.max(w.length, Math.min(VERS_MAX, total)); if (total === sumL(w)) return;
-  reshape(p, q => { const ws = windingsOf(q); q.pw = ws.pw; q.sw = ws.sw; q[side] = scaleSplit(w, total); delete q.pt; delete q.st; }, {},
-    `${p.ref || 'Transformer'}: ${total} ${WSIDE[side][0].toLowerCase()} loops`);
-}
-const LOOP_PRESETS = [4, 6, 8, 12, 16, 20, 24];
 
 // Change a variable part's setting (e.g. dynode count). Hooks that survive keep their wires; a hook that
 // moves (the anode) drags its wires along; wires left on a removed dynode stay where they were.
@@ -2076,11 +2049,7 @@ function partMenu(e, raw) {
           : `<button role="menuitem" data-m="wadd-${f}"><span>${(q[f] || '').trim() ? 'Show' : 'Add'} ${FIELD_NAME[f]}</span><span></span></button>`).join(''); })() : '')
     + (items.length === 1 && items[0].k === 'part' && isTube(items[0].o) ? `<button role="menuitem" data-m="pins"><span>${items[0].o.showPins ? 'Hide' : 'Show'} pin numbers</span><span></span></button>` : '')
     + (t.k === 'pin' ? `<button role="menuitem" data-m="editpin"><span>Edit pin number</span><span>dbl-click</span></button>` + (((t.o.pins || {})[t.pin] || {}).dx || ((t.o.pins || {})[t.pin] || {}).dy ? `<button role="menuitem" data-m="resetpin"><span>Put pin number back</span><span></span></button>` : '') : '')
-    + (items.length === 1 && items[0].k === 'part' && LIB[items[0].o.type].windings ? (() => { const q = items[0].o, ws = windingsOf(q);
-        return ['pw', 'sw'].map(sd => { const w = ws[sd], nt = w.length - 1, tl = sumL(w);
-          return `<div class="mlabel">${WSIDE[sd][0]} taps</div><div class="chips">${Array.from({ length: VERS_TAPS + 1 }, (_, n) => `<button class="chip" data-wnd="${sd}:t:${n}" aria-pressed="${n === nt}">${n}</button>`).join('')}</div>`
-            + `<div class="mlabel">${WSIDE[sd][0]} loops${LOOP_PRESETS.includes(tl) ? '' : ' · now ' + tl}</div><div class="chips">${LOOP_PRESETS.map(n => `<button class="chip" data-wnd="${sd}:l:${n}" aria-pressed="${n === tl}"${n < w.length ? ' disabled' : ''}>${n}</button>`).join('')}</div>`; }).join('')
-          + `<button role="menuitem" data-m="windings"><span>Configure windings…</span><span></span></button>`; })() : '')
+    + (items.length === 1 && items[0].k === 'part' && LIB[items[0].o.type].windings ? `<button role="menuitem" data-m="windings"><span>Configure windings…</span><span></span></button>` : '')
     + (items.length === 1 && items[0].k === 'part' && LIB[items[0].o.type].vary ? (() => { const q = items[0].o;
         return varyList(LIB[q.type]).map(v => { const cur = varyVal(q, v);
           return `<div class="mlabel">${v.label}</div><div class="chips">${Array.from({ length: v.max - v.min + 1 }, (_, i) => v.min + i).map(n => `<button class="chip" data-vary="${v.key}:${n}" aria-pressed="${n === cur}">${n}</button>`).join('')}</div>`; }).join(''); })() : '')
@@ -2093,7 +2062,6 @@ function partMenu(e, raw) {
   menuEl.style.left = Math.min(e.clientX, window.innerWidth - mw - 8) + 'px';
   menuEl.style.top = Math.max(8, Math.min(e.clientY, window.innerHeight - mh - 8)) + 'px';
   menuEl.onclick = ev => { const wc = ev.target.closest('[data-wc]'); if (wc) { closeMenu(); colorWires(wc.dataset.wc); return; }
-    const wd = ev.target.closest('[data-wnd]'); if (wd) { if (wd.disabled) return; closeMenu(); const [sd, kind, n] = wd.dataset.wnd.split(':'); (kind === 't' ? setWindTaps : setWindLoops)(items[0].o, sd, +n); return; }
     const cr = ev.target.closest('[data-core]'); if (cr) { closeMenu(); const q = items[0].o, k = cr.dataset.core; if ((q.core || 'iron') !== k) { snapshot(); q.core = k; render(); changed(); setMsg(`${q.ref || LIB[q.type].name}: ${CORE_NAME[k]}`); } return; }
     const vy = ev.target.closest('[data-vary]'); if (vy) { closeMenu(); const [vk, vn] = vy.dataset.vary.split(':'); setVary(items[0].o, +vn, vk); return; }
     const b = ev.target.closest('[data-m]'); if (!b) return; const m = b.dataset.m; closeMenu();

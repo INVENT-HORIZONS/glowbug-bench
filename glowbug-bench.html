@@ -514,6 +514,12 @@ def('diode_schottky', { cat: 'Semiconductors', name: 'Schottky diode', pre: 'D',
   draw: () => ln(0, 0, 13, 0) + pg([[13, -8], [13, 8], [27, 0]]) + pl([[31, 5], [31, 8], [27, 8], [27, -8], [23, -8], [23, -5]]) + ln(27, 0, 40, 0) });
 def('diode_zener', { cat: 'Semiconductors', name: 'Zener diode', pre: 'D', value: '1N4742A', hooks: { A: [0, 0], K: [40, 0] },
   draw: () => ln(0, 0, 13, 0) + pg([[13, -8], [13, 8], [27, 0]]) + pl([[31, 11], [27, 8], [27, -8], [23, -11]]) + ln(27, 0, 40, 0) });
+// LED: the plain diode with two arrows leaving it, up and to the right (light out)
+const ledArrow = (x1, y1, x2, y2) => { const L = Math.hypot(x2 - x1, y2 - y1), ux = (x2 - x1) / L, uy = (y2 - y1) / L, bx = x2 - 5 * ux, by = y2 - 5 * uy;
+  return ln(x1, y1, bx, by) + pg([[x2, y2], [bx - 2.4 * uy, by + 2.4 * ux], [bx + 2.4 * uy, by - 2.4 * ux]], 'ink solid'); };
+def('diode_led', { cat: 'Semiconductors', name: 'LED', pre: 'D', value: 'Red', tags: 'led light emitting diode indicator lamp', hooks: { A: [0, 0], K: [40, 0] },
+  draw: () => ln(0, 0, 13, 0) + pg([[13, -8], [13, 8], [27, 0]]) + ln(27, -8, 27, 8) + ln(27, 0, 40, 0)
+    + ledArrow(17, -11, 25, -21) + ledArrow(23, -11, 31, -21) });
 
 // Bipolar transistors: base on the left, collector up, emitter down; the arrow on the emitter
 // points out for NPN and in for PNP.

@@ -42,7 +42,7 @@ The owner is Larry Higley (GitHub: INVENT-HORIZONS). The app started as the sche
 - **The stock symbols stay hardcoded in the app.** This was decided on purpose.
   - Deferred: a "Create from stock" right-click item that copies a stock symbol into an editable custom symbol, probably with a popup editor. Custom symbols may live in an external file, probably JSON.
 - **Designators** default to `pre + '?'` (V?, R?, Q?, D?). **Tubes have no default value**; part numbers go in `tags` so search finds them.
-  - Deferred: a "fixed tubes" section with real part numbers.
+  - Deferred: filling the Stock subgroup (Tube, modern) with real tubes by part number. The group exists and is empty.
 - **Heaters inside tubes** use the triangle filament: `pl([[-10,end],[-10,base],[0,base-10],[10,base],[10,end]], 'htr')`. Standalone heater parts come in arch and triangle versions.
 - **Panel groups** are listed in `CATS`, in this order: Passive, Semiconductors, Tube modern, Transformer, Heater, Power, Misc, Tube 1930s, Tube 1920s.
 - **Semiconductors** are laid out in rows: diodes, then BJTs and Darlingtons, then FETs (JFETs and MOSFETs). Each row starts on a fresh line.
@@ -52,8 +52,9 @@ The owner is Larry Higley (GitHub: INVENT-HORIZONS). The app started as the sche
   1. Filament (direct), types ending `_dh`
   2. Cathode only
   3. Cathode + filament, types ending `_ih`
-  4. Gas-filled, types starting `m_gas`, marked with a solid dot
-  5. Specialized, types starting `m_sp_`: photomultiplier, then the single-section eye, then the two-section eye
+  4. Stock, types starting `m_st_`: real tubes by part number (this is where the deferred "fixed tubes" go). Shown with a "No stock tubes yet." note while empty; hidden during a search when nothing matches.
+  5. Gas-filled, types starting `m_gas`, marked with a solid dot
+  6. Specialized, types starting `m_sp_`: photomultiplier, then the single-section eye, then the two-section eye
 - **Period tubes** are drawn in the style of their era. 1920s tubes are sideways with zigzag grids, and 1930s tubes are the same rotated 90°. From 1937 on, the modern symbols apply.
 - **Parts with an adjustable shape** declare `vary: { key, label, min, max, def, build(n) }`, or a list of settings `vary: [{ key, label, min, max, def }, …]` plus `build({ key: n, … })` on the def. Read settings with `varyList(L)` / `varyVal(p, v)`, change them with `setVary(p, n, key)`, and always read the shape through `shapeOf(p)`. Never use `LIB[type].hooks` directly for a placed part.
   - The photomultiplier, `pmtBuild(n)`, takes 2 to 14 dynodes. K and D1 stay fixed.

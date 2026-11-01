@@ -244,6 +244,10 @@ button, input, select, textarea { font: inherit; color: inherit; box-sizing: bor
 .sw:hover, .sw:focus-visible, .menu button.sw:hover, .menu button.sw:focus-visible { box-shadow: 0 0 0 2px var(--accent); outline: none; }
 .menu .swatches { padding: 2px 10px 8px; }
 .chips { display: grid; grid-template-columns: repeat(7, 26px); gap: 3px; padding: 2px 10px 8px; }
+.chips.wide { grid-template-columns: repeat(4, 1fr); }
+.menu .chips.wide button.chip { width: auto; padding: 0 6px; font-size: 10.5px; }
+.menu button[disabled] { opacity: .55; cursor: default; }
+.menu button[disabled]:hover { background: transparent; color: inherit; }
 .menu button.chip { width: 26px; height: 22px; padding: 0; display: flex; justify-content: center; align-items: center; text-align: center; font: 500 11px var(--font-mono); border: 1px solid var(--line); border-radius: 4px; }
 /* ---------- configure windings dialog ---------- */
 .dlg.wnd { width: min(760px, 100%); max-height: 92vh; }
@@ -745,6 +749,54 @@ def('m_beam_ih', { cat: 'Tube, modern', name: 'Beam power, filament', pre: 'V', 
   draw: () => beamBody() + ln(-20, 12, -20, 60)
     + pl([[-10, 60], [-10, 31], [0, 21], [10, 31], [10, 60]], 'htr') });
 
+/* ---- Stock tubes (types m_st_*): real tubes with their pinout. A stock part can have sections (p.unit 'A', 'B'),
+   each placed on its own and linked by p.grp; the ref shows as V1A, V1B. Every section shares the ref and the
+   tube type (the value). Pin numbers are filled in and shown when placed. ---- */
+// 12AX7 family: twin triodes on the 9A noval base. Section A: plate 1, grid 2, cathode 3, with the heater
+// (pins 4 and 5, centre tap 9). Section B: plate 6, grid 7, cathode 8.
+const FAM_12AX7 = ['12AX7', '12AT7', '12AU7', '12AY7', '12AV7', '12AZ7', '12BZ7', '12DW7', '5751', '7025', '6072', '6201', '6681', '5814', '6189', 'ECC81', 'ECC82', 'ECC83'];
+const triodeBody = () => ci(0, 0, 30, 'env') + ln(-17, -15, 17, -15) + ln(0, -15, 0, -50) + ln(-17, 0, 17, 0, 'dash') + ln(-50, 0, -17, 0);
+const ST12AX7 = {
+  A: { hooks: { P: [0, -50], G: [-50, 0], K: [-20, 50], H1: [-10, 50], HCT: [0, 50], H2: [10, 50] },
+       draw: () => triodeBody() + cath(-20, 19, 10, -20, 50) + pl([[-10, 50], [-10, 27], [0, 17], [10, 27], [10, 50]], 'htr') + ln(0, 17, 0, 50, 'htr'),
+       pins: { P: { t: '1' }, G: { t: '2' }, K: { t: '3' }, H1: { t: '4' }, HCT: { t: '9' }, H2: { t: '5' } } },
+  B: { hooks: { P: [0, -50], G: [-50, 0], K: [-10, 50] },
+       draw: () => triodeBody() + cath(-10, 12, 10, -10, 50),
+       pins: { P: { t: '6' }, G: { t: '7' }, K: { t: '8' } } },
+};
+def('m_st_12ax7', { cat: 'Tube, modern', name: '12AX7 family', pre: 'V', value: '12AX7', units: ST12AX7, family: FAM_12AX7,
+  tags: 'stock twin triode dual noval 9a ' + FAM_12AX7.join(' ').toLowerCase(), hooks: ST12AX7.A.hooks, draw: ST12AX7.A.draw });
+const unitsOf = L => L.units ? Object.keys(L.units) : [];
+const unitOf = p => { const L = LIB[p.type]; return L.units ? (L.units[p.unit] ? p.unit : unitsOf(L)[0]) : ''; };
+const refText = p => (p.ref || '') + unitOf(p);
+const groupOf = p => p.grp && LIB[p.type].units ? sheet.parts.filter(q => q.grp === p.grp && q.type === p.type) : [p];
+// a new section: its own pins filled in and shown
+function stockSection(p, u) {
+  const U = LIB[p.type].units[u];
+  return Object.assign(p, { unit: u, showPins: true, pins: JSON.parse(JSON.stringify(U.pins)) });
+}
+function stockDefaults(p) {
+  const L = LIB[p.type]; if (!L || !L.units) return p;
+  if (!L.units[p.unit]) p.unit = unitsOf(L)[0];
+  if (!p.grp) p.grp = uid();
+  if (!p.pins) stockSection(p, p.unit);
+  return p;
+}
+// copy the shared fields (ref, tube type, its labels' visibility) from one section to its siblings
+function syncGroup(p) { for (const q of groupOf(p)) if (q !== p) { q.ref = p.ref; q.value = p.value; } }
+function addSection(p, u) {
+  if (groupOf(p).some(q => unitOf(q) === u)) return;
+  snapshot();
+  const q = stockSection({ id: uid(), type: p.type, x: p.x + 120, y: p.y, rot: p.rot || 0, flip: !!p.flip, ref: p.ref, value: p.value,
+    showRef: p.showRef !== false, showVal: p.showVal !== false, lx: 0, ly: 0, grp: p.grp }, u);
+  sheet.parts.push(q); sel.clear(); sel.add(q.id); render(); renderSel(); changed();
+  setMsg(`Placed ${refText(q)}. Drag it wherever that section belongs.`);
+}
+function setTubeType(p, t) {
+  if (!t || p.value === t) return;
+  snapshot(); for (const q of groupOf(p)) q.value = t; render(); renderSel(); changed();
+  setMsg(`${p.ref || 'Tube'}: ${t}`);
+}
 // Gas-filled tubes: the solid dot inside the envelope marks the gas (or mercury vapour) fill.
 const gasDot = (x, y) => ci(x, y, 2.5, 'ink solid');
 def('m_gas_rect_hw', { cat: 'Tube, modern', name: 'Gas rectifier, half-wave', pre: 'V', value: '', tags: '866a 816 872a mercury vapor gas filament', hooks: { P: [0, -50], F1: [-10, 50], F2: [10, 50] },
@@ -862,8 +914,8 @@ for (const era of ['1930s', '1920s']) for (const ih of [false, true]) for (const
     value: PV[era][ih ? 'ih' : 'dh'][kind], tags: `vintage period zigzag ${era === '1930s' ? '1930 1936 2a3 45 56 27' : '1920 01-a 201a'}`,
     hooks: p.hooks, draw: p.draw });
 }
-// tubes start with no value: the part number comes later (a fixed-tube section is planned); the designator is just V?
-for (const k in LIB) if (LIB[k].cat.startsWith('Tube')) LIB[k].value = '';
+// tubes start with no value and the designator V?; stock tubes (m_st_*) keep their tube type as the value
+for (const k in LIB) if (LIB[k].cat.startsWith('Tube') && !/^m_st_/.test(k)) LIB[k].value = '';   // stock tubes keep their type as the value
 const CATS = ['Passive', 'Semiconductors', 'Tube, modern', 'Transformer', 'Heater', 'Power', 'Misc', 'Tube, 1930s', 'Tube, 1920s'];
 
 /* local bounding boxes, measured once (and per variant, on first use) */
@@ -888,6 +940,11 @@ const varyVal = (p, v) => { const n = Math.round(+p[v.key]); return isFinite(n) 
 const varyN = p => varyVal(p, varyList(LIB[p.type])[0]);
 function shapeOf(p) {
   const L = LIB[p.type];
+  if (L.units) {   // stock part: the shape of its section
+    const U = L.units[unitOf(p)];
+    if (!U.bb) U.bb = measureBB(U.draw, U.hooks);
+    return U;
+  }
   if (L.windings) {   // versatile transformer: shape set by its loop lists
     const w = windingsOf(p), n = w.pw.join('.') + '|' + w.sw.join('.'), c = L._v || (L._v = {});
     if (!c[n]) { const v = versBuild(w.pw, w.sw); c[n] = { hooks: v.hooks, draw: v.draw, bb: measureBB(v.draw, v.hooks) }; }
@@ -996,7 +1053,7 @@ function labelLines(p) {
     });
   } else if (labelShown(p)) {
     const [x, y, a] = labelPos(p);
-    [['ref', p.ref, p.rdx || 0, p.rdy || 0], ['value', p.value, p.vdx || 0, p.vdy || 0]].forEach(([field, txt, ox, oy], i) => {
+    [['ref', refText(p), p.rdx || 0, p.rdy || 0], ['value', p.value, p.vdx || 0, p.vdy || 0]].forEach(([field, txt, ox, oy], i) => {
       if (fieldShown(p, field)) line(field, txt, x + ox, y + i * 13 + oy, a);
     });
   }
@@ -1174,7 +1231,7 @@ function pinSVG(p) {
     + `<text class="pinno" x="${g.x}" y="${g.y}" text-anchor="middle"${editing && editing.p === p && editing.field === 'pin:' + g.name ? ' visibility="hidden"' : ''}>${esc(g.t)}</text>`).join('');
 }
 function labelSVG(p) {
-  return labelLines(p).map(l => `<text class="lbl${l.field === 'ref' ? ' ref' : ''}" x="${l.x}" y="${l.y}" text-anchor="${l.a}"${editing && editing.p === p && editing.field === l.field ? ' visibility="hidden"' : ''}>${esc(p[l.field] || '')}</text>`).join('');
+  return labelLines(p).map(l => `<text class="lbl${l.field === 'ref' ? ' ref' : ''}" x="${l.x}" y="${l.y}" text-anchor="${l.a}"${editing && editing.p === p && editing.field === l.field ? ' visibility="hidden"' : ''}>${esc(l.field === 'ref' ? refText(p) : p[l.field] || '')}</text>`).join('');
 }
 function textSVG(t) {
   const lines = String(t.text).split('\n');
@@ -1522,6 +1579,10 @@ function renderProps() {
     const p = it.o, L = LIB[p.type], HK = shapeOf(p).hooks;
     const pins = Object.keys(HK).join(' · ');
     b.innerHTML = `<div class="what">${esc(L.name)}<small>${esc(L.cat)} · ${Object.keys(HK).length} hook${Object.keys(HK).length > 1 ? 's' : ''}</small></div>
+      ${L.family ? `<div class="field"><label for="pTube">Tube type</label><select id="pTube">${(L.family.includes(p.value) ? L.family : [p.value, ...L.family]).map(t => `<option${t === p.value ? ' selected' : ''}>${esc(t)}</option>`).join('')}</select></div>` : ''}
+      ${L.units ? (() => { const have = groupOf(p).map(unitOf), miss = unitsOf(L).filter(u => !have.includes(u));
+        return `<div class="field"><label>Section</label><span>${esc(refText(p))}${miss.length ? '' : ` · all ${unitsOf(L).length} placed`}</span></div>`
+          + (miss.length ? `<div class="row-btns">${miss.map(u => `<button data-act="unit-${u}">Add section ${u}</button>`).join('')}</div>` : ''); })() : ''}
       ${p.type === 'diode_led' ? `<div class="field"><label for="pLed">Color</label><select id="pLed">${LED_COLORS.map(([k, n]) => `<option value="${k}"${k === ledCol(p) ? ' selected' : ''}>${n}</option>`).join('')}</select></div>` : ''}
       ${isXfmr(p) ? `<div class="field"><label>Outline</label><label style="display:flex;gap:5px;align-items:center;color:inherit"><input type="checkbox" id="pXbox"${p.box ? ' checked' : ''}> light gray box</label></div>` : ''}
       ${L.windings ? `<div class="row-btns"><button data-act="windings">Configure windings…</button></div>` : ''}
@@ -1533,10 +1594,11 @@ function renderProps() {
       <div class="pins">Hooks: ${esc(pins)}</div>
       <div class="row-btns"><button data-act="rot">Rotate</button><button data-act="flip">Flip H</button><button data-act="flipv">Flip V</button><button data-act="dup">Duplicate</button>${(p.lx || p.ly || p.rdx || p.rdy || p.vdx || p.vdy || p.pdx || p.pdy || p.sdx || p.sdy) ? '<button data-act="lreset">Reset labels</button>' : ''}<button class="del" data-act="del">Delete</button></div>`;
     const bind = (id, f) => { const e = $(id); if (!e) return; e.addEventListener('focus', () => snapshot(), { once: true }); e.addEventListener('input', () => { f(e); render(); changedSoon(); }); e.addEventListener('keydown', ev => { ev.stopPropagation(); if (ev.key === 'Enter') e.blur(); }); };
-    bind('pRef', e => p.ref = e.value); bind('pVal', e => p.value = e.value);
+    bind('pRef', e => { p.ref = e.value; syncGroup(p); }); bind('pVal', e => { p.value = e.value; syncGroup(p); });
     varyList(L).forEach((v, k) => { $('pVary' + k).onchange = e => setVary(p, +e.target.value, v.key); });
     $('pShowR').onchange = e => { snapshot(); p.showRef = e.target.checked; render(); changed(); };
     $('pShowV').onchange = e => { snapshot(); p.showVal = e.target.checked; render(); changed(); };
+    if ($('pTube')) $('pTube').onchange = e => setTubeType(p, e.target.value);
     if ($('pLed')) $('pLed').onchange = e => setLedColor(p, e.target.value);
     if ($('pXbox')) $('pXbox').onchange = e => { snapshot(); p.box = e.target.checked; render(); renderSel(); changed(); };
     if (isXfmr(p)) for (const f of ['pri', 'sec']) {
@@ -1565,6 +1627,7 @@ function renderProps() {
 $('propBody').addEventListener('click', e => {
   const wc = e.target.closest('[data-wc]'); if (wc) { colorWires(wc.dataset.wc); return; }
   const a = e.target.closest('[data-act]'); if (!a) return;
+  if (a.dataset.act.startsWith('unit-')) { const it = selItems()[0]; if (it && it.k === 'part') addSection(it.o, a.dataset.act.slice(5)); return; }
   ({ windings: () => { const it = selItems()[0]; if (it && it.k === 'part') windingDialog(it.o); }, rot: rotateSel, flip: () => flipSel('h'), flipv: () => flipSel('v'), dup: duplicate, del: deleteSel, lreset: () => { snapshot(); for (const it of selItems()) if (it.k === 'part') { Object.assign(it.o, { lx: 0, ly: 0, rdx: 0, rdy: 0, vdx: 0, vdy: 0, pdx: 0, pdy: 0, sdx: 0, sdy: 0 }); } render(); changed(); } })[a.dataset.act]();
 });
 
@@ -1717,6 +1780,7 @@ function copySel() {
 function paste(dx = 20, dy = 20) {
   if (!clip) return; snapshot();
   const c = JSON.parse(clip); sel.clear();
+  const regrp = {}; for (const p of c.parts) if (p.grp) p.grp = regrp[p.grp] || (regrp[p.grp] = uid());
   for (const p of c.parts) { p.id = uid(); p.x += dx; p.y += dy; if (p.ref) p.ref = nextRef(LIB[p.type].pre); sheet.parts.push(p); sel.add(p.id); }
   for (const w of c.wires) { w.id = uid(); w.pts = w.pts.map(q => [q[0] + dx, q[1] + dy]); sheet.wires.push(w); sel.add(w.id); }
   for (const t of c.texts) { t.id = uid(); t.x += dx; t.y += dy; sheet.texts.push(t); sel.add(t.id); }
@@ -1946,7 +2010,7 @@ function finishEdit(ok) {
     if (ok && inp && inp.value.trim() !== (pn.t != null ? pn.t : 'p?')) { snapshot(); pn.t = inp.value.trim() || 'p?'; changed(); setMsg(`Pin ${n} set to ${pn.t}`); }
     render(); return;
   }
-  if (ok && inp && inp.value !== (p[field] || '')) { snapshot(); p[field] = inp.value.trim(); changed(); setMsg(`${field === 'ref' ? 'Designator' : field === 'value' ? 'Value' : field === 'pri' ? 'Primary text' : 'Secondary text'} set to ${p[field] || '(blank)'}`); }
+  if (ok && inp && inp.value !== (p[field] || '')) { snapshot(); p[field] = inp.value.trim(); syncGroup(p); changed(); setMsg(`${field === 'ref' ? 'Designator' : field === 'value' ? 'Value' : field === 'pri' ? 'Primary text' : 'Secondary text'} set to ${p[field] || '(blank)'}`); }
   if ((field === 'pri' || field === 'sec') && !(p[field] || '').trim()) { setShown(p, field, false); changed(); }   // an empty winding note would be invisible: hide it
   render();
 }
@@ -2041,7 +2105,7 @@ function partDialog(p) {
     const r = $('pdRef').value.trim(), v = $('pdVal').value.trim(), sr = $('pdShowR').checked, sv = $('pdShowV').checked;
     const W = isXfmr(p) ? ['pri', 'sec'].map(f => { const t = $('pdW' + f).value.trim(); return [f, t, $('pdWs' + f).checked && !!t]; }) : [];
     const wDiff = W.some(([f, t, on]) => t !== (p[f] || '') || on !== fieldShown(p, f));
-    if (wDiff || r !== p.ref || v !== p.value || sr !== fieldShown(p, 'ref') || sv !== fieldShown(p, 'value')) { snapshot(); p.ref = r; p.value = v; p.showRef = sr; p.showVal = sv; for (const [f, t, on] of W) { p[f] = t; setShown(p, f, on); } render(); changed(); setMsg(`Updated ${r || L.name}`); }
+    if (wDiff || r !== p.ref || v !== p.value || sr !== fieldShown(p, 'ref') || sv !== fieldShown(p, 'value')) { snapshot(); p.ref = r; p.value = v; p.showRef = sr; p.showVal = sv; syncGroup(p); for (const [f, t, on] of W) { p[f] = t; setShown(p, f, on); } render(); changed(); setMsg(`Updated ${r || L.name}`); }
     close();
   });
   $('pdRef').focus(); $('pdRef').select();
@@ -2074,7 +2138,7 @@ function partMenu(e, raw) {
   selLabel = t.k === 'label' ? { id: target.id, field: t.field } : null; renderSel();
   const items = selItems(), hasPart = items.some(i => i.k === 'part');
   const many = items.length > 1 ? ` ${items.length} items` : '';
-  const what = items.length > 1 ? `${items.length} items` : items[0].k === 'part' ? (items[0].o.ref || LIB[items[0].o.type].name) : items[0].k === 'wire' ? 'Wire' : 'Text';
+  const what = items.length > 1 ? `${items.length} items` : items[0].k === 'part' ? (refText(items[0].o) || LIB[items[0].o.type].name) : items[0].k === 'wire' ? 'Wire' : 'Text';
   menuEl = document.createElement('div'); menuEl.className = 'menu'; menuEl.setAttribute('role', 'menu');
   menuEl.innerHTML = `<div style="padding:5px 10px 6px;font:500 10.5px var(--font-mono);letter-spacing:.1em;text-transform:uppercase;color:var(--muted)">${esc(what)}</div>`
     + (hasPart ? `<button role="menuitem" data-m="rot"><span>Rotate 90°</span><span>R</span></button><button role="menuitem" data-m="flip"><span>Flip horizontal</span><span>X</span></button><button role="menuitem" data-m="flipv"><span>Flip vertical</span><span>Y</span></button>` : '')
@@ -2088,6 +2152,11 @@ function partMenu(e, raw) {
           : `<button role="menuitem" data-m="wadd-${f}"><span>${(q[f] || '').trim() ? 'Show' : 'Add'} ${FIELD_NAME[f]}</span><span></span></button>`).join(''); })() : '')
     + (items.length === 1 && items[0].k === 'part' && isTube(items[0].o) ? `<button role="menuitem" data-m="pins"><span>${items[0].o.showPins ? 'Hide' : 'Show'} pin numbers</span><span></span></button>` : '')
     + (t.k === 'pin' ? `<button role="menuitem" data-m="editpin"><span>Edit pin number</span><span>dbl-click</span></button>` + (((t.o.pins || {})[t.pin] || {}).dx || ((t.o.pins || {})[t.pin] || {}).dy ? `<button role="menuitem" data-m="resetpin"><span>Put pin number back</span><span></span></button>` : '') : '')
+    + (items.length === 1 && items[0].k === 'part' && LIB[items[0].o.type].units ? (() => { const q = items[0].o, L = LIB[q.type], have = groupOf(q).map(unitOf);
+        return (L.family ? `<div class="mlabel">Tube type</div><div class="chips wide">${L.family.map(t => `<button class="chip" data-tube="${esc(t)}" aria-pressed="${t === q.value}">${esc(t)}</button>`).join('')}</div>` : '')
+          + `<div class="mlabel">Sections</div>` + unitsOf(L).map(u => have.includes(u)
+            ? `<button role="menuitem" disabled><span>${esc(q.ref || L.pre + '?')}${u} placed</span><span>✓</span></button>`
+            : `<button role="menuitem" data-m="unit-${u}"><span>Add section ${u} (${esc(q.ref || L.pre + '?')}${u})</span><span></span></button>`).join(''); })() : '')
     + (items.length === 1 && items[0].k === 'part' && items[0].o.type === 'diode_led' ? (() => { const cur = ledCol(items[0].o);
         return `<div class="mlabel">LED color</div>` + LED_COLORS.map(([k, n, hex]) => `<button role="menuitemradio" data-led="${k}" aria-checked="${k === cur}"><span><i style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${hex};margin-right:7px;vertical-align:-1px;box-shadow:0 0 0 1px rgba(0,0,0,.15)"></i>${n}</span><span>${k === cur ? '●' : ''}</span></button>`).join(''); })() : '')
     + (items.length === 1 && items[0].k === 'part' && LIB[items[0].o.type].windings ? `<button role="menuitem" data-m="windings"><span>Configure windings…</span><span></span></button>` : '')
@@ -2103,11 +2172,13 @@ function partMenu(e, raw) {
   menuEl.style.left = Math.min(e.clientX, window.innerWidth - mw - 8) + 'px';
   menuEl.style.top = Math.max(8, Math.min(e.clientY, window.innerHeight - mh - 8)) + 'px';
   menuEl.onclick = ev => { const wc = ev.target.closest('[data-wc]'); if (wc) { closeMenu(); colorWires(wc.dataset.wc); return; }
+    const tb = ev.target.closest('[data-tube]'); if (tb) { closeMenu(); setTubeType(items[0].o, tb.dataset.tube); return; }
     const lc = ev.target.closest('[data-led]'); if (lc) { closeMenu(); setLedColor(items[0].o, lc.dataset.led); return; }
     const cr = ev.target.closest('[data-core]'); if (cr) { closeMenu(); const q = items[0].o, k = cr.dataset.core; if ((q.core || 'iron') !== k) { snapshot(); q.core = k; render(); changed(); setMsg(`${q.ref || LIB[q.type].name}: ${CORE_NAME[k]}`); } return; }
     const vy = ev.target.closest('[data-vary]'); if (vy) { closeMenu(); const [vk, vn] = vy.dataset.vary.split(':'); setVary(items[0].o, +vn, vk); return; }
     const b = ev.target.closest('[data-m]'); if (!b) return; const m = b.dataset.m; closeMenu();
     if (m === 'edit') { const L0 = selLabel; if (L0) editInPlace(sheet.parts.find(x => x.id === L0.id), L0.field); return; }
+    if (m.startsWith('unit-')) { addSection(items[0].o, m.slice(5)); return; }
     if (m === 'xbox') { const q = items[0].o; snapshot(); q.box = !q.box; render(); renderSel(); changed(); setMsg(`${q.ref || LIB[q.type].name}: gray outline box ${q.box ? 'on' : 'off'}`); return; }
     if (m === 'windings') { windingDialog(items[0].o); return; }
     if (m === 'pins') { const q = items[0].o; snapshot(); q.showPins = !q.showPins; if (q.showPins) { q.pins = q.pins || {}; for (const n of Object.keys(shapeOf(q).hooks)) q.pins[n] = q.pins[n] || { t: 'p?' }; } render(); changed(); setMsg(q.showPins ? 'Pin numbers shown. Double-click one to edit it; drag it to move it.' : 'Pin numbers hidden. Their text is kept.'); return; }
@@ -2160,7 +2231,7 @@ function placePart(p) {
   snapshot();
   const L = LIB[placeType];
   const part = { id: uid(), type: placeType, x: p[0], y: p[1], rot: placeRot, flip: placeFlip, ref: nextRef(L.pre), value: L.value, showRef: !L.hideLabel, showVal: !L.hideLabel, lx: 0, ly: 0 };
-  xfmrDefaults(part);
+  xfmrDefaults(part); stockDefaults(part);
   sheet.parts.push(part); sel.clear(); sel.add(part.id); render(); changed();
   setMsg(`Placed ${part.ref || L.name}. Click to place another, Esc to stop.`);
 }
@@ -2335,7 +2406,7 @@ function loadProject(p, msg) {
       if (!q.ref) q.ref = nextRef(LIB[q.type].pre);
       if (q.value == null || q.value === '') q.value = LIB[q.type].value;
       const legacy = q.showLabel == null ? !LIB[q.type].hideLabel : q.showLabel !== false;
-      xfmrDefaults(q); if (q.showRef == null) q.showRef = legacy; if (q.showVal == null) q.showVal = legacy; delete q.showLabel;
+      xfmrDefaults(q); stockDefaults(q); if (q.showRef == null) q.showRef = legacy; if (q.showVal == null) q.showVal = legacy; delete q.showLabel;
     }
     sheet = was;
   }

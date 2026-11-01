@@ -42,7 +42,7 @@ The owner is Larry Higley (GitHub: INVENT-HORIZONS). The app started as the sche
 - **The stock symbols stay hardcoded in the app.** This was decided on purpose.
   - Deferred: a "Create from stock" right-click item that copies a stock symbol into an editable custom symbol, probably with a popup editor. Custom symbols may live in an external file, probably JSON.
 - **Designators** default to `pre + '?'` (V?, R?, Q?, D?). **Tubes have no default value**; part numbers go in `tags` so search finds them.
-  - Deferred: filling the Stock subgroup (Tube, modern) with real tubes by part number. The group exists and is empty.
+  - The Stock subgroup (Tube, modern) holds real tubes with pinouts; Larry is adding families one at a time, starting with the 12AX7 family.
 - **Heaters inside tubes** use the triangle filament: `pl([[-10,end],[-10,base],[0,base-10],[10,base],[10,end]], 'htr')`. Standalone heater parts come in arch and triangle versions.
 - **Panel groups** are listed in `CATS`, in this order: Passive, Semiconductors, Tube modern, Transformer, Heater, Power, Misc, Tube 1930s, Tube 1920s.
 - **Semiconductors** are laid out in rows: diodes, then BJTs and Darlingtons, then FETs (JFETs and MOSFETs). Each row starts on a fresh line.
@@ -52,7 +52,11 @@ The owner is Larry Higley (GitHub: INVENT-HORIZONS). The app started as the sche
   1. Filament (direct), types ending `_dh`
   2. Cathode only
   3. Cathode + filament, types ending `_ih`
-  4. Stock, types starting `m_st_`: real tubes by part number (this is where the deferred "fixed tubes" go). Shown with a "No stock tubes yet." note while empty; hidden during a search when nothing matches.
+  4. Stock, types starting `m_st_`: real tubes with their pinout (Larry's stock vacuum tube symbols). Shown with a "No stock tubes yet." note when empty; hidden during a search when nothing matches. Stock tubes keep their tube type as the default value (other tubes start blank).
+     - A stock part can have sections: the def carries `units: { A: { hooks, draw, pins }, B: … }`. Each section is its own placed part with `p.unit`, linked to its siblings by `p.grp`. The ref displays as ref + unit (`refText`, e.g. V1A, V1B); `p.ref` holds just V1. `syncGroup(p)` copies ref and value to the siblings and is called from every ref/value edit path. `addSection(p, u)` places a missing section 120 px to the right. Paste gives pasted sections new groups.
+     - `stockDefaults` (placement and load) sets unit, group and the section's pins (`showPins` on). `shapeOf` returns the section's shape.
+     - Families: `family: [...]` on the def lists tube types with the same pinout; picked from the "Tube type" chips in the right-click menu or the Properties select (`setTubeType`, applies to every section).
+     - 12AX7 family (`m_st_12ax7`, `FAM_12AX7`): Larry chose V1A / V1B labels, A = pins 1, 2, 3 (plate, grid, cathode), B = 6, 7, 8, and the heater on section A (H1 pin 4, H2 pin 5, HCT centre tap pin 9). Section B has no heater.
   5. Gas-filled, types starting `m_gas`, marked with a solid dot
   6. Specialized, types starting `m_sp_`: photomultiplier, then the single-section eye, then the two-section eye
 - **Period tubes** are drawn in the style of their era. 1920s tubes are sideways with zigzag grids, and 1930s tubes are the same rotated 90°. From 1937 on, the modern symbols apply.

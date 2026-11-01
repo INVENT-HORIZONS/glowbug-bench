@@ -6,7 +6,7 @@ Open `glowbug-bench.html` in any modern browser. Everything is in the one file; 
 
 ## Features
 
-- **Symbol library (80 parts):** passives, transformers (isolation, step-up, step-down, and a tall versatile transformer with 0 to 6 taps on each winding), heaters, power, semiconductors (diodes including an LED, BJTs, Darlingtons, JFETs and MOSFETs), misc, modern tubes (including gas-filled rectifiers, glow regulators, thyratrons, a photomultiplier and two- and single-section electron-ray "magic eyes"), and 1920s and 1930s period tubes for the Vintage Tube spotlight.
+- **Symbol library (81 parts):** passives, transformers (isolation, step-up, step-down, and a tall versatile transformer with 0 to 6 taps on each winding), heaters, power, semiconductors (diodes including an LED, BJTs, Darlingtons, JFETs and MOSFETs), misc, modern tubes (including gas-filled rectifiers, glow regulators, thyratrons, a photomultiplier and two- and single-section electron-ray "magic eyes"), and 1920s and 1930s period tubes for the Vintage Tube spotlight.
 - **Hooks on a 0.1 in grid:** every connection point lands on the grid, even after rotating or flipping. Ref des and value labels move on a finer 0.05 in grid.
 - **Wiring:** click a hook to start, click to add corners, and finish on a hook or wire. Space flips the corner. Junction dots appear automatically.
 - **Wire colors:** black, red, green, blue, brown and orange. Pick the color for new wires from the swatch under the Wire tool; recolor existing wires from the properties panel or the right-click menu.
@@ -21,6 +21,9 @@ Open `glowbug-bench.html` in any modern browser. Everything is in the one file; 
   - **Configure windings…** (right-click or Properties) opens a dialog with a live preview. Set the loops in each section between terminals and taps, add a tap in the middle of any section, or remove a tap. This makes asymmetric taps. Even out taps spreads them evenly again. The shorter winding is centered beside the taller one.
   - Wires stay on their taps: taps that move drag their wires along, and a removed tap leaves its wires where they were.
 - **Transformer labels:** the isolation, step-up, step-down and versatile transformers place the ref des on top, the value (Isolation, Stepup, Stepdown) below, Pri left of the primary and Sec right of the secondary.
+- **Stock tubes:** real tubes with their pinout, in the Stock group under Tube, modern.
+  - **12AX7 family:** a twin triode with pin numbers already filled in. Section A (V1A) is plate 1, grid 2, cathode 3 and carries the heater (pins 4 and 5, center tap 9); section B (V1B) is plate 6, grid 7, cathode 8. Place A, then right-click (or use Properties) and choose Add section B; drag each section wherever it belongs on the sheet.
+  - **Tube type:** right-click either section to pick 12AX7, 12AT7, 12AU7, 12AY7, 12AV7, 12AZ7, 12BZ7, 12DW7, 5751, 7025, 6072, 6201, 6681, 5814, 6189, ECC81, ECC82 or ECC83 (same 9A pinout). Both sections change together, and renaming the ref on either renames both.
 - **LED color:** right-click an LED (or use Properties) to color its body and light arrows red (the default), orange, yellow, green, blue, white or black; the leads stay black. A value that names a color follows the change.
 - **Transformer outline box:** right-click any transformer and turn on Gray outline box (or tick it in Properties) to draw a light gray rectangle around it. Its labels move out to clear the box, and it appears in exports.
 - **Transformer cores:** right-click any transformer to pick its core: air (no lines), ferrite (dotted lines), iron (solid lines, the default) or variable (iron with an adjusting arrow).

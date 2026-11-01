@@ -514,12 +514,31 @@ def('diode_schottky', { cat: 'Semiconductors', name: 'Schottky diode', pre: 'D',
   draw: () => ln(0, 0, 13, 0) + pg([[13, -8], [13, 8], [27, 0]]) + pl([[31, 5], [31, 8], [27, 8], [27, -8], [23, -8], [23, -5]]) + ln(27, 0, 40, 0) });
 def('diode_zener', { cat: 'Semiconductors', name: 'Zener diode', pre: 'D', value: '1N4742A', hooks: { A: [0, 0], K: [40, 0] },
   draw: () => ln(0, 0, 13, 0) + pg([[13, -8], [13, 8], [27, 0]]) + pl([[31, 11], [27, 8], [27, -8], [23, -11]]) + ln(27, 0, 40, 0) });
-// LED: the plain diode with two arrows leaving it, up and to the right (light out)
-const ledArrow = (x1, y1, x2, y2) => { const L = Math.hypot(x2 - x1, y2 - y1), ux = (x2 - x1) / L, uy = (y2 - y1) / L, bx = x2 - 5 * ux, by = y2 - 5 * uy;
-  return ln(x1, y1, bx, by) + pg([[x2, y2], [bx - 2.4 * uy, by + 2.4 * ux], [bx + 2.4 * uy, by - 2.4 * ux]], 'ink solid'); };
+// LED: the plain diode with two arrows leaving it, up and to the right (light out). p.led picks the color of the body
+// (triangle and bar) and the arrows; the leads stay ink. Colors are inline styles so they survive export.
+// Red (the default) is the app's own power-wire red. Kept clear of the reserved heater orange and magic-eye green.
+const LED_COLORS = [['red', 'Red', '#A3241B'], ['orange', 'Orange', '#E3651D'], ['yellow', 'Yellow', '#D9A400'], ['green', 'Green', '#23A238'],
+  ['blue', 'Blue', '#1F5FD6'], ['white', 'White', '#B9B9B9'], ['black', 'Black', '#17120E']];
+const LED_HEX = Object.fromEntries(LED_COLORS.map(c => [c[0], c[2]])), LED_NAME = Object.fromEntries(LED_COLORS.map(c => [c[0], c[1]]));
+const ledCol = p => LED_HEX[p.led] ? p.led : 'red';
+function ledDraw(c) {
+  const k = LED_HEX[c] || LED_HEX.red, st = ` style="stroke:${k}"`;
+  const arrow = (x1, y1, x2, y2) => { const L = Math.hypot(x2 - x1, y2 - y1), ux = (x2 - x1) / L, uy = (y2 - y1) / L, bx = x2 - 5 * ux, by = y2 - 5 * uy;
+    return `<line class="ink"${st} x1="${x1}" y1="${y1}" x2="${bx}" y2="${by}"/><polygon class="ink solid" style="stroke:${k};fill:${k}" points="${x2},${y2} ${bx - 2.4 * uy},${by + 2.4 * ux} ${bx + 2.4 * uy},${by - 2.4 * ux}"/>`; };
+  return ln(0, 0, 13, 0) + ln(27, 0, 40, 0)
+    + `<polygon class="ink"${st} points="13,-8 13,8 27,0"/><line class="ink"${st} x1="27" y1="-8" x2="27" y2="8"/>`
+    + arrow(17, -11, 25, -21) + arrow(23, -11, 31, -21);
+}
 def('diode_led', { cat: 'Semiconductors', name: 'LED', pre: 'D', value: 'Red', tags: 'led light emitting diode indicator lamp', hooks: { A: [0, 0], K: [40, 0] },
-  draw: () => ln(0, 0, 13, 0) + pg([[13, -8], [13, 8], [27, 0]]) + ln(27, -8, 27, 8) + ln(27, 0, 40, 0)
-    + ledArrow(17, -11, 25, -21) + ledArrow(23, -11, 31, -21) });
+  drawArg: ledCol, draw: c => ledDraw(c || 'red') });
+// change an LED's color; a value that names a color follows it (Black leaves the value alone)
+function setLedColor(p, c) {
+  if (!LED_HEX[c] || ledCol(p) === c) return;
+  snapshot(); p.led = c;
+  const v = String(p.value || '').trim().toLowerCase();
+  if (c !== 'black' && (!v || LED_COLORS.some(x => x[1].toLowerCase() === v))) p.value = LED_NAME[c];
+  render(); renderSel(); changed(); setMsg(`${p.ref || 'LED'}: ${LED_NAME[c].toLowerCase()}`);
+}
 
 // Bipolar transistors: base on the left, collector up, emitter down; the arrow on the emitter
 // points out for NPN and in for PNP.
@@ -1128,7 +1147,7 @@ function applyView() {
   $('stZoom').textContent = Math.round(view.z * 100) + '%';
 }
 function partSVG(p, extra = '') {
-  return `<g transform="translate(${p.x} ${p.y}) rotate(${(p.rot || 0) * 90}) scale(${p.flip ? -1 : 1} 1)"${extra}>${hasBox(p) ? (b => `<rect class="xbox" x="${b[0]}" y="${b[1]}" width="${b[2] - b[0]}" height="${b[3] - b[1]}" rx="2"/>`)(localBB(p)) : ''}${shapeOf(p).draw(isXfmr(p) ? p.core || 'iron' : undefined)}</g>`;
+  return `<g transform="translate(${p.x} ${p.y}) rotate(${(p.rot || 0) * 90}) scale(${p.flip ? -1 : 1} 1)"${extra}>${hasBox(p) ? (b => `<rect class="xbox" x="${b[0]}" y="${b[1]}" width="${b[2] - b[0]}" height="${b[3] - b[1]}" rx="2"/>`)(localBB(p)) : ''}${shapeOf(p).draw(isXfmr(p) ? p.core || 'iron' : LIB[p.type].drawArg ? LIB[p.type].drawArg(p) : undefined)}</g>`;
 }
 /* ---- pin numbers on tubes: one editable, movable label per hook ---- */
 const isTube = p => LIB[p.type].cat.startsWith('Tube');
@@ -1499,6 +1518,7 @@ function renderProps() {
     const p = it.o, L = LIB[p.type], HK = shapeOf(p).hooks;
     const pins = Object.keys(HK).join(' · ');
     b.innerHTML = `<div class="what">${esc(L.name)}<small>${esc(L.cat)} · ${Object.keys(HK).length} hook${Object.keys(HK).length > 1 ? 's' : ''}</small></div>
+      ${p.type === 'diode_led' ? `<div class="field"><label for="pLed">Color</label><select id="pLed">${LED_COLORS.map(([k, n]) => `<option value="${k}"${k === ledCol(p) ? ' selected' : ''}>${n}</option>`).join('')}</select></div>` : ''}
       ${isXfmr(p) ? `<div class="field"><label>Outline</label><label style="display:flex;gap:5px;align-items:center;color:inherit"><input type="checkbox" id="pXbox"${p.box ? ' checked' : ''}> light gray box</label></div>` : ''}
       ${L.windings ? `<div class="row-btns"><button data-act="windings">Configure windings…</button></div>` : ''}
       ${varyList(L).map((v, k) => `<div class="field"><label for="pVary${k}">${v.label}</label><select id="pVary${k}" data-vk="${v.key}">${Array.from({ length: v.max - v.min + 1 }, (_, i) => v.min + i).map(n => `<option${n === varyVal(p, v) ? ' selected' : ''}>${n}</option>`).join('')}</select></div>`).join('')}
@@ -1513,6 +1533,7 @@ function renderProps() {
     varyList(L).forEach((v, k) => { $('pVary' + k).onchange = e => setVary(p, +e.target.value, v.key); });
     $('pShowR').onchange = e => { snapshot(); p.showRef = e.target.checked; render(); changed(); };
     $('pShowV').onchange = e => { snapshot(); p.showVal = e.target.checked; render(); changed(); };
+    if ($('pLed')) $('pLed').onchange = e => setLedColor(p, e.target.value);
     if ($('pXbox')) $('pXbox').onchange = e => { snapshot(); p.box = e.target.checked; render(); renderSel(); changed(); };
     if (isXfmr(p)) for (const f of ['pri', 'sec']) {
       bind('pW' + f, e => { p[f] = e.value; if (e.value.trim() && !fieldShown(p, f)) { setShown(p, f, true); $('pWs' + f).checked = true; } });
@@ -2063,6 +2084,8 @@ function partMenu(e, raw) {
           : `<button role="menuitem" data-m="wadd-${f}"><span>${(q[f] || '').trim() ? 'Show' : 'Add'} ${FIELD_NAME[f]}</span><span></span></button>`).join(''); })() : '')
     + (items.length === 1 && items[0].k === 'part' && isTube(items[0].o) ? `<button role="menuitem" data-m="pins"><span>${items[0].o.showPins ? 'Hide' : 'Show'} pin numbers</span><span></span></button>` : '')
     + (t.k === 'pin' ? `<button role="menuitem" data-m="editpin"><span>Edit pin number</span><span>dbl-click</span></button>` + (((t.o.pins || {})[t.pin] || {}).dx || ((t.o.pins || {})[t.pin] || {}).dy ? `<button role="menuitem" data-m="resetpin"><span>Put pin number back</span><span></span></button>` : '') : '')
+    + (items.length === 1 && items[0].k === 'part' && items[0].o.type === 'diode_led' ? (() => { const cur = ledCol(items[0].o);
+        return `<div class="mlabel">LED color</div>` + LED_COLORS.map(([k, n, hex]) => `<button role="menuitemradio" data-led="${k}" aria-checked="${k === cur}"><span><i style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${hex};margin-right:7px;vertical-align:-1px;box-shadow:0 0 0 1px rgba(0,0,0,.15)"></i>${n}</span><span>${k === cur ? '●' : ''}</span></button>`).join(''); })() : '')
     + (items.length === 1 && items[0].k === 'part' && LIB[items[0].o.type].windings ? `<button role="menuitem" data-m="windings"><span>Configure windings…</span><span></span></button>` : '')
     + (items.length === 1 && items[0].k === 'part' && LIB[items[0].o.type].vary ? (() => { const q = items[0].o;
         return varyList(LIB[q.type]).map(v => { const cur = varyVal(q, v);
@@ -2076,6 +2099,7 @@ function partMenu(e, raw) {
   menuEl.style.left = Math.min(e.clientX, window.innerWidth - mw - 8) + 'px';
   menuEl.style.top = Math.max(8, Math.min(e.clientY, window.innerHeight - mh - 8)) + 'px';
   menuEl.onclick = ev => { const wc = ev.target.closest('[data-wc]'); if (wc) { closeMenu(); colorWires(wc.dataset.wc); return; }
+    const lc = ev.target.closest('[data-led]'); if (lc) { closeMenu(); setLedColor(items[0].o, lc.dataset.led); return; }
     const cr = ev.target.closest('[data-core]'); if (cr) { closeMenu(); const q = items[0].o, k = cr.dataset.core; if ((q.core || 'iron') !== k) { snapshot(); q.core = k; render(); changed(); setMsg(`${q.ref || LIB[q.type].name}: ${CORE_NAME[k]}`); } return; }
     const vy = ev.target.closest('[data-vary]'); if (vy) { closeMenu(); const [vk, vn] = vy.dataset.vary.split(':'); setVary(items[0].o, +vn, vk); return; }
     const b = ev.target.closest('[data-m]'); if (!b) return; const m = b.dataset.m; closeMenu();

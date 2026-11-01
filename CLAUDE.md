@@ -46,7 +46,8 @@ The owner is Larry Higley (GitHub: INVENT-HORIZONS). The app started as the sche
 - **Heaters inside tubes** use the triangle filament: `pl([[-10,end],[-10,base],[0,base-10],[10,base],[10,end]], 'htr')`. Standalone heater parts come in arch and triangle versions.
 - **Panel groups** are listed in `CATS`, in this order: Passive, Semiconductors, Tube modern, Transformer, Heater, Power, Misc, Tube 1930s, Tube 1920s.
 - **Semiconductors** are laid out in rows: diodes, then BJTs and Darlingtons, then FETs (JFETs and MOSFETs). Each row starts on a fresh line.
-  - Diodes, in order: diode, Schottky, Zener, LED (`diode_led`, value `Red`, two light-out arrows drawn with `ledArrow`).
+  - Diodes, in order: diode, Schottky, Zener, LED (`diode_led`, value `Red`).
+  - LED color: `p.led` (key in `LED_COLORS`; unset reads as `red`) colors only the body (triangle and bar) and the two light-out arrows, never the leads. `ledDraw(c)` writes the color as inline styles so exports keep it; the def's `drawArg` hands `p.led` to `draw`. Default red is the power-wire red `#A3241B`, chosen by Larry to fit the color scheme. Set from the right-click menu or Properties via `setLedColor`, which also renames a value that names a color (not for Black).
 - **Tube, modern** has these subgroups, in order:
   1. Filament (direct), types ending `_dh`
   2. Cathode only

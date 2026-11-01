@@ -557,8 +557,8 @@ function xfmr(pct, sct, core) {
   return s;
 }
 def('transformer', { cat: 'Transformer', name: 'Transformer, isolation', pre: 'T', value: 'Isolation', tags: 'isolation 1:1', layout: 'xfmr', hooks: { P1: [0, 0], P2: [0, 60], S1: [50, 0], S2: [50, 60] }, draw: c => xfmr(0, 0, c) });
-def('transformer_sct', { cat: 'Transformer', name: 'Transformer, secondary CT', pre: 'T', value: '350-0-350 V', hooks: { P1: [0, 0], P2: [0, 60], S1: [50, 0], S2: [50, 60], SCT: [50, 30] }, draw: c => xfmr(0, 1, c) });
-def('transformer_ul', { cat: 'Transformer', name: 'Output transformer, ultra-linear', pre: 'T', value: '6.6 kΩ : 8 Ω, UL', tags: 'ul ultralinear push-pull screen tap opt',
+def('transformer_sct', { legacy: true, cat: 'Transformer', name: 'Transformer, secondary CT', pre: 'T', value: '350-0-350 V', hooks: { P1: [0, 0], P2: [0, 60], S1: [50, 0], S2: [50, 60], SCT: [50, 30] }, draw: c => xfmr(0, 1, c) });
+def('transformer_ul', { legacy: true, cat: 'Transformer', name: 'Output transformer, ultra-linear', pre: 'T', value: '6.6 kΩ : 8 Ω, UL', tags: 'ul ultralinear push-pull screen tap opt',
   hooks: { P1: [0, 0], UL1: [0, 20], CT: [0, 40], UL2: [0, 60], P2: [0, 80], S1: [50, 10], S2: [50, 70] },
   draw: c => pa(coilY(10, 0, 8, 1)) + pa(coilY(40, 10, 6, -1)) + coreSVG(c || 'iron', -4, 84)
     + [0, 20, 40, 60, 80].map(y => ln(0, y, 10, y)).join('') + ln(40, 10, 50, 10) + ln(40, 70, 50, 70) });
@@ -573,7 +573,25 @@ def('transformer_up', { cat: 'Transformer', name: 'Transformer, step-up', pre: '
   draw: c => ln(0, 10, 10, 10) + ln(10, 10, 10, 20) + pa(coilY(10, 20, 2, 1)) + ln(10, 40, 10, 50) + ln(10, 50, 0, 50)
     + ln(50, 0, 40, 0) + ln(40, 0, 40, 10) + pa(coilY(40, 10, 4, -1)) + ln(40, 50, 40, 60) + ln(40, 60, 50, 60)
     + coreSVG(c || 'iron', 4, 56) });
-def('transformer_pct', { cat: 'Transformer', name: 'Output transformer, primary CT', pre: 'T', value: '5 kΩ : 8 Ω', tags: 'push-pull opt', hooks: { P1: [0, 0], P2: [0, 60], PCT: [0, 30], S1: [50, 0], S2: [50, 60] }, draw: c => xfmr(1, 0, c) });
+// Versatile: the isolation look at three times the height, with 0-6 evenly spaced taps on each winding (hooks PT1.., ST1..)
+const VERS_TAPS = 6;
+const versTapYs = n => Array.from({ length: n }, (_, i) => 10 * Math.round((10 + (i + 1) * 160 / (n + 1)) / 10));
+function versBuild(o) {
+  const pt = versTapYs(o.pt || 0), st = versTapYs(o.st || 0);
+  const hooks = { P1: [0, 0], P2: [0, 180], S1: [50, 0], S2: [50, 180] };
+  pt.forEach((y, i) => { hooks['PT' + (i + 1)] = [0, y]; }); st.forEach((y, i) => { hooks['ST' + (i + 1)] = [50, y]; });
+  const draw = c => ln(0, 0, 10, 0) + ln(10, 0, 10, 10) + pa(coilY(10, 10, 16, 1)) + ln(10, 170, 10, 180) + ln(10, 180, 0, 180)
+    + ln(50, 0, 40, 0) + ln(40, 0, 40, 10) + pa(coilY(40, 10, 16, -1)) + ln(40, 170, 40, 180) + ln(40, 180, 50, 180)
+    + pt.map(y => ln(0, y, 10, y)).join('') + st.map(y => ln(40, y, 50, y)).join('')
+    + coreSVG(c || 'iron', 4, 176);
+  return { hooks, draw };
+}
+def('transformer_vers', Object.assign({ cat: 'Transformer', name: 'Transformer, versatile', pre: 'T', value: 'Versatile', layout: 'xfmr',
+  tags: 'versatile tap taps tapped center ct multi-tap ultra-linear ul push-pull output opt power',
+  vary: [{ key: 'pt', label: 'Primary taps', min: 0, max: VERS_TAPS, def: 0 }, { key: 'st', label: 'Secondary taps', min: 0, max: VERS_TAPS, def: 0 }], build: versBuild },
+  versBuild({ pt: 0, st: 0 })));
+// Retired from the parts panel (legacy: true) but kept so older drawings still open: secondary CT, ultra-linear, primary CT
+def('transformer_pct', { legacy: true, cat: 'Transformer', name: 'Output transformer, primary CT', pre: 'T', value: '5 kΩ : 8 Ω', tags: 'push-pull opt', hooks: { P1: [0, 0], P2: [0, 60], PCT: [0, 30], S1: [50, 0], S2: [50, 60] }, draw: c => xfmr(1, 0, c) });
 
 /* ---- heaters (always orange) ---- */
 def('heater', { cat: 'Heater', name: 'Heater', pre: 'H', value: '6.3 V', hooks: { 1: [0, 0], 2: [40, 0] },
@@ -804,11 +822,14 @@ function measureBB(draw, hooks) {
 for (const k in LIB) LIB[k].bb = measureBB(LIB[k].draw, LIB[k].hooks);
 // Parts with a setting that changes their shape (the photomultiplier's dynode count) get their hooks,
 // drawing and box from here; every other part just returns its library entry.
-const varyN = p => { const v = LIB[p.type].vary; const n = Math.round(+p[v.key]); return isFinite(n) ? Math.min(v.max, Math.max(v.min, n)) : v.def; };
+// adjustable shapes: vary is one setting { key, label, min, max, def, build(n) } or a list of settings plus L.build({ key: n, ... })
+const varyList = L => !L.vary ? [] : Array.isArray(L.vary) ? L.vary : [L.vary];
+const varyVal = (p, v) => { const n = Math.round(+p[v.key]); return isFinite(n) ? Math.min(v.max, Math.max(v.min, n)) : v.def; };
+const varyN = p => varyVal(p, varyList(LIB[p.type])[0]);
 function shapeOf(p) {
-  const L = LIB[p.type]; if (!L.vary) return L;
-  const n = varyN(p), c = L._v || (L._v = {});
-  if (!c[n]) { const v = L.vary.build(n); c[n] = { hooks: v.hooks, draw: v.draw, bb: measureBB(v.draw, v.hooks) }; }
+  const L = LIB[p.type], vs = varyList(L); if (!vs.length) return L;
+  const vals = Object.fromEntries(vs.map(v => [v.key, varyVal(p, v)])), n = vs.map(v => vals[v.key]).join(','), c = L._v || (L._v = {});
+  if (!c[n]) { const v = Array.isArray(L.vary) ? L.build(vals) : L.vary.build(vals[vs[0].key]); c[n] = { hooks: v.hooks, draw: v.draw, bb: measureBB(v.draw, v.hooks) }; }
   return c[n];
 }
 
@@ -863,7 +884,9 @@ const FIELD_ARIA = { ref: 'Reference designator', value: 'Value', pri: 'Primary 
 // world centres of the primary and secondary windings: [pri, sec]
 function windingCentres(p) {
   const H = Object.values(shapeOf(p).hooks), xs = H.map(h => h[0]), lo = Math.min(...xs), hi = Math.max(...xs);
-  const mid = x => { const ys = H.filter(h => h[0] === x).map(h => h[1]); return (Math.min(...ys) + Math.max(...ys)) / 2; };
+  // the middle of the widest gap between that winding's hooks, so the text stays clear of tap wires
+  const mid = x => { const ys = H.filter(h => h[0] === x).map(h => h[1]).sort((u, v) => u - v); let m = ys[0], g = -1;
+    for (let i = 1; i < ys.length; i++) if (ys[i] - ys[i - 1] > g) { g = ys[i] - ys[i - 1]; m = (ys[i] + ys[i - 1]) / 2; } return m; };
   return [xf(p, [lo, mid(lo)]), xf(p, [hi, mid(hi)])];
 }
 // symbols with layout 'xfmr' (the isolation transformer): ref des on top, value below, Pri and Sec beside their windings.
@@ -1383,7 +1406,7 @@ function renderLib() {
   const q = $('search').value.trim().toLowerCase();
   let total = 0;
   $('lib').innerHTML = CATS.map(cat => {
-    const items = Object.values(LIB).filter(L => L.cat === cat && (!q || (L.name + ' ' + L.cat + ' ' + L.tags + ' ' + L.value).toLowerCase().includes(q)));
+    const items = Object.values(LIB).filter(L => L.cat === cat && !L.legacy && (!q || (L.name + ' ' + L.cat + ' ' + L.tags + ' ' + L.value).toLowerCase().includes(q)));
     total += items.length;
     if (!items.length) return '';
     const open = q || !libClosed.has(cat) ? ' open' : '';
@@ -1426,7 +1449,7 @@ function renderProps() {
     const p = it.o, L = LIB[p.type], HK = shapeOf(p).hooks;
     const pins = Object.keys(HK).join(' · ');
     b.innerHTML = `<div class="what">${esc(L.name)}<small>${esc(L.cat)} · ${Object.keys(HK).length} hook${Object.keys(HK).length > 1 ? 's' : ''}</small></div>
-      ${L.vary ? `<div class="field"><label for="pVary">${L.vary.label}</label><select id="pVary">${Array.from({ length: L.vary.max - L.vary.min + 1 }, (_, i) => L.vary.min + i).map(n => `<option${n === varyN(p) ? ' selected' : ''}>${n}</option>`).join('')}</select></div>` : ''}
+      ${varyList(L).map((v, k) => `<div class="field"><label for="pVary${k}">${v.label}</label><select id="pVary${k}" data-vk="${v.key}">${Array.from({ length: v.max - v.min + 1 }, (_, i) => v.min + i).map(n => `<option${n === varyVal(p, v) ? ' selected' : ''}>${n}</option>`).join('')}</select></div>`).join('')}
       <div class="field"><label for="pRef">Ref des</label><input type="text" id="pRef" value="${esc(p.ref)}" spellcheck="false"></div>
       <div class="field"><label for="pVal">Value</label><input type="text" id="pVal" value="${esc(p.value)}"></div>
       <div class="field"><label>Show</label><span style="display:flex;gap:12px;flex-wrap:wrap"><label style="display:flex;gap:5px;align-items:center;color:inherit"><input type="checkbox" id="pShowR"${fieldShown(p, 'ref') ? ' checked' : ''}> ref des</label><label style="display:flex;gap:5px;align-items:center;color:inherit"><input type="checkbox" id="pShowV"${fieldShown(p, 'value') ? ' checked' : ''}> value</label></span></div>
@@ -1435,7 +1458,7 @@ function renderProps() {
       <div class="row-btns"><button data-act="rot">Rotate</button><button data-act="flip">Flip H</button><button data-act="flipv">Flip V</button><button data-act="dup">Duplicate</button>${(p.lx || p.ly || p.rdx || p.rdy || p.vdx || p.vdy || p.pdx || p.pdy || p.sdx || p.sdy) ? '<button data-act="lreset">Reset labels</button>' : ''}<button class="del" data-act="del">Delete</button></div>`;
     const bind = (id, f) => { const e = $(id); if (!e) return; e.addEventListener('focus', () => snapshot(), { once: true }); e.addEventListener('input', () => { f(e); render(); changedSoon(); }); e.addEventListener('keydown', ev => { ev.stopPropagation(); if (ev.key === 'Enter') e.blur(); }); };
     bind('pRef', e => p.ref = e.value); bind('pVal', e => p.value = e.value);
-    if ($('pVary')) $('pVary').onchange = e => setVary(p, +e.target.value);
+    varyList(L).forEach((v, k) => { $('pVary' + k).onchange = e => setVary(p, +e.target.value, v.key); });
     $('pShowR').onchange = e => { snapshot(); p.showRef = e.target.checked; render(); changed(); };
     $('pShowV').onchange = e => { snapshot(); p.showVal = e.target.checked; render(); changed(); };
     if (isXfmr(p)) for (const f of ['pri', 'sec']) {
@@ -1532,17 +1555,17 @@ function finishWires() { sheet.wires = sheet.wires.filter(w => w && Array.isArra
 
 // Change a variable part's setting (e.g. dynode count). Hooks that survive keep their wires; a hook that
 // moves (the anode) drags its wires along; wires left on a removed dynode stay where they were.
-function setVary(p, n) {
-  const L = LIB[p.type]; if (!L.vary) return;
-  n = Math.min(L.vary.max, Math.max(L.vary.min, n)); if (n === varyN(p)) return;
+function setVary(p, n, vk) {
+  const L = LIB[p.type], vs = varyList(L), v = vs.find(x => x.key === vk) || vs[0]; if (!v) return;
+  n = Math.min(v.max, Math.max(v.min, n)); if (n === varyVal(p, v)) return;
   snapshot();
   const before = Object.fromEntries(hooksOf(p).map(h => [h.name, h.pos]));
-  p[L.vary.key] = n;
+  p[v.key] = n;
   const moves = new Map();
   for (const h of hooksOf(p)) { const b = before[h.name]; if (b && (b[0] !== h.pos[0] || b[1] !== h.pos[1])) moves.set(key(b), [h.pos[0] - b[0], h.pos[1] - b[1]]); }
   if (moves.size) dragWiresWithHooks(moves);
   if (p.pins) { for (const k of Object.keys(p.pins)) if (!(k in shapeOf(p).hooks)) delete p.pins[k]; if (p.showPins) for (const k of Object.keys(shapeOf(p).hooks)) p.pins[k] = p.pins[k] || { t: 'p?' }; }
-  finishWires(); render(); changed(); setMsg(`${p.ref || L.name}: ${n} ${L.vary.label.toLowerCase()}`);
+  finishWires(); render(); changed(); setMsg(`${p.ref || L.name}: ${n} ${v.label.toLowerCase()}`);
 }
 function rotateSel() {
   if (mode === 'place') { placeRot = (placeRot + 1) % 4; renderOver(); return; }
@@ -1904,8 +1927,9 @@ function partMenu(e, raw) {
           : `<button role="menuitem" data-m="wadd-${f}"><span>${(q[f] || '').trim() ? 'Show' : 'Add'} ${FIELD_NAME[f]}</span><span></span></button>`).join(''); })() : '')
     + (items.length === 1 && items[0].k === 'part' && isTube(items[0].o) ? `<button role="menuitem" data-m="pins"><span>${items[0].o.showPins ? 'Hide' : 'Show'} pin numbers</span><span></span></button>` : '')
     + (t.k === 'pin' ? `<button role="menuitem" data-m="editpin"><span>Edit pin number</span><span>dbl-click</span></button>` + (((t.o.pins || {})[t.pin] || {}).dx || ((t.o.pins || {})[t.pin] || {}).dy ? `<button role="menuitem" data-m="resetpin"><span>Put pin number back</span><span></span></button>` : '') : '')
-    + (items.length === 1 && items[0].k === 'part' && LIB[items[0].o.type].vary ? (() => { const q = items[0].o, v = LIB[q.type].vary, cur = varyN(q);
-        return `<div class="mlabel">${v.label}</div><div class="chips">${Array.from({ length: v.max - v.min + 1 }, (_, i) => v.min + i).map(n => `<button class="chip" data-vary="${n}" aria-pressed="${n === cur}">${n}</button>`).join('')}</div>`; })() : '')
+    + (items.length === 1 && items[0].k === 'part' && LIB[items[0].o.type].vary ? (() => { const q = items[0].o;
+        return varyList(LIB[q.type]).map(v => { const cur = varyVal(q, v);
+          return `<div class="mlabel">${v.label}</div><div class="chips">${Array.from({ length: v.max - v.min + 1 }, (_, i) => v.min + i).map(n => `<button class="chip" data-vary="${v.key}:${n}" aria-pressed="${n === cur}">${n}</button>`).join('')}</div>`; }).join(''); })() : '')
     + (items.some(i => i.k === 'wire') ? `<div class="mlabel">Wire color</div>${swatchRow((() => { const cs = new Set(items.filter(i => i.k === 'wire').map(i => i.o.color || 'ink')); return cs.size === 1 ? [...cs][0] : ''; })())}` : '')
     + `<button role="menuitem" data-m="dup"><span>Duplicate</span><span>Ctrl+D</span></button>`
     + (selLabel ? `<button role="menuitem" data-m="del"><span>Hide ${FIELD_NAME[selLabel.field]}</span><span>Del</span></button>`
@@ -1916,7 +1940,7 @@ function partMenu(e, raw) {
   menuEl.style.top = Math.min(e.clientY, window.innerHeight - mh - 8) + 'px';
   menuEl.onclick = ev => { const wc = ev.target.closest('[data-wc]'); if (wc) { closeMenu(); colorWires(wc.dataset.wc); return; }
     const cr = ev.target.closest('[data-core]'); if (cr) { closeMenu(); const q = items[0].o, k = cr.dataset.core; if ((q.core || 'iron') !== k) { snapshot(); q.core = k; render(); changed(); setMsg(`${q.ref || LIB[q.type].name}: ${CORE_NAME[k]}`); } return; }
-    const vy = ev.target.closest('[data-vary]'); if (vy) { closeMenu(); setVary(items[0].o, +vy.dataset.vary); return; }
+    const vy = ev.target.closest('[data-vary]'); if (vy) { closeMenu(); const [vk, vn] = vy.dataset.vary.split(':'); setVary(items[0].o, +vn, vk); return; }
     const b = ev.target.closest('[data-m]'); if (!b) return; const m = b.dataset.m; closeMenu();
     if (m === 'edit') { const L0 = selLabel; if (L0) editInPlace(sheet.parts.find(x => x.id === L0.id), L0.field); return; }
     if (m === 'pins') { const q = items[0].o; snapshot(); q.showPins = !q.showPins; if (q.showPins) { q.pins = q.pins || {}; for (const n of Object.keys(shapeOf(q).hooks)) q.pins[n] = q.pins[n] || { t: 'p?' }; } render(); changed(); setMsg(q.showPins ? 'Pin numbers shown. Double-click one to edit it; drag it to move it.' : 'Pin numbers hidden. Their text is kept.'); return; }

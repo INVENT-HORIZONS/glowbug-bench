@@ -548,6 +548,17 @@ def('transformer_ul', { cat: 'Transformer', name: 'Output transformer, ultra-lin
   hooks: { P1: [0, 0], UL1: [0, 20], CT: [0, 40], UL2: [0, 60], P2: [0, 80], S1: [50, 10], S2: [50, 70] },
   draw: () => pa(coilY(10, 0, 8, 1)) + pa(coilY(40, 10, 6, -1)) + ln(22, -4, 22, 84) + ln(28, -4, 28, 84)
     + [0, 20, 40, 60, 80].map(y => ln(0, y, 10, y)).join('') + ln(40, 10, 50, 10) + ln(40, 70, 50, 70) });
+// general-purpose step-down / step-up: more turns drawn on the higher-voltage winding
+def('transformer_down', { cat: 'Transformer', name: 'Transformer, step-down', pre: 'T', value: '120 V : 12 V', tags: 'step down stepdown power mains',
+  hooks: { P1: [0, 0], P2: [0, 60], S1: [50, 10], S2: [50, 50] },
+  draw: () => ln(0, 0, 10, 0) + ln(10, 0, 10, 10) + pa(coilY(10, 10, 4, 1)) + ln(10, 50, 10, 60) + ln(10, 60, 0, 60)
+    + ln(50, 10, 40, 10) + ln(40, 10, 40, 20) + pa(coilY(40, 20, 2, -1)) + ln(40, 40, 40, 50) + ln(40, 50, 50, 50)
+    + ln(22, 4, 22, 56) + ln(28, 4, 28, 56) });
+def('transformer_up', { cat: 'Transformer', name: 'Transformer, step-up', pre: 'T', value: '12 V : 120 V', tags: 'step up stepup',
+  hooks: { P1: [0, 10], P2: [0, 50], S1: [50, 0], S2: [50, 60] },
+  draw: () => ln(0, 10, 10, 10) + ln(10, 10, 10, 20) + pa(coilY(10, 20, 2, 1)) + ln(10, 40, 10, 50) + ln(10, 50, 0, 50)
+    + ln(50, 0, 40, 0) + ln(40, 0, 40, 10) + pa(coilY(40, 10, 4, -1)) + ln(40, 50, 40, 60) + ln(40, 60, 50, 60)
+    + ln(22, 4, 22, 56) + ln(28, 4, 28, 56) });
 def('transformer_pct', { cat: 'Transformer', name: 'Output transformer, primary CT', pre: 'T', value: '5 kΩ : 8 Ω', tags: 'push-pull opt', hooks: { P1: [0, 0], P2: [0, 60], PCT: [0, 30], S1: [50, 0], S2: [50, 60] }, draw: () => xfmr(1, 0) });
 
 /* ---- heaters (always orange) ---- */
@@ -791,6 +802,7 @@ function shapeOf(p) {
    DOCUMENT MODEL
    project { id, name, sheets:[{ id, name, parts, wires, texts }] }
    part { id, type, x, y, rot 0-3, flip, ref, value, showRef, showVal, rdx/rdy, vdx/vdy }
+   transformers also: pri, sec (winding text), showPri, showSec (hidden until added), pdx/pdy, sdx/sdy
    wire { id, pts:[[x,y],…] } orthogonal polyline
    text { id, x, y, text, size, tone }
    ===================================================================== */
@@ -823,20 +835,43 @@ function labelPos(p) {
   if ((p.type === 'supply' || p.type === 'supply_circle') && !(p.rot % 2)) { const v = xf(p, [0, p.type === 'supply' ? -18 : -24]); return [v[0] + (p.lx || 0), v[1] - 13 + (p.ly || 0), 'middle']; }
   return [bb[2] + 6 + (p.lx || 0), (bb[1] + bb[3]) / 2 - 4 + (p.ly || 0), 'start'];
 }
-const fieldShown = (p, f) => f === 'ref' ? p.showRef !== false : p.showVal !== false;
+// label fields: [show flag, drag-offset prefix]. pri/sec are the winding notes on transformers, hidden until added.
+const LFIELD = { ref: ['showRef', 'r'], value: ['showVal', 'v'], pri: ['showPri', 'p'], sec: ['showSec', 's'] };
+const isXfmr = p => !!p && !!LIB[p.type] && LIB[p.type].cat === 'Transformer';
+const fieldShown = (p, f) => f === 'pri' || f === 'sec' ? isXfmr(p) && p[LFIELD[f][0]] === true : p[LFIELD[f][0]] !== false;
+const setShown = (p, f, on) => { p[LFIELD[f][0]] = !!on; };
 const labelShown = p => fieldShown(p, 'ref') || fieldShown(p, 'value');
-const FIELD_NAME = { ref: 'ref des', value: 'value' };
+const FIELD_NAME = { ref: 'ref des', value: 'value', pri: 'primary text', sec: 'secondary text' };
+const FIELD_ARIA = { ref: 'Reference designator', value: 'Value', pri: 'Primary winding text', sec: 'Secondary winding text' };
+// where a winding note sits: above the transformer over its own winding, or to the left of its winding when the part is turned on end
+function windingPos(p, f) {
+  const H = Object.values(shapeOf(p).hooks), xs = H.map(h => h[0]), lo = Math.min(...xs), hi = Math.max(...xs);
+  const mid = x => { const ys = H.filter(h => h[0] === x).map(h => h[1]); return (Math.min(...ys) + Math.max(...ys)) / 2; };
+  const a = xf(p, [lo, mid(lo)]), b = xf(p, [hi, mid(hi)]), me = f === 'pri' ? a : b, other = f === 'pri' ? b : a, bb = partBB(p);
+  if (Math.abs(a[0] - b[0]) >= Math.abs(a[1] - b[1])) {
+    const cx = (bb[0] + bb[2]) / 2;
+    return me[0] <= other[0] ? [cx - 4, bb[1] - 6, 'end'] : [cx + 4, bb[1] - 6, 'start'];
+  }
+  return [bb[0] - 6, me[1] + 4, 'end'];
+}
 let selLabel = null;   // { id, field } when a single label line is selected
 // the two label lines as boxes: [{ field:'ref'|'value', x, y (baseline), x0, x1, top, bottom }]
 function labelLines(p) {
-  if (!labelShown(p)) return [];
-  const [x, y, a] = labelPos(p), out = [];
-  [['ref', p.ref, p.rdx || 0, p.rdy || 0], ['value', p.value, p.vdx || 0, p.vdy || 0]].forEach(([field, txt, ox, oy], i) => {
-    if (!fieldShown(p, field)) return;
-    const w = Math.max(String(txt || '').length * 6.3, 14), lx = x + ox, by = y + i * 13 + oy;
-    const x0 = a === 'middle' ? lx - w / 2 : lx;
-    out.push({ field, x: lx, y: by, a, x0, x1: x0 + w, top: by - 10, bottom: by + 3 });
-  });
+  const out = [];
+  const line = (field, txt, x, by, a) => {
+    const w = Math.max(String(txt || '').length * 6.3, 14), x0 = a === 'middle' ? x - w / 2 : a === 'end' ? x - w : x;
+    out.push({ field, x, y: by, a, x0, x1: x0 + w, top: by - 10, bottom: by + 3 });
+  };
+  if (labelShown(p)) {
+    const [x, y, a] = labelPos(p);
+    [['ref', p.ref, p.rdx || 0, p.rdy || 0], ['value', p.value, p.vdx || 0, p.vdy || 0]].forEach(([field, txt, ox, oy], i) => {
+      if (fieldShown(p, field)) line(field, txt, x + ox, y + i * 13 + oy, a);
+    });
+  }
+  for (const f of ['pri', 'sec']) if (fieldShown(p, f)) {
+    const [x, y, a] = windingPos(p, f), k = LFIELD[f][1];
+    line(f, p[f], x + (p[k + 'dx'] || 0), y + (p[k + 'dy'] || 0), a);
+  }
   return out;
 }
 
@@ -1007,7 +1042,7 @@ function pinSVG(p) {
     + `<text class="pinno" x="${g.x}" y="${g.y}" text-anchor="middle"${editing && editing.p === p && editing.field === 'pin:' + g.name ? ' visibility="hidden"' : ''}>${esc(g.t)}</text>`).join('');
 }
 function labelSVG(p) {
-  return labelLines(p).map(l => `<text class="lbl${l.field === 'ref' ? ' ref' : ''}" x="${l.x}" y="${l.y}" text-anchor="${l.a === 'middle' ? 'middle' : 'start'}"${editing && editing.p === p && editing.field === l.field ? ' visibility="hidden"' : ''}>${esc(l.field === 'ref' ? p.ref || '' : p.value || '')}</text>`).join('');
+  return labelLines(p).map(l => `<text class="lbl${l.field === 'ref' ? ' ref' : ''}" x="${l.x}" y="${l.y}" text-anchor="${l.a}"${editing && editing.p === p && editing.field === l.field ? ' visibility="hidden"' : ''}>${esc(p[l.field] || '')}</text>`).join('');
 }
 function textSVG(t) {
   const lines = String(t.text).split('\n');
@@ -1356,13 +1391,18 @@ function renderProps() {
       <div class="field"><label for="pRef">Ref des</label><input type="text" id="pRef" value="${esc(p.ref)}" spellcheck="false"></div>
       <div class="field"><label for="pVal">Value</label><input type="text" id="pVal" value="${esc(p.value)}"></div>
       <div class="field"><label>Show</label><span style="display:flex;gap:12px;flex-wrap:wrap"><label style="display:flex;gap:5px;align-items:center;color:inherit"><input type="checkbox" id="pShowR"${fieldShown(p, 'ref') ? ' checked' : ''}> ref des</label><label style="display:flex;gap:5px;align-items:center;color:inherit"><input type="checkbox" id="pShowV"${fieldShown(p, 'value') ? ' checked' : ''}> value</label></span></div>
+      ${isXfmr(p) ? ['pri', 'sec'].map(f => `<div class="field"><label for="pW${f}">${f === 'pri' ? 'Primary' : 'Secondary'}</label><span style="display:flex;gap:8px;align-items:center"><input type="text" id="pW${f}" value="${esc(p[f] || '')}" placeholder="volts, turns, ohms…" style="flex:1;min-width:0"><label style="display:flex;gap:4px;align-items:center;color:inherit;white-space:nowrap" title="Show ${FIELD_NAME[f]} on the sheet"><input type="checkbox" id="pWs${f}"${fieldShown(p, f) ? ' checked' : ''}> show</label></span></div>`).join('') : ''}
       <div class="pins">Hooks: ${esc(pins)}</div>
-      <div class="row-btns"><button data-act="rot">Rotate</button><button data-act="flip">Flip H</button><button data-act="flipv">Flip V</button><button data-act="dup">Duplicate</button>${(p.lx || p.ly || p.rdx || p.rdy || p.vdx || p.vdy) ? '<button data-act="lreset">Reset labels</button>' : ''}<button class="del" data-act="del">Delete</button></div>`;
+      <div class="row-btns"><button data-act="rot">Rotate</button><button data-act="flip">Flip H</button><button data-act="flipv">Flip V</button><button data-act="dup">Duplicate</button>${(p.lx || p.ly || p.rdx || p.rdy || p.vdx || p.vdy || p.pdx || p.pdy || p.sdx || p.sdy) ? '<button data-act="lreset">Reset labels</button>' : ''}<button class="del" data-act="del">Delete</button></div>`;
     const bind = (id, f) => { const e = $(id); if (!e) return; e.addEventListener('focus', () => snapshot(), { once: true }); e.addEventListener('input', () => { f(e); render(); changedSoon(); }); e.addEventListener('keydown', ev => { ev.stopPropagation(); if (ev.key === 'Enter') e.blur(); }); };
     bind('pRef', e => p.ref = e.value); bind('pVal', e => p.value = e.value);
     if ($('pVary')) $('pVary').onchange = e => setVary(p, +e.target.value);
     $('pShowR').onchange = e => { snapshot(); p.showRef = e.target.checked; render(); changed(); };
     $('pShowV').onchange = e => { snapshot(); p.showVal = e.target.checked; render(); changed(); };
+    if (isXfmr(p)) for (const f of ['pri', 'sec']) {
+      bind('pW' + f, e => { p[f] = e.value; if (e.value.trim() && !fieldShown(p, f)) { setShown(p, f, true); $('pWs' + f).checked = true; } });
+      $('pWs' + f).onchange = e => { snapshot(); setShown(p, f, e.target.checked); render(); changed(); };
+    }
   } else if (it.k === 'wire') {
     const w = it.o, len = w.pts.slice(1).reduce((a, p, i) => a + Math.abs(p[0] - w.pts[i][0]) + Math.abs(p[1] - w.pts[i][1]), 0);
     b.innerHTML = `<div class="what">Wire<small>${w.pts.length - 1} segment${w.pts.length > 2 ? 's' : ''} · ${len / G} grid units</small></div>
@@ -1385,7 +1425,7 @@ function renderProps() {
 $('propBody').addEventListener('click', e => {
   const wc = e.target.closest('[data-wc]'); if (wc) { colorWires(wc.dataset.wc); return; }
   const a = e.target.closest('[data-act]'); if (!a) return;
-  ({ rot: rotateSel, flip: () => flipSel('h'), flipv: () => flipSel('v'), dup: duplicate, del: deleteSel, lreset: () => { snapshot(); for (const it of selItems()) if (it.k === 'part') { Object.assign(it.o, { lx: 0, ly: 0, rdx: 0, rdy: 0, vdx: 0, vdy: 0 }); } render(); changed(); } })[a.dataset.act]();
+  ({ rot: rotateSel, flip: () => flipSel('h'), flipv: () => flipSel('v'), dup: duplicate, del: deleteSel, lreset: () => { snapshot(); for (const it of selItems()) if (it.k === 'part') { Object.assign(it.o, { lx: 0, ly: 0, rdx: 0, rdy: 0, vdx: 0, vdy: 0, pdx: 0, pdy: 0, sdx: 0, sdy: 0 }); } render(); changed(); } })[a.dataset.act]();
 });
 
 /* =====================================================================
@@ -1502,9 +1542,9 @@ function flipSel(axis = 'h') {
 }
 function hideLabel(id, field) {
   const q = sheet.parts.find(x => x.id === id); if (!q) return;
-  snapshot(); if (field === 'ref') q.showRef = false; else q.showVal = false;
+  snapshot(); setShown(q, field, false);
   selLabel = null; render(); changed();
-  setMsg(`Hid the ${FIELD_NAME[field]} of ${q.ref || LIB[q.type].name}. Turn it back on in Properties or by double-clicking the part.`);
+  setMsg(`Hid the ${FIELD_NAME[field]} of ${q.ref || LIB[q.type].name}. Turn it back on in Properties or ${field === 'pri' || field === 'sec' ? 'from the right-click menu' : 'by double-clicking the part'}.`);
 }
 function deleteSel() {
   if (selLabel) { hideLabel(selLabel.id, selLabel.field); return; }
@@ -1596,7 +1636,7 @@ svg.addEventListener('pointerdown', e => {
     if (!sel.has(q.id)) { sel.clear(); sel.add(q.id); renderSel(); }
     drag = { kind: 'pin', o: q, pin: target.pin, start: [snapL(raw[0]), snapL(raw[1])], ox: pn.dx || 0, oy: pn.dy || 0, moved: false }; return;
   }
-  if (target.k === 'label') { snapshot(); const k = target.field === 'ref' ? 'r' : 'v'; if (!sel.has(target.o.id)) { sel.clear(); sel.add(target.o.id); renderSel(); } renderSel(); drag = { kind: 'label', o: target.o, k, start: [snapL(raw[0]), snapL(raw[1])], ox: target.o[k + 'dx'] || 0, oy: target.o[k + 'dy'] || 0, moved: false }; return; }
+  if (target.k === 'label') { snapshot(); const k = LFIELD[target.field][1]; if (!sel.has(target.o.id)) { sel.clear(); sel.add(target.o.id); renderSel(); } renderSel(); drag = { kind: 'label', o: target.o, k, start: [snapL(raw[0]), snapL(raw[1])], ox: target.o[k + 'dx'] || 0, oy: target.o[k + 'dy'] || 0, moved: false }; return; }
   const id = target.o.id;
   if (e.shiftKey) { sel.has(id) ? sel.delete(id) : sel.add(id); renderSel(); return; }
   if (!sel.has(id)) { sel.clear(); sel.add(id); renderSel(); }
@@ -1717,13 +1757,13 @@ function editInPlace(p, field) {
   render();
   const r = svg.getBoundingClientRect(), vr = $('view').getBoundingClientRect();
   const inp = document.createElement('input');
-  inp.className = 'inplace'; inp.value = p[field] || ''; inp.setAttribute('aria-label', field === 'ref' ? 'Reference designator' : 'Value');
+  inp.className = 'inplace'; inp.value = p[field] || ''; inp.setAttribute('aria-label', FIELD_ARIA[field]);
   const fs = 11 * view.z, w = Math.max(70, (inp.value.length + 4) * 6.6 * view.z);
   const sx = r.left - vr.left + view.x + l.x0 * view.z, sy = r.top - vr.top + view.y + l.top * view.z;
   Object.assign(inp.style, { left: (l.a === 'middle' ? sx - (w - (l.x1 - l.x0) * view.z) / 2 : sx - 4) + 'px', top: (sy - 3) + 'px', width: w + 'px', fontSize: fs + 'px', fontWeight: field === 'ref' ? 600 : 400 });
   $('view').appendChild(inp); editing.inp = inp;
   inp.focus(); inp.select();
-  inp.addEventListener('keydown', e => { e.stopPropagation(); if (e.key === 'Enter') finishEdit(true); if (e.key === 'Escape') finishEdit(false); if (e.key === 'Tab') { e.preventDefault(); const nf = field === 'ref' ? 'value' : 'ref'; finishEdit(true); editInPlace(p, nf); } });
+  inp.addEventListener('keydown', e => { e.stopPropagation(); if (e.key === 'Enter') finishEdit(true); if (e.key === 'Escape') finishEdit(false); if (e.key === 'Tab') { e.preventDefault(); const fs = labelLines(p).map(x => x.field), nf = fs[(fs.indexOf(field) + (e.shiftKey ? fs.length - 1 : 1)) % fs.length]; finishEdit(true); if (nf && p[LFIELD[nf][0]] !== false) editInPlace(p, nf); } });
   inp.addEventListener('input', () => { inp.style.width = Math.max(70, (inp.value.length + 4) * 6.6 * view.z) + 'px'; });
   inp.addEventListener('blur', () => finishEdit(true));
 }
@@ -1750,7 +1790,8 @@ function finishEdit(ok) {
     if (ok && inp && inp.value.trim() !== (pn.t != null ? pn.t : 'p?')) { snapshot(); pn.t = inp.value.trim() || 'p?'; changed(); setMsg(`Pin ${n} set to ${pn.t}`); }
     render(); return;
   }
-  if (ok && inp && inp.value !== (p[field] || '')) { snapshot(); p[field] = inp.value.trim(); changed(); setMsg(`${field === 'ref' ? 'Designator' : 'Value'} set to ${p[field] || '(blank)'}`); }
+  if (ok && inp && inp.value !== (p[field] || '')) { snapshot(); p[field] = inp.value.trim(); changed(); setMsg(`${field === 'ref' ? 'Designator' : field === 'value' ? 'Value' : field === 'pri' ? 'Primary text' : 'Secondary text'} set to ${p[field] || '(blank)'}`); }
+  if ((field === 'pri' || field === 'sec') && !(p[field] || '').trim()) { setShown(p, field, false); changed(); }   // an empty winding note would be invisible: hide it
   render();
 }
 /* ---- edit both in one dialog ---- */
@@ -1765,6 +1806,7 @@ function partDialog(p) {
       <div class="field"><label for="pdRef">Ref des</label><input type="text" id="pdRef" value="${esc(p.ref)}" spellcheck="false" autocomplete="off"></div>
       <div class="field"><label for="pdVal">Value</label><input type="text" id="pdVal" value="${esc(p.value)}" autocomplete="off"></div>
       <div class="field"><label>Show</label><span style="display:flex;gap:14px"><label style="display:flex;gap:5px;align-items:center;color:inherit"><input type="checkbox" id="pdShowR"${fieldShown(p, 'ref') ? ' checked' : ''}> ref des</label><label style="display:flex;gap:5px;align-items:center;color:inherit"><input type="checkbox" id="pdShowV"${fieldShown(p, 'value') ? ' checked' : ''}> value</label></span></div>
+      ${isXfmr(p) ? ['pri', 'sec'].map(f => `<div class="field"><label for="pdW${f}">${f === 'pri' ? 'Primary' : 'Secondary'}</label><span style="display:flex;gap:8px;align-items:center"><input type="text" id="pdW${f}" value="${esc(p[f] || '')}" placeholder="volts, turns, ohms…" autocomplete="off" style="flex:1;min-width:0"><label style="display:flex;gap:4px;align-items:center;color:inherit;white-space:nowrap"><input type="checkbox" id="pdWs${f}"${fieldShown(p, f) ? ' checked' : ''}> show</label></span></div>`).join('') : ''}
     </div>
     <div class="foot"><button type="button" id="pdCancel">Cancel</button><button type="submit" class="pri">Apply</button></div></form>`;
   document.body.appendChild(back);
@@ -1775,7 +1817,9 @@ function partDialog(p) {
   back.querySelector('form').addEventListener('submit', e => {
     e.preventDefault();
     const r = $('pdRef').value.trim(), v = $('pdVal').value.trim(), sr = $('pdShowR').checked, sv = $('pdShowV').checked;
-    if (r !== p.ref || v !== p.value || sr !== fieldShown(p, 'ref') || sv !== fieldShown(p, 'value')) { snapshot(); p.ref = r; p.value = v; p.showRef = sr; p.showVal = sv; render(); changed(); setMsg(`Updated ${r || L.name}`); }
+    const W = isXfmr(p) ? ['pri', 'sec'].map(f => { const t = $('pdW' + f).value.trim(); return [f, t, $('pdWs' + f).checked && !!t]; }) : [];
+    const wDiff = W.some(([f, t, on]) => t !== (p[f] || '') || on !== fieldShown(p, f));
+    if (wDiff || r !== p.ref || v !== p.value || sr !== fieldShown(p, 'ref') || sv !== fieldShown(p, 'value')) { snapshot(); p.ref = r; p.value = v; p.showRef = sr; p.showVal = sv; for (const [f, t, on] of W) { p[f] = t; setShown(p, f, on); } render(); changed(); setMsg(`Updated ${r || L.name}`); }
     close();
   });
   $('pdRef').focus(); $('pdRef').select();
@@ -1814,6 +1858,10 @@ function partMenu(e, raw) {
     + (hasPart ? `<button role="menuitem" data-m="rot"><span>Rotate 90°</span><span>R</span></button><button role="menuitem" data-m="flip"><span>Flip horizontal</span><span>X</span></button><button role="menuitem" data-m="flipv"><span>Flip vertical</span><span>Y</span></button>` : '')
     + (selLabel ? `<button role="menuitem" data-m="edit"><span>Edit ${FIELD_NAME[selLabel.field]}</span><span>dbl-click</span></button>` : '')
     + (items.length === 1 && items[0].k === 'part' ? ['ref', 'value'].filter(f => !fieldShown(items[0].o, f)).map(f => `<button role="menuitem" data-m="show-${f}"><span>Show ${FIELD_NAME[f]}</span><span></span></button>`).join('') : '')
+    + (items.length === 1 && items[0].k === 'part' && isXfmr(items[0].o) ? (() => { const q = items[0].o;
+        return `<div class="mlabel">Winding text</div>` + ['pri', 'sec'].map(f => fieldShown(q, f)
+          ? `<button role="menuitem" data-m="wedit-${f}"><span>Edit ${FIELD_NAME[f]}</span><span>dbl-click</span></button><button role="menuitem" data-m="whide-${f}"><span>Hide ${FIELD_NAME[f]}</span><span></span></button>`
+          : `<button role="menuitem" data-m="wadd-${f}"><span>${(q[f] || '').trim() ? 'Show' : 'Add'} ${FIELD_NAME[f]}</span><span></span></button>`).join(''); })() : '')
     + (items.length === 1 && items[0].k === 'part' && isTube(items[0].o) ? `<button role="menuitem" data-m="pins"><span>${items[0].o.showPins ? 'Hide' : 'Show'} pin numbers</span><span></span></button>` : '')
     + (t.k === 'pin' ? `<button role="menuitem" data-m="editpin"><span>Edit pin number</span><span>dbl-click</span></button>` + (((t.o.pins || {})[t.pin] || {}).dx || ((t.o.pins || {})[t.pin] || {}).dy ? `<button role="menuitem" data-m="resetpin"><span>Put pin number back</span><span></span></button>` : '') : '')
     + (items.length === 1 && items[0].k === 'part' && LIB[items[0].o.type].vary ? (() => { const q = items[0].o, v = LIB[q.type].vary, cur = varyN(q);
@@ -1833,6 +1881,10 @@ function partMenu(e, raw) {
     if (m === 'pins') { const q = items[0].o; snapshot(); q.showPins = !q.showPins; if (q.showPins) { q.pins = q.pins || {}; for (const n of Object.keys(shapeOf(q).hooks)) q.pins[n] = q.pins[n] || { t: 'p?' }; } render(); changed(); setMsg(q.showPins ? 'Pin numbers shown. Double-click one to edit it; drag it to move it.' : 'Pin numbers hidden. Their text is kept.'); return; }
     if (m === 'editpin') { editPin(t.o, t.pin); return; }
     if (m === 'resetpin') { snapshot(); const pn = t.o.pins[t.pin]; pn.dx = 0; pn.dy = 0; render(); changed(); return; }
+    if (/^w(add|edit|hide)-/.test(m)) { const q = items[0].o, f = m.slice(m.indexOf('-') + 1);
+      if (m.startsWith('whide')) { hideLabel(q.id, f); return; }
+      if (m.startsWith('wadd')) { snapshot(); setShown(q, f, true); render(); changed(); if ((q[f] || '').trim()) return; }
+      editInPlace(q, f); return; }
     if (m.startsWith('show-')) { const q = items[0].o; snapshot(); if (m === 'show-ref') q.showRef = true; else q.showVal = true; render(); changed(); return; }
     ({ rot: rotateSel, flip: () => flipSel('h'), flipv: () => flipSel('v'), dup: duplicate, del: deleteSel })[m](); };
   menuEl.addEventListener('keydown', ev => {

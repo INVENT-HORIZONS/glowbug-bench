@@ -61,6 +61,11 @@ The owner is Larry Higley (GitHub: INVENT-HORIZONS). The app started as the sche
 
 - **Parts:** ref and value labels can be dragged and hidden independently. Delete on a selected label hides it.
   - Tubes can show editable `p?` pin numbers, with a dotted leader line when a number is moved.
+- **Transformer winding text:** every part in the Transformer category can carry `pri` and `sec` text (volts, turns, impedance…), shown by `showPri` / `showSec` and hidden until added from the right-click menu. Offsets are `pdx/pdy` and `sdx/sdy`. Label fields are listed in `LFIELD`; read visibility through `fieldShown(p, f)` and set it with `setShown`.
+  - Default spot (`windingPos`): above the part, primary text right-aligned over the primary side and secondary text left-aligned over the secondary side; when the part is turned on end, to the left of each winding.
+  - Delete (or Cut) on a selected winding label only hides it; the text is kept. A winding label left empty after editing is hidden again.
+  - Primary hooks are the leftmost column of hooks in the symbol's own coordinates, secondary the rightmost. Keep that true for any new transformer symbol.
+- **Step-up and step-down** (`transformer_up`, `transformer_down`) are drawn with 4 coil turns on the higher-voltage winding and 2 on the lower.
 - **Flips:** Flip horizontal (X) and Flip vertical (Y) mirror a part about the center of its hooks, so a two-ended part reverses in place. Hooks that still land on wires keep them.
 - **Tools:** Select V, Wire W, Text T, Cut C (whole item), Snip S (one wire segment).
   - Space flips the corner while drawing a wire.

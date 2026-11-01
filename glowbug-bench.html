@@ -228,6 +228,7 @@ button, input, select, textarea { font: inherit; color: inherit; box-sizing: bor
 .ink { stroke: var(--ink); fill: none; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
 .env { stroke: var(--ink); fill: none; stroke-width: 1.8; }
 .solid { fill: var(--ink); }
+.xbox { fill: none; stroke: #B4B4B4; stroke-width: 1.2; }
 .dotl { stroke: var(--ink); fill: none; stroke-width: 2; stroke-linecap: round; stroke-dasharray: 0 4.2; }
 .htr { stroke: var(--glow); fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
 .tgt { stroke: #2F8A45; fill: none; stroke-width: 1.8; stroke-linecap: round; }
@@ -876,7 +877,7 @@ function shapeOf(p) {
    DOCUMENT MODEL
    project { id, name, sheets:[{ id, name, parts, wires, texts }] }
    part { id, type, x, y, rot 0-3, flip, ref, value, showRef, showVal, rdx/rdy, vdx/vdy }
-   transformers also: core ('air' | 'ferrite' | 'iron' default | 'var'), pri, sec (winding text, default 'Pri' / 'Sec'), showPri, showSec (shown by default), pdx/pdy, sdx/sdy
+   transformers also: box (gray outline), core ('air' | 'ferrite' | 'iron' default | 'var'), pri, sec (winding text, default 'Pri' / 'Sec'), showPri, showSec (shown by default), pdx/pdy, sdx/sdy
    wire { id, pts:[[x,y],…] } orthogonal polyline
    text { id, x, y, text, size, tone }
    ===================================================================== */
@@ -897,8 +898,12 @@ function xf(p, h) {             // local hook -> world
   for (let i = 0; i < (p.rot || 0); i++) [x, y] = [-y, x];
   return [p.x + x, p.y + y];
 }
+// a transformer's optional light gray outline box (p.box) sits XBOX_PAD outside the symbol and counts as part of it
+const XBOX_PAD = 8;
+const hasBox = p => !!p.box && isXfmr(p);
+function localBB(p) { const b = shapeOf(p).bb; return hasBox(p) ? [b[0] - XBOX_PAD, b[1] - XBOX_PAD, b[2] + XBOX_PAD, b[3] + XBOX_PAD] : b; }
 function partBB(p) {
-  const b = shapeOf(p).bb, cs = [[b[0], b[1]], [b[2], b[1]], [b[0], b[3]], [b[2], b[3]]].map(c => xf(p, c));
+  const b = localBB(p), cs = [[b[0], b[1]], [b[2], b[1]], [b[0], b[3]], [b[2], b[3]]].map(c => xf(p, c));
   const xs = cs.map(c => c[0]), ys = cs.map(c => c[1]);
   return [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)];
 }
@@ -1117,7 +1122,7 @@ function applyView() {
   $('stZoom').textContent = Math.round(view.z * 100) + '%';
 }
 function partSVG(p, extra = '') {
-  return `<g transform="translate(${p.x} ${p.y}) rotate(${(p.rot || 0) * 90}) scale(${p.flip ? -1 : 1} 1)"${extra}>${shapeOf(p).draw(isXfmr(p) ? p.core || 'iron' : undefined)}</g>`;
+  return `<g transform="translate(${p.x} ${p.y}) rotate(${(p.rot || 0) * 90}) scale(${p.flip ? -1 : 1} 1)"${extra}>${hasBox(p) ? (b => `<rect class="xbox" x="${b[0]}" y="${b[1]}" width="${b[2] - b[0]}" height="${b[3] - b[1]}" rx="2"/>`)(localBB(p)) : ''}${shapeOf(p).draw(isXfmr(p) ? p.core || 'iron' : undefined)}</g>`;
 }
 /* ---- pin numbers on tubes: one editable, movable label per hook ---- */
 const isTube = p => LIB[p.type].cat.startsWith('Tube');
@@ -1488,6 +1493,7 @@ function renderProps() {
     const p = it.o, L = LIB[p.type], HK = shapeOf(p).hooks;
     const pins = Object.keys(HK).join(' · ');
     b.innerHTML = `<div class="what">${esc(L.name)}<small>${esc(L.cat)} · ${Object.keys(HK).length} hook${Object.keys(HK).length > 1 ? 's' : ''}</small></div>
+      ${isXfmr(p) ? `<div class="field"><label>Outline</label><label style="display:flex;gap:5px;align-items:center;color:inherit"><input type="checkbox" id="pXbox"${p.box ? ' checked' : ''}> light gray box</label></div>` : ''}
       ${L.windings ? `<div class="row-btns"><button data-act="windings">Configure windings…</button></div>` : ''}
       ${varyList(L).map((v, k) => `<div class="field"><label for="pVary${k}">${v.label}</label><select id="pVary${k}" data-vk="${v.key}">${Array.from({ length: v.max - v.min + 1 }, (_, i) => v.min + i).map(n => `<option${n === varyVal(p, v) ? ' selected' : ''}>${n}</option>`).join('')}</select></div>`).join('')}
       <div class="field"><label for="pRef">Ref des</label><input type="text" id="pRef" value="${esc(p.ref)}" spellcheck="false"></div>
@@ -1501,6 +1507,7 @@ function renderProps() {
     varyList(L).forEach((v, k) => { $('pVary' + k).onchange = e => setVary(p, +e.target.value, v.key); });
     $('pShowR').onchange = e => { snapshot(); p.showRef = e.target.checked; render(); changed(); };
     $('pShowV').onchange = e => { snapshot(); p.showVal = e.target.checked; render(); changed(); };
+    if ($('pXbox')) $('pXbox').onchange = e => { snapshot(); p.box = e.target.checked; render(); renderSel(); changed(); };
     if (isXfmr(p)) for (const f of ['pri', 'sec']) {
       bind('pW' + f, e => { p[f] = e.value; if (e.value.trim() && !fieldShown(p, f)) { setShown(p, f, true); $('pWs' + f).checked = true; } });
       $('pWs' + f).onchange = e => { snapshot(); setShown(p, f, e.target.checked); render(); changed(); };
@@ -2044,6 +2051,7 @@ function partMenu(e, raw) {
     + (items.length === 1 && items[0].k === 'part' ? ['ref', 'value'].filter(f => !fieldShown(items[0].o, f)).map(f => `<button role="menuitem" data-m="show-${f}"><span>Show ${FIELD_NAME[f]}</span><span></span></button>`).join('') : '')
     + (items.length === 1 && items[0].k === 'part' && isXfmr(items[0].o) ? (() => { const q = items[0].o;
         return `<div class="mlabel">Core</div>${CORES.map(([k, n]) => `<button role="menuitemradio" data-core="${k}" aria-checked="${(q.core || 'iron') === k}"><span>${(q.core || 'iron') === k ? '● ' : ''}${n}</span><span>${{ air: 'none', ferrite: 'dotted', iron: 'solid', var: 'arrow' }[k]}</span></button>`).join('')}`
+          + `<button role="menuitemcheckbox" data-m="xbox" aria-checked="${!!q.box}"><span>${q.box ? '✓ ' : ''}Gray outline box</span><span>${q.box ? 'on' : 'off'}</span></button>`
           + `<div class="mlabel">Winding text</div>` + ['pri', 'sec'].map(f => fieldShown(q, f)
           ? `<button role="menuitem" data-m="wedit-${f}"><span>Edit ${FIELD_NAME[f]}</span><span>dbl-click</span></button><button role="menuitem" data-m="whide-${f}"><span>Hide ${FIELD_NAME[f]}</span><span></span></button>`
           : `<button role="menuitem" data-m="wadd-${f}"><span>${(q[f] || '').trim() ? 'Show' : 'Add'} ${FIELD_NAME[f]}</span><span></span></button>`).join(''); })() : '')
@@ -2066,6 +2074,7 @@ function partMenu(e, raw) {
     const vy = ev.target.closest('[data-vary]'); if (vy) { closeMenu(); const [vk, vn] = vy.dataset.vary.split(':'); setVary(items[0].o, +vn, vk); return; }
     const b = ev.target.closest('[data-m]'); if (!b) return; const m = b.dataset.m; closeMenu();
     if (m === 'edit') { const L0 = selLabel; if (L0) editInPlace(sheet.parts.find(x => x.id === L0.id), L0.field); return; }
+    if (m === 'xbox') { const q = items[0].o; snapshot(); q.box = !q.box; render(); renderSel(); changed(); setMsg(`${q.ref || LIB[q.type].name}: gray outline box ${q.box ? 'on' : 'off'}`); return; }
     if (m === 'windings') { windingDialog(items[0].o); return; }
     if (m === 'pins') { const q = items[0].o; snapshot(); q.showPins = !q.showPins; if (q.showPins) { q.pins = q.pins || {}; for (const n of Object.keys(shapeOf(q).hooks)) q.pins[n] = q.pins[n] || { t: 'p?' }; } render(); changed(); setMsg(q.showPins ? 'Pin numbers shown. Double-click one to edit it; drag it to move it.' : 'Pin numbers hidden. Their text is kept.'); return; }
     if (m === 'editpin') { editPin(t.o, t.pin); return; }
@@ -2355,7 +2364,7 @@ function sheetSVG(withBg = true, whole = false) {
   let x0, y0, x1, y1;
   if (whole) { const [SW, SH] = sheetDims(sheet); x0 = 0; y0 = 0; x1 = SW; y1 = SH; }
   else { if (!bbs.length) return null; const pad = 16; x0 = Math.min(...bbs.map(b => b[0])) - pad; y0 = Math.min(...bbs.map(b => b[1])) - pad; x1 = Math.max(...bbs.map(b => b[2])) + pad; y1 = Math.max(...bbs.map(b => b[3])) + pad; }
-  const css = `.ink{stroke:#17120E;fill:none;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}.solid{fill:#17120E}.tgt{stroke:#2F8A45;fill:none;stroke-width:1.8;stroke-linecap:round}.env{stroke:#17120E;fill:none;stroke-width:1.8}.htr{stroke:#E8912D;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}.dash{stroke:#17120E;fill:none;stroke-width:1.6;stroke-dasharray:5 3.4}.dotl{stroke:#17120E;fill:none;stroke-width:2;stroke-linecap:round;stroke-dasharray:0 4.2}.wire{stroke:#17120E;fill:none;stroke-width:1.4;stroke-linecap:round;stroke-linejoin:round}.jdot{fill:#17120E}.lbl{font-family:'Libre Franklin','Franklin Gothic Book',Arial,sans-serif;font-size:11px;fill:#17120E}.lbl .ref,.lbl.ref{font-weight:600}.pinno{font-family:'Libre Franklin','Franklin Gothic Book',Arial,sans-serif;font-size:8.5px;fill:#17120E}.pinlead{stroke:#5C5248;stroke-width:.8;stroke-dasharray:1.2 2;fill:none}.stxt{font-family:'Libre Franklin','Franklin Gothic Book',Arial,sans-serif;white-space:pre}.fr{stroke:#17120E;fill:none;stroke-width:1.1}.fr-b{stroke:#17120E;fill:none;stroke-width:2}.fr-lab{font-family:'JetBrains Mono',Consolas,monospace;font-size:7.5px;letter-spacing:.08em;fill:#5C5248}.fr-val{font-family:'Libre Franklin','Franklin Gothic Book',Arial,sans-serif;fill:#17120E}.fr-zone{font-family:'JetBrains Mono',Consolas,monospace;font-size:10px;fill:#5C5248}.fr-co{font-family:'Big Shoulders Display','Arial Narrow',sans-serif;font-weight:800;fill:#17120E}`;
+  const css = `.ink{stroke:#17120E;fill:none;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}.solid{fill:#17120E}.tgt{stroke:#2F8A45;fill:none;stroke-width:1.8;stroke-linecap:round}.env{stroke:#17120E;fill:none;stroke-width:1.8}.htr{stroke:#E8912D;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}.dash{stroke:#17120E;fill:none;stroke-width:1.6;stroke-dasharray:5 3.4}.xbox{fill:none;stroke:#B4B4B4;stroke-width:1.2}.dotl{stroke:#17120E;fill:none;stroke-width:2;stroke-linecap:round;stroke-dasharray:0 4.2}.wire{stroke:#17120E;fill:none;stroke-width:1.4;stroke-linecap:round;stroke-linejoin:round}.jdot{fill:#17120E}.lbl{font-family:'Libre Franklin','Franklin Gothic Book',Arial,sans-serif;font-size:11px;fill:#17120E}.lbl .ref,.lbl.ref{font-weight:600}.pinno{font-family:'Libre Franklin','Franklin Gothic Book',Arial,sans-serif;font-size:8.5px;fill:#17120E}.pinlead{stroke:#5C5248;stroke-width:.8;stroke-dasharray:1.2 2;fill:none}.stxt{font-family:'Libre Franklin','Franklin Gothic Book',Arial,sans-serif;white-space:pre}.fr{stroke:#17120E;fill:none;stroke-width:1.1}.fr-b{stroke:#17120E;fill:none;stroke-width:2}.fr-lab{font-family:'JetBrains Mono',Consolas,monospace;font-size:7.5px;letter-spacing:.08em;fill:#5C5248}.fr-val{font-family:'Libre Franklin','Franklin Gothic Book',Arial,sans-serif;fill:#17120E}.fr-zone{font-family:'JetBrains Mono',Consolas,monospace;font-size:10px;fill:#5C5248}.fr-co{font-family:'Big Shoulders Display','Arial Narrow',sans-serif;font-weight:800;fill:#17120E}`;
   const body = ((whole ? $('layerFrame').innerHTML : '') + $('layerParts').innerHTML + $('layerWires').innerHTML + $('layerText').innerHTML).replace(/var\(--ink\)/g, '#17120E').replace(/var\(--paper\)/g, '#FBF8F3');
   return { w: x1 - x0, h: y1 - y0, svg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${x0} ${y0} ${x1 - x0} ${y1 - y0}" width="${x1 - x0}" height="${y1 - y0}"><style>${css}</style>${withBg ? `<rect x="${x0}" y="${y0}" width="${x1 - x0}" height="${y1 - y0}" fill="#FBF8F3"/>` : ''}${body}</svg>` };
 }

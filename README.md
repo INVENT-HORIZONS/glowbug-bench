@@ -6,7 +6,7 @@ Open `glowbug-bench.html` in any modern browser. Everything is in the one file; 
 
 ## Features
 
-- **Symbol library (81 parts):** passives, transformers (general-purpose step-up and step-down, ultra-linear and center-tapped), heaters, power, semiconductors (diodes, BJTs, Darlingtons, JFETs and MOSFETs), misc, modern tubes (including gas-filled rectifiers, glow regulators, thyratrons, a photomultiplier and two- and single-section electron-ray "magic eyes"), and 1920s and 1930s period tubes for the Vintage Tube spotlight.
+- **Symbol library (81 parts):** passives, transformers (isolation, general-purpose step-up and step-down, ultra-linear and center-tapped), heaters, power, semiconductors (diodes, BJTs, Darlingtons, JFETs and MOSFETs), misc, modern tubes (including gas-filled rectifiers, glow regulators, thyratrons, a photomultiplier and two- and single-section electron-ray "magic eyes"), and 1920s and 1930s period tubes for the Vintage Tube spotlight.
 - **Hooks on a 0.1 in grid:** every connection point lands on the grid, even after rotating or flipping. Ref des and value labels move on a finer 0.05 in grid.
 - **Wiring:** click a hook to start, click to add corners, and finish on a hook or wire. Space flips the corner. Junction dots appear automatically.
 - **Wire colors:** black, red, green, blue, brown and orange. Pick the color for new wires from the swatch under the Wire tool; recolor existing wires from the properties panel or the right-click menu.
@@ -18,7 +18,7 @@ Open `glowbug-bench.html` in any modern browser. Everything is in the one file; 
   - Delete on a selected label hides it instead of deleting anything.
 - **Pin numbers on tubes:** right-click a tube and choose Show pin numbers. Each hook gets a `p?` label you can double-click to edit (Tab moves to the next pin) and drag anywhere; a moved label is tied back to its pin with a dotted line.
 - **Transformer cores:** right-click any transformer to pick its core: air (no lines), ferrite (dotted lines), iron (solid lines, the default) or variable (iron with an adjusting arrow).
-- **Winding text on transformers:** right-click any transformer and choose Add primary text or Add secondary text to note voltages, turns, impedance or anything else beside each winding. Each has its own Show checkbox in Properties and in the double-click dialog. Drag them anywhere; Delete on a selected one just hides it, and its text is kept.
+- **Winding text on transformers:** every transformer starts with "Pri" and "Sec" over its windings. Double-click either to change it to voltages, turns, impedance or anything else. Each has its own Show checkbox in Properties and in the double-click dialog, and the right-click menu can edit, hide or show them. Drag them anywhere; Delete on a selected one just hides it, and its text is kept.
 - **Photomultiplier dynodes:** right-click a photomultiplier (or use the properties panel) to set 2 to 14 dynodes. The photocathode and D1 stay put; the anode's wires follow it.
 - **Toolbox:** Select (V), Wire (W), Text (T), Cut (C, removes a whole part or wire) and Snip (S, removes one wire segment).
 - **Sheets:** ANSI A (Letter), B (Tabloid), C and D, portrait or landscape, with mixed sizes in one project. Each sheet can have:

@@ -61,11 +61,12 @@ The owner is Larry Higley (GitHub: INVENT-HORIZONS). The app started as the sche
 
 - **Parts:** ref and value labels can be dragged and hidden independently. Delete on a selected label hides it.
   - Tubes can show editable `p?` pin numbers, with a dotted leader line when a number is moved.
-- **Transformer winding text:** every part in the Transformer category can carry `pri` and `sec` text (volts, turns, impedance…), shown by `showPri` / `showSec` and hidden until added from the right-click menu. Offsets are `pdx/pdy` and `sdx/sdy`. Label fields are listed in `LFIELD`; read visibility through `fieldShown(p, f)` and set it with `setShown`.
+- **Transformer winding text:** every part in the Transformer category can carry `pri` and `sec` text (volts, turns, impedance…), shown by `showPri` / `showSec`. New transformers start with `Pri` / `Sec`, both shown (`xfmrDefaults`, applied on placement, in the example and on load for parts that have neither field yet). The right-click menu edits, hides or shows them. Offsets are `pdx/pdy` and `sdx/sdy`. Label fields are listed in `LFIELD`; read visibility through `fieldShown(p, f)` and set it with `setShown`.
   - Default spot (`windingPos`): above the part, primary text right-aligned over the primary side and secondary text left-aligned over the secondary side; when the part is turned on end, to the left of each winding.
   - Delete (or Cut) on a selected winding label only hides it; the text is kept. A winding label left empty after editing is hidden again.
   - Primary hooks are the leftmost column of hooks in the symbol's own coordinates, secondary the rightmost. Keep that true for any new transformer symbol.
 - **Transformer cores:** `p.core` is `air` (no lines), `ferrite` (dotted, CSS class `dotl`), `iron` (solid, the default when unset) or `var` (iron plus a diagonal adjust arrow). Chosen from the right-click menu. Every transformer `draw(c)` takes the core and draws it with `coreSVG(c, y0, y1)`; `partSVG` passes `p.core` for transformers, and thumbnails use the iron default. A new transformer symbol must draw its core through `coreSVG`. The `dotl` class is also in the export CSS.
+- **The plain `transformer` type is "Transformer, isolation"**, value `Isolation`.
 - **Step-up and step-down** (`transformer_up`, `transformer_down`) are drawn with 4 coil turns on the higher-voltage winding and 2 on the lower.
 - **Flips:** Flip horizontal (X) and Flip vertical (Y) mirror a part about the center of its hooks, so a two-ended part reverses in place. Hooks that still land on wires keep them.
 - **Tools:** Select V, Wire W, Text T, Cut C (whole item), Snip S (one wire segment).

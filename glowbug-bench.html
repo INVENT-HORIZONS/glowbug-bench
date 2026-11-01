@@ -556,7 +556,7 @@ function xfmr(pct, sct, core) {
   if (pct) s += ln(0, 30, 10, 30); if (sct) s += ln(40, 30, 50, 30);
   return s;
 }
-def('transformer', { cat: 'Transformer', name: 'Transformer', pre: 'T', value: '120 V : 6.3 V', hooks: { P1: [0, 0], P2: [0, 60], S1: [50, 0], S2: [50, 60] }, draw: c => xfmr(0, 0, c) });
+def('transformer', { cat: 'Transformer', name: 'Transformer, isolation', pre: 'T', value: 'Isolation', tags: 'isolation 1:1', hooks: { P1: [0, 0], P2: [0, 60], S1: [50, 0], S2: [50, 60] }, draw: c => xfmr(0, 0, c) });
 def('transformer_sct', { cat: 'Transformer', name: 'Transformer, secondary CT', pre: 'T', value: '350-0-350 V', hooks: { P1: [0, 0], P2: [0, 60], S1: [50, 0], S2: [50, 60], SCT: [50, 30] }, draw: c => xfmr(0, 1, c) });
 def('transformer_ul', { cat: 'Transformer', name: 'Output transformer, ultra-linear', pre: 'T', value: '6.6 kΩ : 8 Ω, UL', tags: 'ul ultralinear push-pull screen tap opt',
   hooks: { P1: [0, 0], UL1: [0, 20], CT: [0, 40], UL2: [0, 60], P2: [0, 80], S1: [50, 10], S2: [50, 70] },
@@ -816,7 +816,7 @@ function shapeOf(p) {
    DOCUMENT MODEL
    project { id, name, sheets:[{ id, name, parts, wires, texts }] }
    part { id, type, x, y, rot 0-3, flip, ref, value, showRef, showVal, rdx/rdy, vdx/vdy }
-   transformers also: core ('air' | 'ferrite' | 'iron' default | 'var'), pri, sec (winding text), showPri, showSec (hidden until added), pdx/pdy, sdx/sdy
+   transformers also: core ('air' | 'ferrite' | 'iron' default | 'var'), pri, sec (winding text, default 'Pri' / 'Sec'), showPri, showSec (shown by default), pdx/pdy, sdx/sdy
    wire { id, pts:[[x,y],…] } orthogonal polyline
    text { id, x, y, text, size, tone }
    ===================================================================== */
@@ -852,6 +852,8 @@ function labelPos(p) {
 // label fields: [show flag, drag-offset prefix]. pri/sec are the winding notes on transformers, hidden until added.
 const LFIELD = { ref: ['showRef', 'r'], value: ['showVal', 'v'], pri: ['showPri', 'p'], sec: ['showSec', 's'] };
 const isXfmr = p => !!p && !!LIB[p.type] && LIB[p.type].cat === 'Transformer';
+// new transformers carry "Pri" and "Sec" winding text, shown; parts that predate winding text get the same on load
+const xfmrDefaults = p => { if (isXfmr(p) && p.pri == null && p.sec == null) Object.assign(p, { pri: 'Pri', sec: 'Sec', showPri: true, showSec: true }); return p; };
 const fieldShown = (p, f) => f === 'pri' || f === 'sec' ? isXfmr(p) && p[LFIELD[f][0]] === true : p[LFIELD[f][0]] !== false;
 const setShown = (p, f, on) => { p[LFIELD[f][0]] = !!on; };
 const labelShown = p => fieldShown(p, 'ref') || fieldShown(p, 'value');
@@ -988,7 +990,7 @@ function frameSVG(s) {
 function nextRef(pre) { return pre ? pre + '?' : ''; }
 function exampleProject() {
   const s = newSheet('2A3 filament, center tap'); s.file = '2a3-filament-ct.sch';
-  const P = (type, x, y, o = {}) => { const p = Object.assign({ id: uid(), type, x, y, rot: 0, flip: false, ref: '', value: LIB[type].value, showRef: !LIB[type].hideLabel, showVal: !LIB[type].hideLabel, lx: 0, ly: 0 }, o); s.parts.push(p); return p; };
+  const P = (type, x, y, o = {}) => { const p = xfmrDefaults(Object.assign({ id: uid(), type, x, y, rot: 0, flip: false, ref: '', value: LIB[type].value, showRef: !LIB[type].hideLabel, showVal: !LIB[type].hideLabel, lx: 0, ly: 0 }, o)); s.parts.push(p); return p; };
   P('p30_triode_dh', 300, 200, { ref: 'V?', value: '2A3' });
   P('resistor', 210, 200, { rot: 1, ref: 'R?', value: 'grid return', lx: -86, ly: 0 });
   P('ground', 210, 260);
@@ -1944,6 +1946,7 @@ function placePart(p) {
   snapshot();
   const L = LIB[placeType];
   const part = { id: uid(), type: placeType, x: p[0], y: p[1], rot: placeRot, flip: placeFlip, ref: nextRef(L.pre), value: L.value, showRef: !L.hideLabel, showVal: !L.hideLabel, lx: 0, ly: 0 };
+  xfmrDefaults(part);
   sheet.parts.push(part); sel.clear(); sel.add(part.id); render(); changed();
   setMsg(`Placed ${part.ref || L.name}. Click to place another, Esc to stop.`);
 }
@@ -2118,7 +2121,7 @@ function loadProject(p, msg) {
       if (!q.ref) q.ref = nextRef(LIB[q.type].pre);
       if (q.value == null || q.value === '') q.value = LIB[q.type].value;
       const legacy = q.showLabel == null ? !LIB[q.type].hideLabel : q.showLabel !== false;
-      if (q.showRef == null) q.showRef = legacy; if (q.showVal == null) q.showVal = legacy; delete q.showLabel;
+      xfmrDefaults(q); if (q.showRef == null) q.showRef = legacy; if (q.showVal == null) q.showVal = legacy; delete q.showLabel;
     }
     sheet = was;
   }

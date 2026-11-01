@@ -769,6 +769,19 @@ const ST12AX7 = {
 };
 def('m_st_12ax7', { cat: 'Tube, modern', name: '12AX7 family', pre: 'V', value: '12AX7', units: ST12AX7, family: FAM_12AX7,
   tags: 'stock twin triode dual noval 9a ' + FAM_12AX7.join(' ').toLowerCase(), hooks: ST12AX7.A.hooks, draw: ST12AX7.A.draw });
+// 6SN7 family: twin triodes on the 8BD octal base (6SN7EH datasheet: pins 1-2-3 = grid, plate, cathode of unit 2;
+// 4-5-6 = unit 1; heater 7 and 8, no centre tap). As with the 12AX7, section A takes pins 1-2-3 and the heater.
+const FAM_6SN7 = ['6SN7', '6SN7GT', '6SN7GTA', '6SN7GTB', '6SN7W', '5692', '6180', '8SN7', '12SN7GT', '25SN7GT', '6SL7', '6SL7GT', '5691', '12SL7GT'];
+const ST6SN7 = {
+  A: { hooks: { P: [0, -50], G: [-50, 0], K: [-20, 50], H1: [-10, 50], H2: [10, 50] },
+       draw: () => triodeBody() + cath(-20, 19, 10, -20, 50) + pl([[-10, 50], [-10, 27], [0, 17], [10, 27], [10, 50]], 'htr'),
+       pins: { G: { t: '1' }, P: { t: '2' }, K: { t: '3' }, H1: { t: '7' }, H2: { t: '8' } },
+       bare: ST12AX7.A.bare },
+  B: { hooks: ST12AX7.B.hooks, draw: ST12AX7.B.draw,
+       pins: { G: { t: '4' }, P: { t: '5' }, K: { t: '6' } } },
+};
+def('m_st_6sn7', { cat: 'Tube, modern', name: '6SN7 family', pre: 'V', value: '6SN7', units: ST6SN7, family: FAM_6SN7,
+  tags: 'stock twin triode dual octal 8bd ' + FAM_6SN7.join(' ').toLowerCase(), hooks: ST6SN7.A.hooks, draw: ST6SN7.A.draw });
 const unitsOf = L => L.units ? Object.keys(L.units) : [];
 const unitOf = p => { const L = LIB[p.type]; return L.units ? (L.units[p.unit] ? p.unit : unitsOf(L)[0]) : ''; };
 const refText = p => (p.ref || '') + unitOf(p);

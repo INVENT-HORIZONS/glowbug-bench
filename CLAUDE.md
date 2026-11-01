@@ -89,5 +89,6 @@ The owner is Larry Higley (GitHub: INVENT-HORIZONS). The app started as the sche
   - Drag to move, corner dot to resize, hover bar for camera picker, mirror, round/rectangle and close. Settings (position, size, mirror, shape, camera) persist in `gs.cam`.
   - The camera is never opened on page load, only from the button or K. Closing it stops the camera tracks so the camera light goes off.
   - The app always runs locally from a PC (file://). Larry may remove this feature from the production build.
+  - Resolution: `camStart` asks for an ideal 1280 × 720, so 1080p and 4K cameras run at 720p. Larry finds 720p not really usable for his videos. Deferred until he has a better camera: ask for 1920 × 1080, or add a resolution choice (720p / 1080p / camera's best) to the camera window's hover bar.
   - Possible future: let users record their own training videos (screen + camera + mic via `getDisplayMedia` and `MediaRecorder`) to post. Not started; do not build until Larry asks.
 - **Testing:** the main script is one IIFE. To reach its internals from Playwright, inject `window.__t = {...}` just before the final `})();`, in a scratch copy only.

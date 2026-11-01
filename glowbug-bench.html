@@ -228,6 +228,7 @@ button, input, select, textarea { font: inherit; color: inherit; box-sizing: bor
 .ink { stroke: var(--ink); fill: none; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
 .env { stroke: var(--ink); fill: none; stroke-width: 1.8; }
 .solid { fill: var(--ink); }
+.dotl { stroke: var(--ink); fill: none; stroke-width: 2; stroke-linecap: round; stroke-dasharray: 0 4.2; }
 .htr { stroke: var(--glow); fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
 .tgt { stroke: #2F8A45; fill: none; stroke-width: 1.8; stroke-linecap: round; }
 .dash { stroke: var(--ink); fill: none; stroke-width: 1.6; stroke-dasharray: 5 3.4; }
@@ -535,31 +536,44 @@ def('pmos', { cat: 'Semiconductors', name: 'P-channel MOSFET, enhancement', pre:
 def('pmos_dep', { cat: 'Semiconductors', name: 'P-channel MOSFET, depletion', pre: 'Q', value: '', tags: 'mosfet fet p channel depletion', hooks: MOS_H, draw: () => mosfet(1, PARR) });
 
 /* ---- transformers ---- */
-function xfmr(pct, sct) {
+// transformer core between the windings: air (none), ferrite (dotted), iron (solid, the default) or variable (iron + adjust arrow)
+const CORES = [['air', 'Air'], ['ferrite', 'Ferrite'], ['iron', 'Iron'], ['var', 'Variable']];
+const CORE_NAME = { air: 'air core', ferrite: 'ferrite core', iron: 'iron core', var: 'variable core' };
+function coreSVG(c, y0, y1) {
+  if (c === 'air') return '';
+  if (c === 'ferrite') return ln(22, y0, 22, y1, 'dotl') + ln(28, y0, 28, y1, 'dotl');
+  let s = ln(22, y0, 22, y1) + ln(28, y0, 28, y1);
+  if (c === 'var') {   // adjustable core: arrow up and to the right across the core
+    const ax = 12, ay = y1 - 6, bx = 38, by = y0 + 6, L = Math.hypot(bx - ax, by - ay), ux = (bx - ax) / L, uy = (by - ay) / L, hx = bx - ux * 8, hy = by - uy * 8;
+    s += ln(ax, ay, hx, hy) + pg([[bx, by], [hx - uy * 3.5, hy + ux * 3.5], [hx + uy * 3.5, hy - ux * 3.5]], 'solid');
+  }
+  return s;
+}
+function xfmr(pct, sct, core) {
   let s = ln(0, 0, 10, 0) + ln(10, 0, 10, 10) + pa(coilY(10, 10, 4, 1)) + ln(10, 50, 10, 60) + ln(10, 60, 0, 60)
         + ln(50, 0, 40, 0) + ln(40, 0, 40, 10) + pa(coilY(40, 10, 4, -1)) + ln(40, 50, 40, 60) + ln(40, 60, 50, 60)
-        + ln(22, 4, 22, 56) + ln(28, 4, 28, 56);
+        + coreSVG(core || 'iron', 4, 56);
   if (pct) s += ln(0, 30, 10, 30); if (sct) s += ln(40, 30, 50, 30);
   return s;
 }
-def('transformer', { cat: 'Transformer', name: 'Transformer', pre: 'T', value: '120 V : 6.3 V', hooks: { P1: [0, 0], P2: [0, 60], S1: [50, 0], S2: [50, 60] }, draw: () => xfmr(0, 0) });
-def('transformer_sct', { cat: 'Transformer', name: 'Transformer, secondary CT', pre: 'T', value: '350-0-350 V', hooks: { P1: [0, 0], P2: [0, 60], S1: [50, 0], S2: [50, 60], SCT: [50, 30] }, draw: () => xfmr(0, 1) });
+def('transformer', { cat: 'Transformer', name: 'Transformer', pre: 'T', value: '120 V : 6.3 V', hooks: { P1: [0, 0], P2: [0, 60], S1: [50, 0], S2: [50, 60] }, draw: c => xfmr(0, 0, c) });
+def('transformer_sct', { cat: 'Transformer', name: 'Transformer, secondary CT', pre: 'T', value: '350-0-350 V', hooks: { P1: [0, 0], P2: [0, 60], S1: [50, 0], S2: [50, 60], SCT: [50, 30] }, draw: c => xfmr(0, 1, c) });
 def('transformer_ul', { cat: 'Transformer', name: 'Output transformer, ultra-linear', pre: 'T', value: '6.6 kΩ : 8 Ω, UL', tags: 'ul ultralinear push-pull screen tap opt',
   hooks: { P1: [0, 0], UL1: [0, 20], CT: [0, 40], UL2: [0, 60], P2: [0, 80], S1: [50, 10], S2: [50, 70] },
-  draw: () => pa(coilY(10, 0, 8, 1)) + pa(coilY(40, 10, 6, -1)) + ln(22, -4, 22, 84) + ln(28, -4, 28, 84)
+  draw: c => pa(coilY(10, 0, 8, 1)) + pa(coilY(40, 10, 6, -1)) + coreSVG(c || 'iron', -4, 84)
     + [0, 20, 40, 60, 80].map(y => ln(0, y, 10, y)).join('') + ln(40, 10, 50, 10) + ln(40, 70, 50, 70) });
 // general-purpose step-down / step-up: more turns drawn on the higher-voltage winding
 def('transformer_down', { cat: 'Transformer', name: 'Transformer, step-down', pre: 'T', value: '120 V : 12 V', tags: 'step down stepdown power mains',
   hooks: { P1: [0, 0], P2: [0, 60], S1: [50, 10], S2: [50, 50] },
-  draw: () => ln(0, 0, 10, 0) + ln(10, 0, 10, 10) + pa(coilY(10, 10, 4, 1)) + ln(10, 50, 10, 60) + ln(10, 60, 0, 60)
+  draw: c => ln(0, 0, 10, 0) + ln(10, 0, 10, 10) + pa(coilY(10, 10, 4, 1)) + ln(10, 50, 10, 60) + ln(10, 60, 0, 60)
     + ln(50, 10, 40, 10) + ln(40, 10, 40, 20) + pa(coilY(40, 20, 2, -1)) + ln(40, 40, 40, 50) + ln(40, 50, 50, 50)
-    + ln(22, 4, 22, 56) + ln(28, 4, 28, 56) });
+    + coreSVG(c || 'iron', 4, 56) });
 def('transformer_up', { cat: 'Transformer', name: 'Transformer, step-up', pre: 'T', value: '12 V : 120 V', tags: 'step up stepup',
   hooks: { P1: [0, 10], P2: [0, 50], S1: [50, 0], S2: [50, 60] },
-  draw: () => ln(0, 10, 10, 10) + ln(10, 10, 10, 20) + pa(coilY(10, 20, 2, 1)) + ln(10, 40, 10, 50) + ln(10, 50, 0, 50)
+  draw: c => ln(0, 10, 10, 10) + ln(10, 10, 10, 20) + pa(coilY(10, 20, 2, 1)) + ln(10, 40, 10, 50) + ln(10, 50, 0, 50)
     + ln(50, 0, 40, 0) + ln(40, 0, 40, 10) + pa(coilY(40, 10, 4, -1)) + ln(40, 50, 40, 60) + ln(40, 60, 50, 60)
-    + ln(22, 4, 22, 56) + ln(28, 4, 28, 56) });
-def('transformer_pct', { cat: 'Transformer', name: 'Output transformer, primary CT', pre: 'T', value: '5 kΩ : 8 Ω', tags: 'push-pull opt', hooks: { P1: [0, 0], P2: [0, 60], PCT: [0, 30], S1: [50, 0], S2: [50, 60] }, draw: () => xfmr(1, 0) });
+    + coreSVG(c || 'iron', 4, 56) });
+def('transformer_pct', { cat: 'Transformer', name: 'Output transformer, primary CT', pre: 'T', value: '5 kΩ : 8 Ω', tags: 'push-pull opt', hooks: { P1: [0, 0], P2: [0, 60], PCT: [0, 30], S1: [50, 0], S2: [50, 60] }, draw: c => xfmr(1, 0, c) });
 
 /* ---- heaters (always orange) ---- */
 def('heater', { cat: 'Heater', name: 'Heater', pre: 'H', value: '6.3 V', hooks: { 1: [0, 0], 2: [40, 0] },
@@ -802,7 +816,7 @@ function shapeOf(p) {
    DOCUMENT MODEL
    project { id, name, sheets:[{ id, name, parts, wires, texts }] }
    part { id, type, x, y, rot 0-3, flip, ref, value, showRef, showVal, rdx/rdy, vdx/vdy }
-   transformers also: pri, sec (winding text), showPri, showSec (hidden until added), pdx/pdy, sdx/sdy
+   transformers also: core ('air' | 'ferrite' | 'iron' default | 'var'), pri, sec (winding text), showPri, showSec (hidden until added), pdx/pdy, sdx/sdy
    wire { id, pts:[[x,y],…] } orthogonal polyline
    text { id, x, y, text, size, tone }
    ===================================================================== */
@@ -1016,7 +1030,7 @@ function applyView() {
   $('stZoom').textContent = Math.round(view.z * 100) + '%';
 }
 function partSVG(p, extra = '') {
-  return `<g transform="translate(${p.x} ${p.y}) rotate(${(p.rot || 0) * 90}) scale(${p.flip ? -1 : 1} 1)"${extra}>${shapeOf(p).draw()}</g>`;
+  return `<g transform="translate(${p.x} ${p.y}) rotate(${(p.rot || 0) * 90}) scale(${p.flip ? -1 : 1} 1)"${extra}>${shapeOf(p).draw(isXfmr(p) ? p.core || 'iron' : undefined)}</g>`;
 }
 /* ---- pin numbers on tubes: one editable, movable label per hook ---- */
 const isTube = p => LIB[p.type].cat.startsWith('Tube');
@@ -1859,7 +1873,8 @@ function partMenu(e, raw) {
     + (selLabel ? `<button role="menuitem" data-m="edit"><span>Edit ${FIELD_NAME[selLabel.field]}</span><span>dbl-click</span></button>` : '')
     + (items.length === 1 && items[0].k === 'part' ? ['ref', 'value'].filter(f => !fieldShown(items[0].o, f)).map(f => `<button role="menuitem" data-m="show-${f}"><span>Show ${FIELD_NAME[f]}</span><span></span></button>`).join('') : '')
     + (items.length === 1 && items[0].k === 'part' && isXfmr(items[0].o) ? (() => { const q = items[0].o;
-        return `<div class="mlabel">Winding text</div>` + ['pri', 'sec'].map(f => fieldShown(q, f)
+        return `<div class="mlabel">Core</div>${CORES.map(([k, n]) => `<button role="menuitemradio" data-core="${k}" aria-checked="${(q.core || 'iron') === k}"><span>${(q.core || 'iron') === k ? '● ' : ''}${n}</span><span>${{ air: 'none', ferrite: 'dotted', iron: 'solid', var: 'arrow' }[k]}</span></button>`).join('')}`
+          + `<div class="mlabel">Winding text</div>` + ['pri', 'sec'].map(f => fieldShown(q, f)
           ? `<button role="menuitem" data-m="wedit-${f}"><span>Edit ${FIELD_NAME[f]}</span><span>dbl-click</span></button><button role="menuitem" data-m="whide-${f}"><span>Hide ${FIELD_NAME[f]}</span><span></span></button>`
           : `<button role="menuitem" data-m="wadd-${f}"><span>${(q[f] || '').trim() ? 'Show' : 'Add'} ${FIELD_NAME[f]}</span><span></span></button>`).join(''); })() : '')
     + (items.length === 1 && items[0].k === 'part' && isTube(items[0].o) ? `<button role="menuitem" data-m="pins"><span>${items[0].o.showPins ? 'Hide' : 'Show'} pin numbers</span><span></span></button>` : '')
@@ -1875,6 +1890,7 @@ function partMenu(e, raw) {
   menuEl.style.left = Math.min(e.clientX, window.innerWidth - mw - 8) + 'px';
   menuEl.style.top = Math.min(e.clientY, window.innerHeight - mh - 8) + 'px';
   menuEl.onclick = ev => { const wc = ev.target.closest('[data-wc]'); if (wc) { closeMenu(); colorWires(wc.dataset.wc); return; }
+    const cr = ev.target.closest('[data-core]'); if (cr) { closeMenu(); const q = items[0].o, k = cr.dataset.core; if ((q.core || 'iron') !== k) { snapshot(); q.core = k; render(); changed(); setMsg(`${q.ref || LIB[q.type].name}: ${CORE_NAME[k]}`); } return; }
     const vy = ev.target.closest('[data-vary]'); if (vy) { closeMenu(); setVary(items[0].o, +vy.dataset.vary); return; }
     const b = ev.target.closest('[data-m]'); if (!b) return; const m = b.dataset.m; closeMenu();
     if (m === 'edit') { const L0 = selLabel; if (L0) editInPlace(sheet.parts.find(x => x.id === L0.id), L0.field); return; }
@@ -2165,7 +2181,7 @@ function sheetSVG(withBg = true, whole = false) {
   let x0, y0, x1, y1;
   if (whole) { const [SW, SH] = sheetDims(sheet); x0 = 0; y0 = 0; x1 = SW; y1 = SH; }
   else { if (!bbs.length) return null; const pad = 16; x0 = Math.min(...bbs.map(b => b[0])) - pad; y0 = Math.min(...bbs.map(b => b[1])) - pad; x1 = Math.max(...bbs.map(b => b[2])) + pad; y1 = Math.max(...bbs.map(b => b[3])) + pad; }
-  const css = `.ink{stroke:#17120E;fill:none;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}.solid{fill:#17120E}.tgt{stroke:#2F8A45;fill:none;stroke-width:1.8;stroke-linecap:round}.env{stroke:#17120E;fill:none;stroke-width:1.8}.htr{stroke:#E8912D;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}.dash{stroke:#17120E;fill:none;stroke-width:1.6;stroke-dasharray:5 3.4}.wire{stroke:#17120E;fill:none;stroke-width:1.4;stroke-linecap:round;stroke-linejoin:round}.jdot{fill:#17120E}.lbl{font-family:'Libre Franklin','Franklin Gothic Book',Arial,sans-serif;font-size:11px;fill:#17120E}.lbl .ref,.lbl.ref{font-weight:600}.pinno{font-family:'Libre Franklin','Franklin Gothic Book',Arial,sans-serif;font-size:8.5px;fill:#17120E}.pinlead{stroke:#5C5248;stroke-width:.8;stroke-dasharray:1.2 2;fill:none}.stxt{font-family:'Libre Franklin','Franklin Gothic Book',Arial,sans-serif;white-space:pre}.fr{stroke:#17120E;fill:none;stroke-width:1.1}.fr-b{stroke:#17120E;fill:none;stroke-width:2}.fr-lab{font-family:'JetBrains Mono',Consolas,monospace;font-size:7.5px;letter-spacing:.08em;fill:#5C5248}.fr-val{font-family:'Libre Franklin','Franklin Gothic Book',Arial,sans-serif;fill:#17120E}.fr-zone{font-family:'JetBrains Mono',Consolas,monospace;font-size:10px;fill:#5C5248}.fr-co{font-family:'Big Shoulders Display','Arial Narrow',sans-serif;font-weight:800;fill:#17120E}`;
+  const css = `.ink{stroke:#17120E;fill:none;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}.solid{fill:#17120E}.tgt{stroke:#2F8A45;fill:none;stroke-width:1.8;stroke-linecap:round}.env{stroke:#17120E;fill:none;stroke-width:1.8}.htr{stroke:#E8912D;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}.dash{stroke:#17120E;fill:none;stroke-width:1.6;stroke-dasharray:5 3.4}.dotl{stroke:#17120E;fill:none;stroke-width:2;stroke-linecap:round;stroke-dasharray:0 4.2}.wire{stroke:#17120E;fill:none;stroke-width:1.4;stroke-linecap:round;stroke-linejoin:round}.jdot{fill:#17120E}.lbl{font-family:'Libre Franklin','Franklin Gothic Book',Arial,sans-serif;font-size:11px;fill:#17120E}.lbl .ref,.lbl.ref{font-weight:600}.pinno{font-family:'Libre Franklin','Franklin Gothic Book',Arial,sans-serif;font-size:8.5px;fill:#17120E}.pinlead{stroke:#5C5248;stroke-width:.8;stroke-dasharray:1.2 2;fill:none}.stxt{font-family:'Libre Franklin','Franklin Gothic Book',Arial,sans-serif;white-space:pre}.fr{stroke:#17120E;fill:none;stroke-width:1.1}.fr-b{stroke:#17120E;fill:none;stroke-width:2}.fr-lab{font-family:'JetBrains Mono',Consolas,monospace;font-size:7.5px;letter-spacing:.08em;fill:#5C5248}.fr-val{font-family:'Libre Franklin','Franklin Gothic Book',Arial,sans-serif;fill:#17120E}.fr-zone{font-family:'JetBrains Mono',Consolas,monospace;font-size:10px;fill:#5C5248}.fr-co{font-family:'Big Shoulders Display','Arial Narrow',sans-serif;font-weight:800;fill:#17120E}`;
   const body = ((whole ? $('layerFrame').innerHTML : '') + $('layerParts').innerHTML + $('layerWires').innerHTML + $('layerText').innerHTML).replace(/var\(--ink\)/g, '#17120E').replace(/var\(--paper\)/g, '#FBF8F3');
   return { w: x1 - x0, h: y1 - y0, svg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${x0} ${y0} ${x1 - x0} ${y1 - y0}" width="${x1 - x0}" height="${y1 - y0}"><style>${css}</style>${withBg ? `<rect x="${x0}" y="${y0}" width="${x1 - x0}" height="${y1 - y0}" fill="#FBF8F3"/>` : ''}${body}</svg>` };
 }

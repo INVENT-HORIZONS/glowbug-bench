@@ -759,7 +759,10 @@ const triodeBody = () => ci(0, 0, 30, 'env') + ln(-17, -15, 17, -15) + ln(0, -15
 const ST12AX7 = {
   A: { hooks: { P: [0, -50], G: [-50, 0], K: [-20, 50], H1: [-10, 50], HCT: [0, 50], H2: [10, 50] },
        draw: () => triodeBody() + cath(-20, 19, 10, -20, 50) + pl([[-10, 50], [-10, 27], [0, 17], [10, 27], [10, 50]], 'htr') + ln(0, 17, 0, 50, 'htr'),
-       pins: { P: { t: '1' }, G: { t: '2' }, K: { t: '3' }, H1: { t: '4' }, HCT: { t: '9' }, H2: { t: '5' } } },
+       pins: { P: { t: '1' }, G: { t: '2' }, K: { t: '3' }, H1: { t: '4' }, HCT: { t: '9' }, H2: { t: '5' } },
+       // the same section with its heater hidden (p.noHeater). The cathode stays where it was, so no pin moves and a
+       // wire left on a heater pin can never land on the cathode.
+       bare: { hooks: { P: [0, -50], G: [-50, 0], K: [-20, 50] }, draw: () => triodeBody() + cath(-20, 19, 10, -20, 50) } },
   B: { hooks: { P: [0, -50], G: [-50, 0], K: [-10, 50] },
        draw: () => triodeBody() + cath(-10, 12, 10, -10, 50),
        pins: { P: { t: '6' }, G: { t: '7' }, K: { t: '8' } } },
@@ -791,6 +794,12 @@ function addSection(p, u) {
     showRef: p.showRef !== false, showVal: p.showVal !== false, lx: 0, ly: 0, grp: p.grp }, u);
   sheet.parts.push(q); sel.clear(); sel.add(q.id); render(); renderSel(); changed();
   setMsg(`Placed ${refText(q)}. Drag it wherever that section belongs.`);
+}
+// hide or show a section's heater; only the heater pins come and go, and wires on them stay where they are
+function setHeater(p, on) {
+  const S = LIB[p.type].units && LIB[p.type].units[unitOf(p)]; if (!S || !S.bare || !p.noHeater === on) return;
+  reshape(p, q => { q.noHeater = !on; }, {}, `${refText(p)}: heater ${on ? 'shown' : 'hidden'}`);
+  renderSel();
 }
 function setTubeType(p, t) {
   if (!t || p.value === t) return;
@@ -941,7 +950,7 @@ const varyN = p => varyVal(p, varyList(LIB[p.type])[0]);
 function shapeOf(p) {
   const L = LIB[p.type];
   if (L.units) {   // stock part: the shape of its section
-    const U = L.units[unitOf(p)];
+    const S = L.units[unitOf(p)], U = p.noHeater && S.bare ? S.bare : S;
     if (!U.bb) U.bb = measureBB(U.draw, U.hooks);
     return U;
   }
@@ -1582,6 +1591,7 @@ function renderProps() {
       ${L.family ? `<div class="field"><label for="pTube">Tube type</label><select id="pTube">${(L.family.includes(p.value) ? L.family : [p.value, ...L.family]).map(t => `<option${t === p.value ? ' selected' : ''}>${esc(t)}</option>`).join('')}</select></div>` : ''}
       ${L.units ? (() => { const have = groupOf(p).map(unitOf), miss = unitsOf(L).filter(u => !have.includes(u));
         return `<div class="field"><label>Section</label><span>${esc(refText(p))}${miss.length ? '' : ` · all ${unitsOf(L).length} placed`}</span></div>`
+          + (L.units[unitOf(p)].bare ? `<div class="field"><label>Heater</label><label style="display:flex;gap:5px;align-items:center;color:inherit"><input type="checkbox" id="pHtr"${p.noHeater ? '' : ' checked'}> show heater</label></div>` : '')
           + (miss.length ? `<div class="row-btns">${miss.map(u => `<button data-act="unit-${u}">Add section ${u}</button>`).join('')}</div>` : ''); })() : ''}
       ${p.type === 'diode_led' ? `<div class="field"><label for="pLed">Color</label><select id="pLed">${LED_COLORS.map(([k, n]) => `<option value="${k}"${k === ledCol(p) ? ' selected' : ''}>${n}</option>`).join('')}</select></div>` : ''}
       ${isXfmr(p) ? `<div class="field"><label>Outline</label><label style="display:flex;gap:5px;align-items:center;color:inherit"><input type="checkbox" id="pXbox"${p.box ? ' checked' : ''}> light gray box</label></div>` : ''}
@@ -1598,6 +1608,7 @@ function renderProps() {
     varyList(L).forEach((v, k) => { $('pVary' + k).onchange = e => setVary(p, +e.target.value, v.key); });
     $('pShowR').onchange = e => { snapshot(); p.showRef = e.target.checked; render(); changed(); };
     $('pShowV').onchange = e => { snapshot(); p.showVal = e.target.checked; render(); changed(); };
+    if ($('pHtr')) $('pHtr').onchange = e => setHeater(p, e.target.checked);
     if ($('pTube')) $('pTube').onchange = e => setTubeType(p, e.target.value);
     if ($('pLed')) $('pLed').onchange = e => setLedColor(p, e.target.value);
     if ($('pXbox')) $('pXbox').onchange = e => { snapshot(); p.box = e.target.checked; render(); renderSel(); changed(); };
@@ -2156,7 +2167,8 @@ function partMenu(e, raw) {
         return (L.family ? `<div class="mlabel">Tube type</div><div class="chips wide">${L.family.map(t => `<button class="chip" data-tube="${esc(t)}" aria-pressed="${t === q.value}">${esc(t)}</button>`).join('')}</div>` : '')
           + `<div class="mlabel">Sections</div>` + unitsOf(L).map(u => have.includes(u)
             ? `<button role="menuitem" disabled><span>${esc(q.ref || L.pre + '?')}${u} placed</span><span>✓</span></button>`
-            : `<button role="menuitem" data-m="unit-${u}"><span>Add section ${u} (${esc(q.ref || L.pre + '?')}${u})</span><span></span></button>`).join(''); })() : '')
+            : `<button role="menuitem" data-m="unit-${u}"><span>Add section ${u} (${esc(q.ref || L.pre + '?')}${u})</span><span></span></button>`).join('')
+          + (L.units[unitOf(q)].bare ? `<button role="menuitem" data-m="heater"><span>${q.noHeater ? 'Show' : 'Hide'} heater</span><span>pins ${Object.entries(L.units[unitOf(q)].pins).filter(([k]) => /^H/.test(k)).map(([, v]) => v.t).join(', ')}</span></button>` : ''); })() : '')
     + (items.length === 1 && items[0].k === 'part' && items[0].o.type === 'diode_led' ? (() => { const cur = ledCol(items[0].o);
         return `<div class="mlabel">LED color</div>` + LED_COLORS.map(([k, n, hex]) => `<button role="menuitemradio" data-led="${k}" aria-checked="${k === cur}"><span><i style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${hex};margin-right:7px;vertical-align:-1px;box-shadow:0 0 0 1px rgba(0,0,0,.15)"></i>${n}</span><span>${k === cur ? '●' : ''}</span></button>`).join(''); })() : '')
     + (items.length === 1 && items[0].k === 'part' && LIB[items[0].o.type].windings ? `<button role="menuitem" data-m="windings"><span>Configure windings…</span><span></span></button>` : '')
@@ -2178,6 +2190,7 @@ function partMenu(e, raw) {
     const vy = ev.target.closest('[data-vary]'); if (vy) { closeMenu(); const [vk, vn] = vy.dataset.vary.split(':'); setVary(items[0].o, +vn, vk); return; }
     const b = ev.target.closest('[data-m]'); if (!b) return; const m = b.dataset.m; closeMenu();
     if (m === 'edit') { const L0 = selLabel; if (L0) editInPlace(sheet.parts.find(x => x.id === L0.id), L0.field); return; }
+    if (m === 'heater') { setHeater(items[0].o, !!items[0].o.noHeater); return; }
     if (m.startsWith('unit-')) { addSection(items[0].o, m.slice(5)); return; }
     if (m === 'xbox') { const q = items[0].o; snapshot(); q.box = !q.box; render(); renderSel(); changed(); setMsg(`${q.ref || LIB[q.type].name}: gray outline box ${q.box ? 'on' : 'off'}`); return; }
     if (m === 'windings') { windingDialog(items[0].o); return; }

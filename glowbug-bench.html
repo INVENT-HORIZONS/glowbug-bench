@@ -752,7 +752,7 @@ def('m_beam_ih', { cat: 'Tube, modern', name: 'Beam power, filament', pre: 'V', 
 /* ---- Stock tubes (types m_st_*): real tubes with their pinout. A stock part can have sections (p.unit 'A', 'B'),
    each placed on its own and linked by p.grp; the ref shows as V1A, V1B. Every section shares the ref and the
    tube type (the value). Pin numbers are filled in and shown when placed. ---- */
-// ---- Stock rectifiers (stock: 'rect'; listed under "Stock: rectifiers", 5AR4 first). Single section, so the ref has no letter.
+// ---- Stock rectifiers (stock: 'rect'; listed under "Stock: rectifiers" in alphabetical order by name). Single section, so the ref has no letter.
 // 5AR4 / GZ34 (r-type.org base table): pin 1 internal, 2 heater, 4 anode 2, 6 anode 1, 8 heater + cathode. Indirectly
 // heated with the cathode tied to the heater at pin 8 inside the tube, so the cathode has no pin of its own.
 const FAM_5AR4 = ['5AR4', 'GZ34', 'CV1377', 'U77'];
@@ -763,6 +763,13 @@ def('m_st_5ar4', { cat: 'Tube, modern', stock: 'rect', name: '5AR4 family', pre:
     + ln(-26, 5, 26, 5) + ln(26, 5, 26, 24) + ln(26, 24, 10, 24) + ci(10, 24, 1.8, 'solid')
     + pl([[-10, 50], [-10, 21], [0, 12], [10, 21], [10, 50]], 'htr'),
   pins: { P1: { t: '4' }, P2: { t: '6' }, H1: { t: '2' }, H2: { t: '8' } } });
+// 5R4 (r-type.org 5R4GYB base table): pin 2 filament, 4 anode 2, 6 anode 1, 8 filament. Directly heated; same pins as the 5U4.
+const FAM_5R4 = ['5R4G', '5R4GY', '5R4GYA', '5R4GYB', '5R4GB', '5R4WGY', '5R4WGB', 'CV717'];
+def('m_st_5r4', { cat: 'Tube, modern', stock: 'rect', name: '5R4 family', pre: 'V', value: '5R4GY', family: FAM_5R4,
+  tags: 'stock rectifier full-wave octal directly heated filament high voltage 5r4 ' + FAM_5R4.join(' ').toLowerCase(),
+  hooks: { P1: [-20, -50], P2: [20, -50], F1: [-10, 50], F2: [10, 50] },
+  draw: () => pa(stadium(20, 30), 'env') + ln(-32, -10, -8, -10) + ln(8, -10, 32, -10) + ln(-20, -10, -20, -50) + ln(20, -10, 20, -50) + filV(8, 24, 50),
+  pins: { P1: { t: '4' }, P2: { t: '6' }, F1: { t: '2' }, F2: { t: '8' } } });
 // 5U4 (r-type.org base table): pin 2 filament, 4 anode 2, 6 anode 1, 8 filament (and cathode: the B+ side). Directly heated.
 const FAM_5U4 = ['5U4G', '5U4GA', '5U4GB', '5U4GT', '5U4GTY', '5AS4', '5AS4A', '5Z3S', 'U52', 'GZ31', 'VT-244', 'CV575', 'CV684'];
 def('m_st_5u4', { cat: 'Tube, modern', stock: 'rect', name: '5U4 family', pre: 'V', value: '5U4GB', family: FAM_5U4,
@@ -1604,7 +1611,8 @@ function renderLib() {
       // two stock groups: rectifiers (defs with stock: 'rect') above signal tubes (every other m_st_ type). An empty group
       // still shows its header with a note, except during a search.
       const stockGrp = (label, list, none) => list.length ? grp(label, list) : q ? '' : `<div class="subcat">${label}</div><div class="subnote">${none}</div>`;
-      const stRect = stock.filter(L => L.stock === 'rect'), stSig = stock.filter(L => L.stock !== 'rect');
+      const stRect = stock.filter(L => L.stock === 'rect').sort((a, b) => a.name.localeCompare(b.name)),   // rectifiers in alphabetical order
+         stSig = stock.filter(L => L.stock !== 'rect');
       body = grp('Directly heated', direct) + grp('Cathode only', kOnly) + grp('Indirectly heated', withHtr)
         + stockGrp('Stock: rectifiers', stRect, 'No stock rectifiers yet.') + stockGrp('Stock: signal tubes', stSig, 'No stock signal tubes yet.')
         + grp('Gas-filled', gas) + grp('Specialized', sp);

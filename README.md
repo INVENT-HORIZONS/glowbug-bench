@@ -6,7 +6,7 @@ Open `glowbug-bench.html` in any modern browser. Everything is in the one file; 
 
 ## Features
 
-- **Symbol library (77 parts):** passives, transformers (isolation, step-up, step-down, and a tall versatile transformer with 0 to 6 taps on each winding), heaters, power, semiconductors (diodes including an LED, BJTs, Darlingtons, JFETs and MOSFETs), misc, modern tubes (including gas-filled rectifiers, glow regulators, thyratrons, a photomultiplier and two- and single-section electron-ray "magic eyes"), and 1920s and 1930s period tubes for the Vintage Tube spotlight.
+- **Symbol library (78 parts):** passives, transformers (isolation, step-up, step-down, and a tall versatile transformer with 0 to 6 taps on each winding), heaters, power, semiconductors (diodes including an LED, BJTs, Darlingtons, JFETs and MOSFETs), misc, modern tubes (including gas-filled rectifiers, glow regulators, thyratrons, a photomultiplier and two- and single-section electron-ray "magic eyes"), and 1920s and 1930s period tubes for the Vintage Tube spotlight.
 - **Hooks on a 0.1 in grid:** every connection point lands on the grid, even after rotating or flipping. Ref des and value labels move on a finer 0.05 in grid.
 - **Wiring:** click a hook to start, click to add corners, and finish on a hook or wire. Space flips the corner. Junction dots appear automatically.
 - **Wire colors:** black, red, green, blue, brown and orange. Pick the color for new wires from the swatch under the Wire tool; recolor existing wires from the properties panel or the right-click menu.
@@ -24,6 +24,7 @@ Open `glowbug-bench.html` in any modern browser. Everything is in the one file; 
 - **Hide a tube's heater:** right-click any indirectly heated tube (or untick show heater in Properties) to draw it without its heater. Only the heater connections go away; every other connection stays exactly where it was, so wires stay on. This replaces the old cathode-only tubes.
 - **Stock tubes:** real tubes with their pinout, in two Stock groups under Tube, modern: Stock: rectifiers, then Stock: signal tubes.
   - **5AR4 family** (rectifier): plates on pins 4 and 6, heater on pins 2 and 8, with the cathode tied to pin 8 inside the tube. Tube types 5AR4, GZ34, CV1377, U77.
+  - **5R4 family** (rectifier): plates on pins 4 and 6, filament on pins 2 and 8. Tube types 5R4G, 5R4GY, 5R4GYA, 5R4GYB, 5R4GB, 5R4WGY, 5R4WGB, CV717.
   - **5U4 family** (rectifier): plates on pins 4 and 6, filament on pins 2 and 8 (pin 8 is the B+ side). Tube types 5U4G, 5U4GA, 5U4GB, 5U4GT, 5U4GTY, 5AS4, 5AS4A, 5Z3S, U52, GZ31, VT-244, CV575, CV684.
   - **12AX7 family:** a twin triode with pin numbers already filled in. Section A (V1A) is plate 1, grid 2, cathode 3 and carries the heater (pins 4 and 5, center tap 9); section B (V1B) is plate 6, grid 7, cathode 8. Place A, then right-click (or use Properties) and choose Add section B; drag each section wherever it belongs on the sheet. Right-click V1A (or use Properties) to hide or show its heater; the plate, grid and cathode stay put, and the heater pin numbers come back when you show it again.
   - **Tube type:** right-click either section to pick 12AX7, 12AT7, 12AU7, 12AY7, 12AV7, 12AZ7, 12BZ7, 12DW7, 5751, 7025, 6072, 6201, 6681, 5814, 6189, ECC81, ECC82 or ECC83 (same 9A pinout). Both sections change together, and renaming the ref on either renames both.

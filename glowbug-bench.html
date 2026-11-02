@@ -1670,15 +1670,15 @@ function renderLib() {
     const open = q || !libClosed.has(cat) ? ' open' : '';
     const tile = L => `<button class="tile${placeType === L.type && mode === 'place' ? ' armed' : ''}" data-type="${L.type}" title="${esc(L.name)} · ${Object.keys(L.hooks).length} hooks">${thumb(L.type)}<span>${esc(L.name)}</span></button>`;
     let body;
+    // each subgroup (Tube, modern; Semiconductors) folds on its own; closed ones are remembered in gs.closed as "<group>|<label>", and a search opens them all
+    const sub = (label, n, inner) => `<details class="subgrp" data-cat="${esc(cat + '|' + label)}"${q || !libClosed.has(cat + '|' + label) ? ' open' : ''}><summary class="subcat">${label}<small>${n || ''}</small></summary>${inner}</details>`;
+    const grp = (label, list) => list.length ? sub(label, list.length, `<div class="tiles">${list.map(tile).join('')}</div>`) : '';
     if (cat === 'Tube, modern') {
       // filament (directly heated) tubes first, in their own group, then everything with a cathode
       // Stock (types starting m_st_): real tubes by part number. Shown even while empty, except during a search.
       const isGas = L => /^m_gas/.test(L.type), isSp = L => /^m_sp_/.test(L.type), isSt = L => /^m_st_/.test(L.type);
       const vac = items.filter(L => !isGas(L) && !isSp(L) && !isSt(L)), gas = items.filter(isGas), sp = items.filter(isSp), stock = items.filter(isSt);
       const direct = vac.filter(isDirect), withHtr = vac.filter(L => !isDirect(L) && /_ih$/.test(L.type)), kOnly = vac.filter(L => !isDirect(L) && !/_ih$/.test(L.type));
-      // each subgroup folds on its own; closed ones are remembered in gs.closed as "Tube, modern|<label>", and a search opens them all
-      const sub = (label, n, inner) => `<details class="subgrp" data-cat="${esc(cat + '|' + label)}"${q || !libClosed.has(cat + '|' + label) ? ' open' : ''}><summary class="subcat">${label}<small>${n || ''}</small></summary>${inner}</details>`;
-      const grp = (label, list) => list.length ? sub(label, list.length, `<div class="tiles">${list.map(tile).join('')}</div>`) : '';
       // three stock groups: rectifiers (stock: 'rect'), signal tubes (no stock key), All American Five (stock: 'aa5'). An empty group
       // still shows its header with a note, except during a search.
       const stockGrp = (label, list, none) => list.length ? grp(label, list) : q ? '' : sub(label, 0, `<div class="subnote">${none}</div>`);
@@ -1689,10 +1689,10 @@ function renderLib() {
         + stockGrp('Stock: All American Five', stAA5, 'No All American Five tubes yet.')
         + grp('Gas-filled', gas) + grp('Specialized', sp);
     } else if (cat === 'Semiconductors') {
-      // diodes, then bipolar transistors, then FETs, each group starting a fresh row
+      // diodes, then bipolar transistors (and Darlingtons), then FETs, each its own folding group
       const dio = items.filter(L => /^diode/.test(L.type)), bjt = items.filter(L => /^(npn|pnp)/.test(L.type));
       const fet = items.filter(L => !dio.includes(L) && !bjt.includes(L));
-      body = [dio, bjt, fet].filter(l => l.length).map(l => `<div class="tiles">${l.map(tile).join('')}</div>`).join('');
+      body = grp('Diodes', dio) + grp('Bipolar transistors', bjt) + grp('Field effect transistors', fet);
     } else body = `<div class="tiles">${items.map(tile).join('')}</div>`;
     return `<details class="cat" data-cat="${cat}"${open}><summary>${cat}<small>${items.length}</small></summary>${body}</details>`;
   }).join('') || `<p class="props empty" style="padding:8px">No part matches “${esc(q)}”.</p>`;

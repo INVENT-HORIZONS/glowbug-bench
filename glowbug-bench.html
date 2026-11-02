@@ -818,7 +818,7 @@ stockRectIH('m_st_6x5', '6X5 family', '6X5GT', FAM_6X5, 'octal 6x5',
 // gets its own hook (HT). Own cathode pin, so it can hide its heater (tap included).
 const FAM_35W4 = ['35W4', 'HY90'];
 const hwBody = () => ci(0, 0, 30, 'env') + ln(-17, -10, 17, -10) + ln(0, -10, 0, -50) + cath(-20, 19, 8, -20, 50);
-def('m_st_35w4', { cat: 'Tube, modern', stock: 'rect', name: '35W4 family', pre: 'V', value: '35W4', family: FAM_35W4,
+def('m_st_35w4', { cat: 'Tube, modern', stock: 'rect', alsoIn: ['aa5'], name: '35W4 family', pre: 'V', value: '35W4', family: FAM_35W4,
   tags: 'stock rectifier half-wave 7-pin miniature b7g indirectly heated series heater pilot lamp tap all american five 35w4 hy90',
   hooks: { P: [0, -50], K: [-20, 50], H1: [-10, 50], HT: [0, 50], H2: [10, 50] },
   draw: () => hwBody() + pl([[-10, 50], [-10, 26], [0, 16], [10, 26], [10, 50]], 'htr') + ln(0, 16, 0, 50, 'htr'),
@@ -1674,7 +1674,7 @@ function renderLib() {
       // still shows its header with a note, except during a search.
       const stockGrp = (label, list, none) => list.length ? grp(label, list) : q ? '' : `<div class="subcat">${label}</div><div class="subnote">${none}</div>`;
       const stRect = stock.filter(L => L.stock === 'rect').sort((a, b) => a.name.localeCompare(b.name, 'en', { numeric: true })),   // rectifiers in order, numbers read as numbers (6X5 before 35W4)
-         stSig = stock.filter(L => !L.stock), stAA5 = stock.filter(L => L.stock === 'aa5');   // aa5: All American Five set tubes
+         stSig = stock.filter(L => !L.stock), stAA5 = stock.filter(L => L.stock === 'aa5' || (L.alsoIn || []).includes('aa5'));   // aa5: All American Five set tubes; alsoIn shows a part in a second group too
       body = grp('Directly heated', direct) + grp('Cathode only', kOnly) + grp('Indirectly heated', withHtr)
         + stockGrp('Stock: rectifiers', stRect, 'No stock rectifiers yet.') + stockGrp('Stock: signal tubes', stSig, 'No stock signal tubes yet.')
         + stockGrp('Stock: All American Five', stAA5, 'No All American Five tubes yet.')

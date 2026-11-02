@@ -524,11 +524,11 @@ def('cap_film', { cat: 'Passive', name: 'Film capacitor', pre: 'C', value: '0.1 
   draw: () => ln(0, 0, 17, 0) + ln(17, -10, 17, 10) + pa('M26 -10 Q21 0 26 10') + ln(23.5, 0, 40, 0) });
 def('electrolytic', { cat: 'Passive', name: 'Electrolytic', pre: 'C', value: '47 µF 450 V', hooks: { '+': [0, 0], '−': [40, 0] },
   draw: () => ln(0, 0, 17, 0) + ln(17, -10, 17, 10) + pa('M26 -10 Q21 0 26 10') + ln(23, 0, 40, 0) + ln(8, -10, 8, -4) + ln(5, -7, 11, -7) });
-// Inductor with a core (Larry merged the choke into it): p.core is air (the default: no lines), ferrite (dotted), iron
+// Inductor with a core (Larry merged the choke into it): p.core is air (the default: no lines), ferrite (dashed), iron
 // (two solid lines above the coil, the old choke look) or var (iron plus a diagonal adjust arrow), from the right-click
 // menu like the transformers. Saved chokes load as iron-core inductors.
 function inductorCore(c) {
-  if (c === 'ferrite') return ln(10, -9, 50, -9, 'dotl') + ln(10, -12, 50, -12, 'dotl');
+  if (c === 'ferrite') return ln(10, -9, 50, -9, 'dash') + ln(10, -12, 50, -12, 'dash');
   if (c !== 'iron' && c !== 'var') return '';
   let s = ln(10, -9, 50, -9) + ln(10, -12, 50, -12);
   if (c === 'var') {
@@ -620,16 +620,16 @@ def('pmos', { cat: 'Semiconductors', name: 'P-channel MOSFET, enhancement', pre:
 def('pmos_dep', { cat: 'Semiconductors', name: 'P-channel MOSFET, depletion', pre: 'Q', value: '', tags: 'mosfet fet p channel depletion', hooks: MOS_H, draw: () => mosfet(1, PARR) });
 
 /* ---- transformers ---- */
-// transformer core between the windings: air (none), ferrite (dotted), iron (solid, the default) or variable (iron + adjust arrow)
+// transformer core between the windings: air (none), ferrite (dashed), iron (solid, the default) or variable (iron + adjust arrow)
 const CORES = [['air', 'Air'], ['ferrite', 'Ferrite'], ['iron', 'Iron'], ['var', 'Variable']];
 const CORE_NAME = { air: 'air core', ferrite: 'ferrite core', iron: 'iron core', var: 'variable core' };
 // a part's core: transformers default to iron, a def can set its own default (coreDef: the inductor's is air)
 const coreOf = p => p.core || (LIB[p.type] && LIB[p.type].coreDef) || 'iron';
 // the Core section of the right-click menu, shared by transformers and the inductor
-const coreMenu = q => `<div class="mlabel">Core</div>${CORES.map(([k, n]) => `<button role="menuitemradio" data-core="${k}" aria-checked="${coreOf(q) === k}"><span>${coreOf(q) === k ? '● ' : ''}${n}</span><span>${{ air: 'none', ferrite: 'dotted', iron: 'solid', var: 'arrow' }[k]}</span></button>`).join('')}`;
+const coreMenu = q => `<div class="mlabel">Core</div>${CORES.map(([k, n]) => `<button role="menuitemradio" data-core="${k}" aria-checked="${coreOf(q) === k}"><span>${coreOf(q) === k ? '● ' : ''}${n}</span><span>${{ air: 'none', ferrite: 'dashed', iron: 'solid', var: 'arrow' }[k]}</span></button>`).join('')}`;
 function coreSVG(c, y0, y1) {
   if (c === 'air') return '';
-  if (c === 'ferrite') return ln(22, y0, 22, y1, 'dotl') + ln(28, y0, 28, y1, 'dotl');
+  if (c === 'ferrite') return ln(22, y0, 22, y1, 'dash') + ln(28, y0, 28, y1, 'dash');   // ferrite: dashed (Larry: dashes, not dots)
   let s = ln(22, y0, 22, y1) + ln(28, y0, 28, y1);
   if (c === 'var') {   // adjustable core: arrow up and to the right across the core
     const ax = 12, ay = y1 - 6, bx = 38, by = y0 + 6, L = Math.hypot(bx - ax, by - ay), ux = (bx - ax) / L, uy = (by - ay) / L, hx = bx - ux * 8, hy = by - uy * 8;

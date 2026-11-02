@@ -813,6 +813,17 @@ stockRectIH('m_st_6x4', '6X4 family', '6X4', FAM_6X4, '7-pin miniature b7g 6x4',
 const FAM_6X5 = ['6X5GT', '6X5', '6X5G', '6X5GT/G', '6X5WGT', 'EZ35', 'CV573', 'CV574', 'VT-126B', 'U70', 'U147', '6Ц5С'];
 stockRectIH('m_st_6x5', '6X5 family', '6X5GT', FAM_6X5, 'octal 6x5',
   { P1: { t: '3' }, P2: { t: '5' }, K: { t: '8' }, H1: { t: '2' }, H2: { t: '7' } });
+// 35W4 (r-type.org B7G table): pin 3 and 4 heater, 5 anode, 6 heater tap (about 7.5 V, for a panel lamp), 7 cathode; 1, 2 nc.
+// Half-wave, for series-heater sets. Drawn like the indirectly heated diode with a tap line down from the heater; the tap
+// gets its own hook (HT). Own cathode pin, so it can hide its heater (tap included).
+const FAM_35W4 = ['35W4', 'HY90'];
+const hwBody = () => ci(0, 0, 30, 'env') + ln(-17, -10, 17, -10) + ln(0, -10, 0, -50) + cath(-20, 19, 8, -20, 50);
+def('m_st_35w4', { cat: 'Tube, modern', stock: 'rect', name: '35W4 family', pre: 'V', value: '35W4', family: FAM_35W4,
+  tags: 'stock rectifier half-wave 7-pin miniature b7g indirectly heated series heater pilot lamp tap all american five 35w4 hy90',
+  hooks: { P: [0, -50], K: [-20, 50], H1: [-10, 50], HT: [0, 50], H2: [10, 50] },
+  draw: () => hwBody() + pl([[-10, 50], [-10, 26], [0, 16], [10, 26], [10, 50]], 'htr') + ln(0, 16, 0, 50, 'htr'),
+  bare: { hooks: { P: [0, -50], K: [-20, 50] }, draw: hwBody },
+  pins: { P: { t: '5' }, K: { t: '7' }, H1: { t: '3' }, HT: { t: '6' }, H2: { t: '4' } } });
 // 12AX7 family: twin triodes on the 9A noval base. Section A: plate 1, grid 2, cathode 3, with the heater
 // (pins 4 and 5, centre tap 9). Section B: plate 6, grid 7, cathode 8.
 const FAM_12AX7 = ['12AX7', '12AT7', '12AU7', '12AY7', '12AV7', '12AZ7', '12BZ7', '12DW7', '5751', '7025', '6072', '6201', '6681', '5814', '6189', 'ECC81', 'ECC82', 'ECC83'];
@@ -1647,7 +1658,7 @@ function renderLib() {
       // two stock groups: rectifiers (defs with stock: 'rect') above signal tubes (every other m_st_ type). An empty group
       // still shows its header with a note, except during a search.
       const stockGrp = (label, list, none) => list.length ? grp(label, list) : q ? '' : `<div class="subcat">${label}</div><div class="subnote">${none}</div>`;
-      const stRect = stock.filter(L => L.stock === 'rect').sort((a, b) => a.name.localeCompare(b.name)),   // rectifiers in alphabetical order
+      const stRect = stock.filter(L => L.stock === 'rect').sort((a, b) => a.name.localeCompare(b.name, 'en', { numeric: true })),   // rectifiers in order, numbers read as numbers (6X5 before 35W4)
          stSig = stock.filter(L => L.stock !== 'rect');
       body = grp('Directly heated', direct) + grp('Cathode only', kOnly) + grp('Indirectly heated', withHtr)
         + stockGrp('Stock: rectifiers', stRect, 'No stock rectifiers yet.') + stockGrp('Stock: signal tubes', stSig, 'No stock signal tubes yet.')

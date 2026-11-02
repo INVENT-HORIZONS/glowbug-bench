@@ -696,6 +696,14 @@ def('speaker', { cat: 'Misc', name: 'Speaker', pre: 'LS', value: '8 Ω', hooks: 
 
 /* ---- modern tubes (dashed grids, inverted-T plates, heaters left out) ---- */
 const cath = (x1, x2, y, lx, ly) => ln(x1, y, x2, y) + ln(x2, y, x2, y + 5) + ln(lx, y, lx, ly);   // inverted L + lead
+// Tube grid, Larry's look (2026-11-02): the solid lead from the hook stops 2 short of the old inner end x0, then after one
+// dash gap the grid runs as whole even dashes (the 'dash' class: dash 5, gap 3.4) as far across the bulb as fits, ending on a
+// full dash at least 4.5 inside the glass. x0 is the grid's inner end on the lead side, hx the hook x, r the bulb radius.
+const grid = (y, x0, hx, r) => {
+  const s = Math.sign(hx), le = x0 + 2 * s, ds = le - 3.4 * s, far = Math.sqrt(r * r - y * y) - 4.5;
+  const n = Math.max(1, Math.floor((far + s * ds + 3.4) / 8.4)), de = ds - s * (n * 8.4 - 3.4);
+  return ln(+ds.toFixed(2), y, +de.toFixed(2), y, 'dash') + ln(hx, y, le, y);
+};
 const filV = (apex, legY, end, x = 10) => pl([[-x, end], [-x, legY], [0, apex], [x, legY], [x, end]], 'htr');
 def('m_diode_dh', { cat: 'Tube, modern', name: 'Diode, direct', pre: 'V', value: '81', tags: 'directly heated filament', hooks: { P: [0, -50], F1: [-10, 50], F2: [10, 50] },
   draw: () => ci(0, 0, 30, 'env') + ln(-12, -8, 12, -8) + ln(0, -8, 0, -50) + filV(6, 24, 50) });
@@ -712,44 +720,44 @@ def('m_rect_ih', { cat: 'Tube, modern', name: 'Full-wave rectifier, indirect', p
   draw: () => pa(stadium(20, 30), 'env') + ln(-32, -10, -8, -10) + ln(8, -10, 32, -10) + ln(-20, -10, -20, -50) + ln(20, -10, 20, -50) + cath(-30, 30, 10, -30, 50)
     + pl([[-10, 50], [-10, 27], [0, 17], [10, 27], [10, 50]], 'htr') });
 def('m_triode_dh', { cat: 'Tube, modern', name: 'Triode, direct', pre: 'V', value: '2A3', tags: '300b 45 directly heated', hooks: { P: [0, -50], G: [-50, 0], F1: [-10, 50], F2: [10, 50] },
-  draw: () => ci(0, 0, 30, 'env') + ln(-12, -15, 12, -15) + ln(0, -15, 0, -50) + ln(-15, 0, 15, 0, 'dash') + ln(-50, 0, -15, 0) + filV(10, 24, 50) });
+  draw: () => ci(0, 0, 30, 'env') + ln(-12, -15, 12, -15) + ln(0, -15, 0, -50) + grid(0, -15, -50, 30) + filV(10, 24, 50) });
 def('m_triode', { cat: 'Tube, modern', name: 'Triode', pre: 'V', value: '6J5', tags: '12ax7 half 6sn7', hooks: { P: [0, -50], G: [-50, 0], K: [-10, 50] },
-  draw: () => ci(0, 0, 30, 'env') + ln(-12, -15, 12, -15) + ln(0, -15, 0, -50) + ln(-15, 0, 15, 0, 'dash') + ln(-50, 0, -15, 0) + cath(-10, 12, 15, -10, 50) });
+  draw: () => ci(0, 0, 30, 'env') + ln(-12, -15, 12, -15) + ln(0, -15, 0, -50) + grid(0, -15, -50, 30) + cath(-10, 12, 15, -10, 50) });
 def('m_triode_ih', { cat: 'Tube, modern', name: 'Triode, indirect', pre: 'V', value: '6J5', tags: '12ax7 half 6sn7 indirectly heated heater', hooks: { P: [0, -50], G: [-50, 0], K: [-20, 50], H1: [-10, 50], H2: [10, 50] },
-  draw: () => ci(0, 0, 30, 'env') + ln(-17, -15, 17, -15) + ln(0, -15, 0, -50) + ln(-17, 0, 17, 0, 'dash') + ln(-50, 0, -17, 0) + cath(-20, 19, 10, -20, 50)
+  draw: () => ci(0, 0, 30, 'env') + ln(-17, -15, 17, -15) + ln(0, -15, 0, -50) + grid(0, -17, -50, 30) + cath(-20, 19, 10, -20, 50)
     + pl([[-10, 50], [-10, 27], [0, 17], [10, 27], [10, 50]], 'htr') });
 def('m_twin', { cat: 'Tube, modern', name: 'Twin triode', pre: 'V', value: '12AX7', tags: '12au7 12at7 6sn7 ecc83', hooks: { P1: [-30, -50], G1: [-70, 0], K1: [-40, 50], P2: [30, -50], G2: [70, 0], K2: [20, 50] },
   draw: () => pa(stadium(30, 30), 'env')
     + ln(-42, -15, -18, -15) + ln(-30, -15, -30, -50) + ln(-45, 0, -15, 0, 'dash') + ln(-70, 0, -45, 0) + cath(-40, -18, 15, -40, 50)
     + ln(18, -15, 42, -15) + ln(30, -15, 30, -50) + ln(15, 0, 45, 0, 'dash') + ln(45, 0, 70, 0) + cath(20, 42, 15, 20, 50) });
 def('m_tetrode_dh', { cat: 'Tube, modern', name: 'Tetrode, direct', pre: 'V', value: '22', tags: 'directly heated filament screen grid', hooks: { P: [0, -60], G2: [60, -10], G1: [-60, 0], F1: [-10, 60], F2: [10, 60] },
-  draw: () => ci(0, 0, 40, 'env') + ln(-15, -22, 15, -22) + ln(0, -22, 0, -60) + ln(-18, -10, 18, -10, 'dash') + ln(18, -10, 60, -10)
-    + ln(-18, 0, 18, 0, 'dash') + ln(-60, 0, -18, 0) + filV(12, 32, 60) });
+  draw: () => ci(0, 0, 40, 'env') + ln(-15, -22, 15, -22) + ln(0, -22, 0, -60) + grid(-10, 18, 60, 40)
+    + grid(0, -18, -60, 40) + filV(12, 32, 60) });
 def('m_tetrode', { cat: 'Tube, modern', name: 'Tetrode', pre: 'V', value: '24-A', hooks: { P: [0, -60], G2: [60, -10], G1: [-60, 0], K: [-10, 60] },
-  draw: () => ci(0, 0, 40, 'env') + ln(-15, -22, 15, -22) + ln(0, -22, 0, -60) + ln(-18, -10, 18, -10, 'dash') + ln(18, -10, 60, -10)
-    + ln(-18, 0, 18, 0, 'dash') + ln(-60, 0, -18, 0) + cath(-10, 15, 15, -10, 60) });
+  draw: () => ci(0, 0, 40, 'env') + ln(-15, -22, 15, -22) + ln(0, -22, 0, -60) + grid(-10, 18, 60, 40)
+    + grid(0, -18, -60, 40) + cath(-10, 15, 15, -10, 60) });
 def('m_tetrode_ih', { cat: 'Tube, modern', name: 'Tetrode, indirect', pre: 'V', value: '24-A', tags: 'indirectly heated heater screen grid', hooks: { P: [0, -60], G2: [60, -10], G1: [-60, 0], K: [-20, 60], H1: [-10, 60], H2: [10, 60] },
-  draw: () => ci(0, 0, 40, 'env') + ln(-20, -22, 20, -22) + ln(0, -22, 0, -60) + ln(-20, -10, 20, -10, 'dash') + ln(20, -10, 60, -10)
-    + ln(-20, 0, 20, 0, 'dash') + ln(-60, 0, -20, 0) + cath(-20, 22, 12, -20, 60)
+  draw: () => ci(0, 0, 40, 'env') + ln(-20, -22, 20, -22) + ln(0, -22, 0, -60) + grid(-10, 20, 60, 40)
+    + grid(0, -20, -60, 40) + cath(-20, 22, 12, -20, 60)
     + pl([[-10, 60], [-10, 31], [0, 21], [10, 31], [10, 60]], 'htr') });
 def('m_pentode_dh', { cat: 'Tube, modern', name: 'Pentode, direct', pre: 'V', value: '33', tags: 'directly heated filament suppressor', hooks: { P: [0, -60], G3: [60, -10], G2: [60, 0], G1: [-60, 10], F1: [-10, 60], F2: [10, 60] },
   draw: () => ci(0, 0, 40, 'env') + ln(-15, -24, 15, -24) + ln(0, -24, 0, -60)
-    + ln(-18, -10, 18, -10, 'dash') + ln(18, -10, 60, -10) + ln(-18, 0, 18, 0, 'dash') + ln(18, 0, 60, 0)
-    + ln(-18, 10, 18, 10, 'dash') + ln(-60, 10, -18, 10) + filV(19, 33, 60) });
+    + grid(-10, 18, 60, 40) + grid(0, 18, 60, 40)
+    + grid(10, -18, -60, 40) + filV(19, 33, 60) });
 def('m_pentode', { cat: 'Tube, modern', name: 'Pentode', pre: 'V', value: 'EF86', tags: '6au6 el34 6sj7', hooks: { P: [0, -60], G3: [60, -10], G2: [60, 0], G1: [-60, 10], K: [-20, 60] },
   draw: () => ci(0, 0, 40, 'env') + ln(-15, -24, 15, -24) + ln(0, -24, 0, -60)
-    + ln(-18, -10, 18, -10, 'dash') + ln(18, -10, 60, -10) + ln(-18, 0, 18, 0, 'dash') + ln(18, 0, 60, 0)
-    + ln(-18, 10, 18, 10, 'dash') + ln(-60, 10, -18, 10) + cath(-20, 20, 22, -20, 60) });
+    + grid(-10, 18, 60, 40) + grid(0, 18, 60, 40)
+    + grid(10, -18, -60, 40) + cath(-20, 20, 22, -20, 60) });
 def('m_pentode_ih', { cat: 'Tube, modern', name: 'Pentode, indirect', pre: 'V', value: 'EF86', tags: '6au6 el34 6sj7 indirectly heated heater', hooks: { P: [0, -60], G3: [60, -10], G2: [60, 0], G1: [-60, 10], K: [-20, 60], H1: [-10, 60], H2: [10, 60] },
   draw: () => ci(0, 0, 40, 'env') + ln(-20, -24, 20, -24) + ln(0, -24, 0, -60)
-    + ln(-20, -10, 20, -10, 'dash') + ln(20, -10, 60, -10) + ln(-20, 0, 20, 0, 'dash') + ln(20, 0, 60, 0)
-    + ln(-20, 10, 20, 10, 'dash') + ln(-60, 10, -20, 10) + cath(-20, 22, 18, -20, 60)
+    + grid(-10, 20, 60, 40) + grid(0, 20, 60, 40)
+    + grid(10, -20, -60, 40) + cath(-20, 22, 18, -20, 60)
     + pl([[-10, 60], [-10, 34], [0, 24], [10, 34], [10, 60]], 'htr') });
 // Beam-forming plates: a cathode-tied cradle around the grids. The bottom bar is the cathode;
 // each side hops outward where a grid lead crosses it (G1 on the left at y 0, G2 on the right at y -10).
 const beamCradle = () => pa('M -22 -17 L -28 -17 L -28 -3 A 3 3 0 0 0 -28 3 L -28 8 L -24 12 L 24 12 L 28 8 L 28 -7 A 3 3 0 0 0 28 -13 L 28 -17 L 22 -17');
 const beamBody = () => ci(0, 0, 40, 'env') + ln(-20, -24, 20, -24) + ln(0, -24, 0, -60)
-  + ln(-18, -10, 18, -10, 'dash') + ln(18, -10, 60, -10) + ln(-18, 0, 18, 0, 'dash') + ln(-60, 0, -18, 0) + beamCradle();
+  + grid(-10, 18, 60, 40) + grid(0, -18, -60, 40) + beamCradle();
 def('m_beam', { cat: 'Tube, modern', name: 'Beam power', pre: 'V', value: '6V6', tags: '6l6 kt88 6550 el34', hooks: { P: [0, -60], G2: [60, -10], G1: [-60, 0], K: [-10, 60] },
   draw: () => beamBody() + ln(-10, 12, -10, 60) });
 def('m_beam_ih', { cat: 'Tube, modern', name: 'Beam power, filament', pre: 'V', value: '6V6', tags: '6l6 kt88 6550 el34 heater indirectly heated', hooks: { P: [0, -60], G2: [60, -10], G1: [-60, 0], K: [-20, 60], H1: [-10, 60], H2: [10, 60] },
@@ -834,9 +842,8 @@ def('m_st_35w4', { cat: 'Tube, modern', stock: 'rect', alsoIn: ['aa5'], name: '3
 // 12AX7 family: twin triodes on the 9A noval base. Section A: plate 1, grid 2, cathode 3, with the heater
 // (pins 4 and 5, centre tap 9). Section B: plate 6, grid 7, cathode 8.
 const FAM_12AX7 = ['12AX7', '12AT7', '12AU7', '12AY7', '12AV7', '12AZ7', '12BZ7', '12DW7', '5751', '7025', '6072', '6201', '6681', '5814', '6189', 'ECC81', 'ECC82', 'ECC83'];
-// Stock triode body. Grid (Larry's look): the solid lead stops at x -19, then five even dashes (dash 5, gap 3.4, from the
-// 'dash' class) run from -15.6 to 23, so the grid reaches well across the tube and ends on a full dash.
-const triodeBody = () => ci(0, 0, 30, 'env') + ln(-17, -15, 17, -15) + ln(0, -15, 0, -50) + ln(-15.6, 0, 23, 0, 'dash') + ln(-50, 0, -19, 0);
+// Stock triode body. Its grid (via grid()) is Larry's approved look: lead to x -19, five even dashes from -15.6 to 23.
+const triodeBody = () => ci(0, 0, 30, 'env') + ln(-17, -15, 17, -15) + ln(0, -15, 0, -50) + grid(0, -17, -50, 30);
 const ST12AX7 = {
   A: { hooks: { P: [0, -50], G: [-50, 0], K: [-20, 50], H1: [-10, 50], HCT: [0, 50], H2: [10, 50] },
        draw: () => triodeBody() + cath(-20, 19, 10, -20, 50) + pl([[-10, 50], [-10, 27], [0, 17], [10, 27], [10, 50]], 'htr') + ln(0, 17, 0, 50, 'htr'),
@@ -929,11 +936,11 @@ def('m_gas_rect', { cat: 'Tube, modern', name: 'Gas rectifier, full-wave', pre: 
 def('m_gas_vr', { cat: 'Tube, modern', name: 'Voltage regulator (glow)', pre: 'V', value: '', tags: '0a2 0b2 0c3 0d3 vr150 vr105 vr75 glow regulator cold cathode gas', hooks: { P: [0, -50], K: [0, 50] },
   draw: () => ci(0, 0, 30, 'env') + ln(-12, -12, 12, -12) + ln(0, -12, 0, -50) + pa('M -12 4 A 12 12 0 0 0 12 4') + ln(0, 16, 0, 50) + gasDot(18, -2) });
 def('m_gas_thyratron', { cat: 'Tube, modern', name: 'Thyratron', pre: 'V', value: '', tags: '884 6d4 2050 gas triode thyratron', hooks: { P: [0, -50], G: [-50, 0], K: [-20, 50], H1: [-10, 50], H2: [10, 50] },
-  draw: () => ci(0, 0, 30, 'env') + ln(-17, -15, 17, -15) + ln(0, -15, 0, -50) + ln(-17, 0, 17, 0, 'dash') + ln(-50, 0, -17, 0) + cath(-20, 19, 10, -20, 50)
+  draw: () => ci(0, 0, 30, 'env') + ln(-17, -15, 17, -15) + ln(0, -15, 0, -50) + grid(0, -17, -50, 30) + cath(-20, 19, 10, -20, 50)
     + pl([[-10, 50], [-10, 27], [0, 17], [10, 27], [10, 50]], 'htr') + gasDot(21, -7) });
 def('m_gas_thyratron_t', { cat: 'Tube, modern', name: 'Thyratron, tetrode', pre: 'V', value: '', tags: '2d21 2050 eN91 gas tetrode thyratron shield grid', hooks: { P: [0, -60], G2: [60, -10], G1: [-60, 0], K: [-20, 60], H1: [-10, 60], H2: [10, 60] },
-  draw: () => ci(0, 0, 40, 'env') + ln(-20, -22, 20, -22) + ln(0, -22, 0, -60) + ln(-20, -10, 20, -10, 'dash') + ln(20, -10, 60, -10)
-    + ln(-20, 0, 20, 0, 'dash') + ln(-60, 0, -20, 0) + cath(-20, 22, 12, -20, 60)
+  draw: () => ci(0, 0, 40, 'env') + ln(-20, -22, 20, -22) + ln(0, -22, 0, -60) + grid(-10, 20, 60, 40)
+    + grid(0, -20, -60, 40) + cath(-20, 22, 12, -20, 60)
     + pl([[-10, 60], [-10, 31], [0, 21], [10, 31], [10, 60]], 'htr') + gasDot(28, -18) });
 
 // Specialized tubes.

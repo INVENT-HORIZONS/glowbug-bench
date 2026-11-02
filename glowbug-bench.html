@@ -1583,7 +1583,7 @@ function renderLib() {
       const direct = vac.filter(isDirect), withHtr = vac.filter(L => !isDirect(L) && /_ih$/.test(L.type)), kOnly = vac.filter(L => !isDirect(L) && !/_ih$/.test(L.type));
       const grp = (label, list) => list.length ? `<div class="subcat">${label}</div><div class="tiles">${list.map(tile).join('')}</div>` : '';
       const stockGrp = stock.length ? grp('Stock', stock) : q ? '' : `<div class="subcat">Stock</div><div class="subnote">No stock tubes yet.</div>`;
-      body = grp('Filament (direct)', direct) + grp('Cathode only', kOnly) + grp('Cathode + filament', withHtr) + stockGrp + grp('Gas-filled', gas) + grp('Specialized', sp);
+      body = grp('Directly heated', direct) + grp('Cathode only', kOnly) + grp('Indirectly heated', withHtr) + stockGrp + grp('Gas-filled', gas) + grp('Specialized', sp);
     } else if (cat === 'Semiconductors') {
       // diodes, then bipolar transistors, then FETs, each group starting a fresh row
       const dio = items.filter(L => /^diode/.test(L.type)), bjt = items.filter(L => /^(npn|pnp)/.test(L.type));

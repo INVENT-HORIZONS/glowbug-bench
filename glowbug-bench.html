@@ -511,6 +511,12 @@ def('resistor', { cat: 'Passive', name: 'Resistor', pre: 'R', value: '100 kΩ', 
   draw: () => ln(0, 0, 15, 0) + pl(zig(15, 0, 45, 0, 3, 6)) + ln(45, 0, 60, 0) });
 def('pot', { cat: 'Passive', name: 'Potentiometer', pre: 'R', value: '500 kΩ', hooks: { 1: [0, 0], 2: [60, 0], W: [30, -30] },
   draw: () => ln(0, 0, 15, 0) + pl(zig(15, 0, 45, 0, 3, 6)) + ln(45, 0, 60, 0) + ln(30, -30, 30, -13) + pg([[26, -14], [34, -14], [30, -8]]).replace('class="ink"', 'class="ink" style="fill:var(--ink)"') });
+// Rheostat: a two-terminal variable resistor, drawn as the resistor zigzag with a diagonal adjust arrow through it.
+def('rheostat', { cat: 'Passive', name: 'Rheostat', pre: 'R', value: '25 Ω', tags: 'variable resistor adjustable rheostat',
+  hooks: { 1: [0, 0], 2: [60, 0] },
+  draw: () => { const ax = 18, ay = 13, bx = 43, by = -12, L = Math.hypot(bx - ax, by - ay), ux = (bx - ax) / L, uy = (by - ay) / L, hx = bx - ux * 7, hy = by - uy * 7;
+    return ln(0, 0, 15, 0) + pl(zig(15, 0, 45, 0, 3, 6)) + ln(45, 0, 60, 0)
+      + ln(ax, ay, +hx.toFixed(2), +hy.toFixed(2)) + pg([[bx, by], [+(hx - uy * 3.2).toFixed(2), +(hy + ux * 3.2).toFixed(2)], [+(hx + uy * 3.2).toFixed(2), +(hy - ux * 3.2).toFixed(2)]], 'ink solid'); } });
 def('capacitor', { cat: 'Passive', name: 'Capacitor', pre: 'C', value: '0.022 µF', hooks: { 1: [0, 0], 2: [40, 0] },
   draw: () => ln(0, 0, 17, 0) + ln(17, -10, 17, 10) + ln(23, -10, 23, 10) + ln(23, 0, 40, 0) });
 def('electrolytic', { cat: 'Passive', name: 'Electrolytic', pre: 'C', value: '47 µF 450 V', hooks: { '+': [0, 0], '−': [40, 0] },

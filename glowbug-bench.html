@@ -777,6 +777,14 @@ def('m_st_5u4', { cat: 'Tube, modern', stock: 'rect', name: '5U4 family', pre: '
   hooks: { P1: [-20, -50], P2: [20, -50], F1: [-10, 50], F2: [10, 50] },
   draw: () => pa(stadium(20, 30), 'env') + ln(-32, -10, -8, -10) + ln(8, -10, 32, -10) + ln(-20, -10, -20, -50) + ln(20, -10, 20, -50) + filV(8, 24, 50),
   pins: { P1: { t: '4' }, P2: { t: '6' }, F1: { t: '2' }, F2: { t: '8' } } });
+// 5Y3 (r-type.org 5Y3GT base table): pin 2 filament, 4 anode 2, 6 anode 1, 8 filament. Directly heated; same pins as the 5U4.
+// Family from r-type.org and radiomuseum.org (identical, other bulb, other quality class); the 5Y4GT has different pins.
+const FAM_5Y3 = ['5Y3G', '5Y3GT', '5Y3GT/G', '5Y3WGT', '5Y3WGTA', 'U50', 'CV1856', 'VT-197A'];
+def('m_st_5y3', { cat: 'Tube, modern', stock: 'rect', name: '5Y3 family', pre: 'V', value: '5Y3GT', family: FAM_5Y3,
+  tags: 'stock rectifier full-wave octal directly heated filament 5y3 ' + FAM_5Y3.join(' ').toLowerCase(),
+  hooks: { P1: [-20, -50], P2: [20, -50], F1: [-10, 50], F2: [10, 50] },
+  draw: () => pa(stadium(20, 30), 'env') + ln(-32, -10, -8, -10) + ln(8, -10, 32, -10) + ln(-20, -10, -20, -50) + ln(20, -10, 20, -50) + filV(8, 24, 50),
+  pins: { P1: { t: '4' }, P2: { t: '6' }, F1: { t: '2' }, F2: { t: '8' } } });
 // 12AX7 family: twin triodes on the 9A noval base. Section A: plate 1, grid 2, cathode 3, with the heater
 // (pins 4 and 5, centre tap 9). Section B: plate 6, grid 7, cathode 8.
 const FAM_12AX7 = ['12AX7', '12AT7', '12AU7', '12AY7', '12AV7', '12AZ7', '12BZ7', '12DW7', '5751', '7025', '6072', '6201', '6681', '5814', '6189', 'ECC81', 'ECC82', 'ECC83'];

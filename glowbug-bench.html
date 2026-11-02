@@ -506,10 +506,11 @@ const LIB = {};
 function def(type, o) { LIB[type] = Object.assign({ type, pre: '', value: '', tags: '' }, o); }
 
 /* ---- passives ---- */
+// Resistor zigzag (Larry's look): three points on the bottom and two on top, zig(..., 3, 6). The potentiometer matches.
 def('resistor', { cat: 'Passive', name: 'Resistor', pre: 'R', value: '100 kΩ', hooks: { 1: [0, 0], 2: [60, 0] },
-  draw: () => ln(0, 0, 15, 0) + pl(zig(15, 0, 45, 0, 6, 6)) + ln(45, 0, 60, 0) });
+  draw: () => ln(0, 0, 15, 0) + pl(zig(15, 0, 45, 0, 3, 6)) + ln(45, 0, 60, 0) });
 def('pot', { cat: 'Passive', name: 'Potentiometer', pre: 'R', value: '500 kΩ', hooks: { 1: [0, 0], 2: [60, 0], W: [30, -30] },
-  draw: () => ln(0, 0, 15, 0) + pl(zig(15, 0, 45, 0, 6, 6)) + ln(45, 0, 60, 0) + ln(30, -30, 30, -13) + pg([[26, -14], [34, -14], [30, -8]]).replace('class="ink"', 'class="ink" style="fill:var(--ink)"') });
+  draw: () => ln(0, 0, 15, 0) + pl(zig(15, 0, 45, 0, 3, 6)) + ln(45, 0, 60, 0) + ln(30, -30, 30, -13) + pg([[26, -14], [34, -14], [30, -8]]).replace('class="ink"', 'class="ink" style="fill:var(--ink)"') });
 def('capacitor', { cat: 'Passive', name: 'Capacitor', pre: 'C', value: '0.022 µF', hooks: { 1: [0, 0], 2: [40, 0] },
   draw: () => ln(0, 0, 17, 0) + ln(17, -10, 17, 10) + ln(23, -10, 23, 10) + ln(23, 0, 40, 0) });
 def('electrolytic', { cat: 'Passive', name: 'Electrolytic', pre: 'C', value: '47 µF 450 V', hooks: { '+': [0, 0], '−': [40, 0] },

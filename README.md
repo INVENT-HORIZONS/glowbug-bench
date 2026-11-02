@@ -6,7 +6,7 @@ Open `glowbug-bench.html` in any modern browser. Everything is in the one file; 
 
 ## Features
 
-- **Symbol library (86 parts):** passives (including a two-terminal rheostat), transformers (isolation, step-up, step-down, and a tall versatile transformer with 0 to 6 taps on each winding), heaters, power, semiconductors (diodes including an LED, BJTs, Darlingtons, JFETs and MOSFETs), misc, modern tubes (including gas-filled rectifiers, glow regulators, thyratrons, a photomultiplier and two- and single-section electron-ray "magic eyes"), and 1920s and 1930s period tubes for the Vintage Tube spotlight.
+- **Symbol library (87 parts):** passives (including a two-terminal rheostat and a film capacitor), transformers (isolation, step-up, step-down, and a tall versatile transformer with 0 to 6 taps on each winding), heaters, power, semiconductors (diodes including an LED, BJTs, Darlingtons, JFETs and MOSFETs), misc, modern tubes (including gas-filled rectifiers, glow regulators, thyratrons, a photomultiplier and two- and single-section electron-ray "magic eyes"), and 1920s and 1930s period tubes for the Vintage Tube spotlight.
 - **Hooks on a 0.1 in grid:** every connection point lands on the grid, even after rotating or flipping. Ref des and value labels move on a finer 0.05 in grid.
 - **Wiring:** click a hook to start, click to add corners, and finish on a hook or wire. Space flips the corner. Junction dots appear automatically.
 - **Wire colors:** black, red, green, blue, brown and orange. Pick the color for new wires from the swatch under the Wire tool; recolor existing wires from the properties panel or the right-click menu.

@@ -1046,7 +1046,8 @@ const FAM_6267 = ['6267', 'EF86', '6BK8', '6CF8', '6F22', 'Z729', 'CV2901', 'CV8
     pins: { P: { t: '6' }, G3: { t: '8' }, G2: { t: '1', below: true }, G1: { t: '9' }, K: { t: '3' }, H1: { t: '4' }, H2: { t: '5' } } }); }
 // tubes start with no value and the designator V?; stock tubes (m_st_*) keep their tube type as the value
 for (const k in LIB) if (LIB[k].cat.startsWith('Tube') && !/^m_st_/.test(k)) LIB[k].value = '';   // stock tubes keep their type as the value
-const CATS = ['Passive', 'Semiconductors', 'Tube, modern', 'Transformer', 'Heater', 'Power', 'Misc', 'Tube, 1930s', 'Tube, 1920s'];
+// The Heater parts (cat 'Heater') have no section of their own: they show as the Heaters group at the bottom of Tube, modern.
+const CATS = ['Passive', 'Semiconductors', 'Tube, modern', 'Transformer', 'Power', 'Misc', 'Tube, 1930s', 'Tube, 1920s'];
 
 /* local bounding boxes, measured once (and per variant, on first use) */
 function measureBB(draw, hooks) {
@@ -1664,7 +1665,7 @@ function renderLib() {
   const q = $('search').value.trim().toLowerCase();
   let total = 0;
   $('lib').innerHTML = CATS.map(cat => {
-    const items = Object.values(LIB).filter(L => L.cat === cat && !L.legacy && (!q || (L.name + ' ' + L.cat + ' ' + L.tags + ' ' + L.value).toLowerCase().includes(q)));
+    const items = Object.values(LIB).filter(L => (L.cat === cat || (cat === 'Tube, modern' && L.cat === 'Heater')) && !L.legacy && (!q || (L.name + ' ' + L.cat + ' ' + L.tags + ' ' + L.value).toLowerCase().includes(q)));
     total += items.length;
     if (!items.length) return '';
     const open = q || !libClosed.has(cat) ? ' open' : '';
@@ -1677,7 +1678,8 @@ function renderLib() {
       // filament (directly heated) tubes first, in their own group, then everything with a cathode
       // Stock (types starting m_st_): real tubes by part number. Shown even while empty, except during a search.
       const isGas = L => /^m_gas/.test(L.type), isSp = L => /^m_sp_/.test(L.type), isSt = L => /^m_st_/.test(L.type);
-      const vac = items.filter(L => !isGas(L) && !isSp(L) && !isSt(L)), gas = items.filter(isGas), sp = items.filter(isSp), stock = items.filter(isSt);
+      const htrs = items.filter(L => L.cat === 'Heater');
+      const vac = items.filter(L => L.cat !== 'Heater' && !isGas(L) && !isSp(L) && !isSt(L)), gas = items.filter(isGas), sp = items.filter(isSp), stock = items.filter(isSt);
       const direct = vac.filter(isDirect), withHtr = vac.filter(L => !isDirect(L) && /_ih$/.test(L.type)), kOnly = vac.filter(L => !isDirect(L) && !/_ih$/.test(L.type));
       // three stock groups: rectifiers (stock: 'rect'), signal tubes (no stock key), All American Five (stock: 'aa5'). An empty group
       // still shows its header with a note, except during a search.
@@ -1687,7 +1689,7 @@ function renderLib() {
       body = grp('Directly heated', direct) + grp('Cathode only', kOnly) + grp('Indirectly heated', withHtr)
         + stockGrp('Stock: rectifiers', stRect, 'No stock rectifiers yet.') + stockGrp('Stock: signal tubes', stSig, 'No stock signal tubes yet.')
         + stockGrp('Stock: All American Five', stAA5, 'No All American Five tubes yet.')
-        + grp('Gas-filled', gas) + grp('Specialized', sp);
+        + grp('Gas-filled', gas) + grp('Specialized', sp) + grp('Heaters', htrs);
     } else if (cat === 'Semiconductors') {
       // diodes, then bipolar transistors (and Darlingtons), then FETs, each its own folding group
       const dio = items.filter(L => /^diode/.test(L.type)), bjt = items.filter(L => /^(npn|pnp)/.test(L.type));

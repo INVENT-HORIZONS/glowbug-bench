@@ -44,7 +44,7 @@ The owner is Larry Higley (GitHub: INVENT-HORIZONS). The app started as the sche
 - **Designators** default to `pre + '?'` (V?, R?, Q?, D?). **Tubes have no default value**; part numbers go in `tags` so search finds them.
   - The Stock subgroup (Tube, modern) holds real tubes with pinouts; Larry is adding families one at a time, starting with the 12AX7 family.
 - **Heaters inside tubes** use the triangle filament: `pl([[-10,end],[-10,base],[0,base-10],[10,base],[10,end]], 'htr')`. Standalone heater parts come in arch and triangle versions.
-- **Panel groups** are listed in `CATS`, in this order: Passive, Semiconductors, Tube modern, Transformer, Heater, Power, Misc, Tube 1930s, Tube 1920s.
+- **Panel groups** are listed in `CATS`, in this order: Passive, Semiconductors, Tube modern, Transformer, Power, Misc, Tube 1930s, Tube 1920s. The heater parts keep `cat: 'Heater'` but have no section of their own: Larry moved them into Tube, modern as the Heaters subgroup.
 - **Semiconductors** are in three folding subgroups, in order: Diodes, Bipolar transistors (NPN, PNP and the Darlingtons) and Field effect transistors (JFETs and MOSFETs). They use the same `sub()` / `grp()` helpers as Tube, modern, remembered in `gs.closed` as `Semiconductors|<header>`.
   - Diodes, in order: diode, Schottky, Zener, LED (`diode_led`, value `Red`).
   - LED color: `p.led` (key in `LED_COLORS`; unset reads as `red`) colors only the body (triangle and bar) and the two light-out arrows, never the leads. `ledDraw(c)` writes the color as inline styles so exports keep it; the def's `drawArg` hands `p.led` to `draw`. Default red is the power-wire red `#A3241B`, chosen by Larry to fit the color scheme. Set from the right-click menu or Properties via `setLedColor`, which also renames a value that names a color (not for Black).
@@ -71,6 +71,7 @@ The owner is Larry Higley (GitHub: INVENT-HORIZONS). The app started as the sche
      - Section A's heater can be hidden the same way (`p.noHeater`, `setHeater`, `heaterBare`, right-click "Hide heater" or the Properties checkbox): the section's `bare` shape keeps P, G and K exactly where they are, so only the heater hooks come and go and a wire left on a heater pin can never land on the cathode.
   4. Gas-filled, types starting `m_gas`, marked with a solid dot
   5. Specialized, types starting `m_sp_`: photomultiplier, then the single-section eye, then the two-section eye
+  6. Heaters (at the bottom, at Larry's request): the standalone heater parts (`cat: 'Heater'`: heater, center tap, triangle, center tap triangle), pulled into the Tube, modern list by the panel's item filter.
 - **Period tubes** are drawn in the style of their era. 1920s tubes are sideways with zigzag grids, and 1930s tubes are the same rotated 90°. From 1937 on, the modern symbols apply.
 - **Parts with an adjustable shape** declare `vary: { key, label, min, max, def, build(n) }`, or a list of settings `vary: [{ key, label, min, max, def }, …]` plus `build({ key: n, … })` on the def. Read settings with `varyList(L)` / `varyVal(p, v)`, change them with `setVary(p, n, key)`, and always read the shape through `shapeOf(p)`. Never use `LIB[type].hooks` directly for a placed part.
   - The photomultiplier, `pmtBuild(n)`, takes 2 to 14 dynodes. K and D1 stay fixed.

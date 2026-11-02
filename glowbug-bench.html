@@ -842,8 +842,11 @@ const ST12AX7 = {
        // the same section with its heater hidden (p.noHeater). The cathode stays where it was, so no pin moves and a
        // wire left on a heater pin can never land on the cathode.
        bare: { hooks: { P: [0, -50], G: [-50, 0], K: [-20, 50] }, draw: () => triodeBody() + cath(-20, 19, 10, -20, 50) } },
-  B: { hooks: { P: [0, -50], G: [-50, 0], K: [-10, 50] },
-       draw: () => triodeBody() + cath(-10, 12, 10, -10, 50),
+  // Section B: the cathode is as wide as the plate, like section A's (Larry: the cathode should match the plate). Its lead was
+  // at x -10 before 2026-11-02 (shape `old`, a short cathode); B sections saved then are moved over on load (`kfix`).
+  B: { hooks: { P: [0, -50], G: [-50, 0], K: [-20, 50] },
+       draw: () => triodeBody() + cath(-20, 19, 10, -20, 50),
+       old: { hooks: { P: [0, -50], G: [-50, 0], K: [-10, 50] }, draw: () => triodeBody() + cath(-10, 12, 10, -10, 50) },
        pins: { P: { t: '6' }, G: { t: '7' }, K: { t: '8' } } },
 };
 def('m_st_12ax7', { cat: 'Tube, modern', name: '12AX7 family', pre: 'V', value: '12AX7', units: ST12AX7, family: FAM_12AX7,
@@ -856,7 +859,7 @@ const ST6SN7 = {
        draw: () => triodeBody() + cath(-20, 19, 10, -20, 50) + pl([[-10, 50], [-10, 27], [0, 17], [10, 27], [10, 50]], 'htr'),
        pins: { G: { t: '1' }, P: { t: '2' }, K: { t: '3' }, H1: { t: '7' }, H2: { t: '8' } },
        bare: ST12AX7.A.bare },
-  B: { hooks: ST12AX7.B.hooks, draw: ST12AX7.B.draw,
+  B: { hooks: ST12AX7.B.hooks, draw: ST12AX7.B.draw, old: ST12AX7.B.old,
        pins: { G: { t: '4' }, P: { t: '5' }, K: { t: '6' } } },
 };
 def('m_st_6sn7', { cat: 'Tube, modern', name: '6SN7 family', pre: 'V', value: '6SN7', units: ST6SN7, family: FAM_6SN7,
@@ -874,7 +877,15 @@ const groupOf = p => p.grp && LIB[p.type].units ? sheet.parts.filter(q => q.grp 
 // a new section: its own pins filled in and shown
 function stockSection(p, u) {
   const U = LIB[p.type].units[u];
-  return Object.assign(p, { unit: u, showPins: true, pins: JSON.parse(JSON.stringify(U.pins)) });
+  return Object.assign(p, { unit: u, showPins: true, kfix: true, pins: JSON.parse(JSON.stringify(U.pins)) });
+}
+// a section saved with an older shape (S.old): switch it to the current one and carry the wires on hooks that moved
+function fixOldSection(p) {
+  const L = LIB[p.type], S = L && L.units && L.units[unitOf(p)]; if (!S || !S.old || p.kfix) return;
+  const before = hooksOf(p).map(h => [h.name, h.pos]); p.kfix = true;
+  const after = Object.fromEntries(hooksOf(p).map(h => [h.name, h.pos])), moves = new Map();
+  for (const [n, b] of before) { const a = after[n]; if (a && (a[0] !== b[0] || a[1] !== b[1])) moves.set(key(b), [a[0] - b[0], a[1] - b[1]]); }
+  if (moves.size) dragWiresWithHooks(moves);
 }
 function stockDefaults(p) {
   const L = LIB[p.type]; if (!L) return p;
@@ -1076,7 +1087,7 @@ function shapeOf(p) {
   const L = LIB[p.type];
   if (L.bare && p.noHeater && !L.units) { const U = L.bare; if (!U.bb) U.bb = measureBB(U.draw, U.hooks); return U; }
   if (L.units) {   // stock part: the shape of its section
-    const S = L.units[unitOf(p)], U = p.noHeater && S.bare ? S.bare : S;
+    const S = L.units[unitOf(p)], U = p.noHeater && S.bare ? S.bare : S.old && !p.kfix ? S.old : S;
     if (!U.bb) U.bb = measureBB(U.draw, U.hooks);
     return U;
   }
@@ -2560,7 +2571,7 @@ function loadProject(p, msg) {
       if (!q.ref) q.ref = nextRef(LIB[q.type].pre);
       if (q.value == null || q.value === '') q.value = LIB[q.type].value;
       const legacy = q.showLabel == null ? !LIB[q.type].hideLabel : q.showLabel !== false;
-      xfmrDefaults(q); stockDefaults(q); if (q.showRef == null) q.showRef = legacy; if (q.showVal == null) q.showVal = legacy; delete q.showLabel;
+      xfmrDefaults(q); stockDefaults(q); fixOldSection(q); if (q.showRef == null) q.showRef = legacy; if (q.showVal == null) q.showVal = legacy; delete q.showLabel;
     }
     sheet = was;
   }

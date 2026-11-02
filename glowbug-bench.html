@@ -795,6 +795,24 @@ def('m_st_6ca4', { cat: 'Tube, modern', stock: 'rect', name: '6CA4 family', pre:
   draw: () => rectBody() + pl([[-10, 50], [-10, 27], [0, 17], [10, 27], [10, 50]], 'htr'),
   bare: { hooks: { P1: [-20, -50], P2: [20, -50], K: [-30, 50] }, draw: rectBody },
   pins: { P1: { t: '1' }, P2: { t: '7' }, K: { t: '3' }, H1: { t: '4' }, H2: { t: '5' } } });
+// Indirectly heated full-wave rectifiers with their own cathode pin share one drawing (the 6CA4's); only the pins differ.
+function stockRectIH(type, name, value, fam, tags, pins) {
+  def(type, { cat: 'Tube, modern', stock: 'rect', name, pre: 'V', value, family: fam,
+    tags: 'stock rectifier full-wave indirectly heated ' + tags + ' ' + fam.join(' ').toLowerCase(),
+    hooks: { P1: [-20, -50], P2: [20, -50], K: [-30, 50], H1: [-10, 50], H2: [10, 50] },
+    draw: () => rectBody() + pl([[-10, 50], [-10, 27], [0, 17], [10, 27], [10, 50]], 'htr'),
+    bare: { hooks: { P1: [-20, -50], P2: [20, -50], K: [-30, 50] }, draw: rectBody }, pins });
+}
+// 6X4 / EZ90 (r-type.org EZ90 B7G table): pin 1 anode 2, 3 and 4 heater, 6 anode 1, 7 cathode; 2 and 5 nc.
+// Family: identical and other-quality types from radiomuseum.org; the 6202 and 6BX4 have different maximum ratings.
+const FAM_6X4 = ['6X4', 'EZ90', 'CV493', 'U78', 'V2M70', '6063', 'E90Z', 'EZ900', '6202', '6BX4'];
+stockRectIH('m_st_6x4', '6X4 family', '6X4', FAM_6X4, '7-pin miniature b7g 6x4',
+  { P1: { t: '1' }, P2: { t: '6' }, K: { t: '7' }, H1: { t: '3' }, H2: { t: '4' } });
+// 6X5 / EZ35 (r-type.org EZ35 IO table): pin 1 metal shell (not drawn), 2 and 7 heater, 3 anode 2, 5 anode 1, 8 cathode; 4, 6 nc.
+// Family: identical, other bulb and other-quality types from radiomuseum.org; the U147 is listed as slightly different.
+const FAM_6X5 = ['6X5GT', '6X5', '6X5G', '6X5GT/G', '6X5WGT', 'EZ35', 'CV573', 'CV574', 'VT-126B', 'U70', 'U147', '6Ц5С'];
+stockRectIH('m_st_6x5', '6X5 family', '6X5GT', FAM_6X5, 'octal 6x5',
+  { P1: { t: '3' }, P2: { t: '5' }, K: { t: '8' }, H1: { t: '2' }, H2: { t: '7' } });
 // 12AX7 family: twin triodes on the 9A noval base. Section A: plate 1, grid 2, cathode 3, with the heater
 // (pins 4 and 5, centre tap 9). Section B: plate 6, grid 7, cathode 8.
 const FAM_12AX7 = ['12AX7', '12AT7', '12AU7', '12AY7', '12AV7', '12AZ7', '12BZ7', '12DW7', '5751', '7025', '6072', '6201', '6681', '5814', '6189', 'ECC81', 'ECC82', 'ECC83'];

@@ -524,12 +524,27 @@ def('cap_film', { cat: 'Passive', name: 'Film capacitor', pre: 'C', value: '0.1 
   draw: () => ln(0, 0, 17, 0) + ln(17, -10, 17, 10) + pa('M26 -10 Q21 0 26 10') + ln(23.5, 0, 40, 0) });
 def('electrolytic', { cat: 'Passive', name: 'Electrolytic', pre: 'C', value: '47 µF 450 V', hooks: { '+': [0, 0], '−': [40, 0] },
   draw: () => ln(0, 0, 17, 0) + ln(17, -10, 17, 10) + pa('M26 -10 Q21 0 26 10') + ln(23, 0, 40, 0) + ln(8, -10, 8, -4) + ln(5, -7, 11, -7) });
-def('inductor', { cat: 'Passive', name: 'Inductor', pre: 'L', value: '2.5 mH', hooks: { 1: [0, 0], 2: [60, 0] },
-  draw: () => ln(0, 0, 10, 0) + pa(coilX(10, 0, 4)) + ln(50, 0, 60, 0) });
-def('choke', { cat: 'Passive', name: 'Choke (iron core)', pre: 'L', value: '10 H', hooks: { 1: [0, 0], 2: [60, 0] },
+// Inductor with a core (Larry merged the choke into it): p.core is air (the default: no lines), ferrite (dotted), iron
+// (two solid lines above the coil, the old choke look) or var (iron plus a diagonal adjust arrow), from the right-click
+// menu like the transformers. Saved chokes load as iron-core inductors.
+function inductorCore(c) {
+  if (c === 'ferrite') return ln(10, -9, 50, -9, 'dotl') + ln(10, -12, 50, -12, 'dotl');
+  if (c !== 'iron' && c !== 'var') return '';
+  let s = ln(10, -9, 50, -9) + ln(10, -12, 50, -12);
+  if (c === 'var') {
+    const ax = 15, ay = 9, bx = 45, by = -22, L = Math.hypot(bx - ax, by - ay), ux = (bx - ax) / L, uy = (by - ay) / L, hx = bx - ux * 7, hy = by - uy * 7;
+    s += ln(ax, ay, +hx.toFixed(2), +hy.toFixed(2)) + pg([[bx, by], [+(hx - uy * 3.2).toFixed(2), +(hy + ux * 3.2).toFixed(2)], [+(hx + uy * 3.2).toFixed(2), +(hy - ux * 3.2).toFixed(2)]], 'ink solid');
+  }
+  return s;
+}
+def('inductor', { cat: 'Passive', name: 'Inductor', pre: 'L', value: '2.5 mH', tags: 'choke coil air core ferrite iron variable', coreDef: 'air',
+  hooks: { 1: [0, 0], 2: [60, 0] }, drawArg: p => coreOf(p),
+  draw: c => ln(0, 0, 10, 0) + pa(coilX(10, 0, 4)) + ln(50, 0, 60, 0) + inductorCore(c || 'air') });
+def('choke', { legacy: true, cat: 'Passive', name: 'Choke (iron core)', pre: 'L', value: '10 H', hooks: { 1: [0, 0], 2: [60, 0] },
   draw: () => ln(0, 0, 10, 0) + pa(coilX(10, 0, 4)) + ln(50, 0, 60, 0) + ln(10, -9, 50, -9) + ln(10, -12, 50, -12) });
-def('inductor_ct', { cat: 'Passive', name: 'Winding, center tap', pre: 'T', value: '6.3 V CT', tags: 'heater winding secondary', hooks: { 1: [0, 0], 2: [60, 0], CT: [30, 20] },
-  draw: () => ln(0, 0, 10, 0) + pa(coilX(10, 0, 4)) + ln(50, 0, 60, 0) + ln(30, 0, 30, 20) });
+def('inductor_ct', { cat: 'Passive', name: 'Winding, center tap', pre: 'T', value: '6.3 V CT', tags: 'heater winding secondary air core ferrite iron variable', coreDef: 'air',
+  hooks: { 1: [0, 0], 2: [60, 0], CT: [30, 20] }, drawArg: p => coreOf(p),
+  draw: c => ln(0, 0, 10, 0) + pa(coilX(10, 0, 4)) + ln(50, 0, 60, 0) + ln(30, 0, 30, 20) + inductorCore(c || 'air') });
 def('diode', { cat: 'Semiconductors', name: 'Diode (solid-state)', pre: 'D', value: '1N4007', hooks: { A: [0, 0], K: [40, 0] },
   draw: () => ln(0, 0, 13, 0) + pg([[13, -8], [13, 8], [27, 0]]) + ln(27, -8, 27, 8) + ln(27, 0, 40, 0) });
 def('diode_schottky', { cat: 'Semiconductors', name: 'Schottky diode', pre: 'D', value: '1N5819', hooks: { A: [0, 0], K: [40, 0] },
@@ -608,6 +623,10 @@ def('pmos_dep', { cat: 'Semiconductors', name: 'P-channel MOSFET, depletion', pr
 // transformer core between the windings: air (none), ferrite (dotted), iron (solid, the default) or variable (iron + adjust arrow)
 const CORES = [['air', 'Air'], ['ferrite', 'Ferrite'], ['iron', 'Iron'], ['var', 'Variable']];
 const CORE_NAME = { air: 'air core', ferrite: 'ferrite core', iron: 'iron core', var: 'variable core' };
+// a part's core: transformers default to iron, a def can set its own default (coreDef: the inductor's is air)
+const coreOf = p => p.core || (LIB[p.type] && LIB[p.type].coreDef) || 'iron';
+// the Core section of the right-click menu, shared by transformers and the inductor
+const coreMenu = q => `<div class="mlabel">Core</div>${CORES.map(([k, n]) => `<button role="menuitemradio" data-core="${k}" aria-checked="${coreOf(q) === k}"><span>${coreOf(q) === k ? '● ' : ''}${n}</span><span>${{ air: 'none', ferrite: 'dotted', iron: 'solid', var: 'arrow' }[k]}</span></button>`).join('')}`;
 function coreSVG(c, y0, y1) {
   if (c === 'air') return '';
   if (c === 'ferrite') return ln(22, y0, 22, y1, 'dotl') + ln(28, y0, 28, y1, 'dotl');
@@ -2324,8 +2343,9 @@ function partMenu(e, raw) {
     + (hasPart ? `<button role="menuitem" data-m="rot"><span>Rotate 90°</span><span>R</span></button><button role="menuitem" data-m="flip"><span>Flip horizontal</span><span>X</span></button><button role="menuitem" data-m="flipv"><span>Flip vertical</span><span>Y</span></button>` : '')
     + (selLabel ? `<button role="menuitem" data-m="edit"><span>Edit ${FIELD_NAME[selLabel.field]}</span><span>dbl-click</span></button>` : '')
     + (items.length === 1 && items[0].k === 'part' ? ['ref', 'value'].filter(f => !fieldShown(items[0].o, f)).map(f => `<button role="menuitem" data-m="show-${f}"><span>Show ${FIELD_NAME[f]}</span><span></span></button>`).join('') : '')
+    + (items.length === 1 && items[0].k === 'part' && LIB[items[0].o.type].coreDef ? coreMenu(items[0].o) : '')
     + (items.length === 1 && items[0].k === 'part' && isXfmr(items[0].o) ? (() => { const q = items[0].o;
-        return `<div class="mlabel">Core</div>${CORES.map(([k, n]) => `<button role="menuitemradio" data-core="${k}" aria-checked="${(q.core || 'iron') === k}"><span>${(q.core || 'iron') === k ? '● ' : ''}${n}</span><span>${{ air: 'none', ferrite: 'dotted', iron: 'solid', var: 'arrow' }[k]}</span></button>`).join('')}`
+        return coreMenu(q)
           + `<button role="menuitemcheckbox" data-m="xbox" aria-checked="${!!q.box}"><span>${q.box ? '✓ ' : ''}Gray outline box</span><span>${q.box ? 'on' : 'off'}</span></button>`
           + `<div class="mlabel">Winding text</div>` + ['pri', 'sec'].map(f => fieldShown(q, f)
           ? `<button role="menuitem" data-m="wedit-${f}"><span>Edit ${FIELD_NAME[f]}</span><span>dbl-click</span></button><button role="menuitem" data-m="whide-${f}"><span>Hide ${FIELD_NAME[f]}</span><span></span></button>`
@@ -2357,7 +2377,7 @@ function partMenu(e, raw) {
   menuEl.onclick = ev => { const wc = ev.target.closest('[data-wc]'); if (wc) { closeMenu(); colorWires(wc.dataset.wc); return; }
     const tb = ev.target.closest('[data-tube]'); if (tb) { closeMenu(); setTubeType(items[0].o, tb.dataset.tube); return; }
     const lc = ev.target.closest('[data-led]'); if (lc) { closeMenu(); setLedColor(items[0].o, lc.dataset.led); return; }
-    const cr = ev.target.closest('[data-core]'); if (cr) { closeMenu(); const q = items[0].o, k = cr.dataset.core; if ((q.core || 'iron') !== k) { snapshot(); q.core = k; render(); changed(); setMsg(`${q.ref || LIB[q.type].name}: ${CORE_NAME[k]}`); } return; }
+    const cr = ev.target.closest('[data-core]'); if (cr) { closeMenu(); const q = items[0].o, k = cr.dataset.core; if (coreOf(q) !== k) { snapshot(); q.core = k; render(); changed(); setMsg(`${q.ref || LIB[q.type].name}: ${CORE_NAME[k]}`); } return; }
     const vy = ev.target.closest('[data-vary]'); if (vy) { closeMenu(); const [vk, vn] = vy.dataset.vary.split(':'); setVary(items[0].o, +vn, vk); return; }
     const b = ev.target.closest('[data-m]'); if (!b) return; const m = b.dataset.m; closeMenu();
     if (m === 'edit') { const L0 = selLabel; if (L0) editInPlace(sheet.parts.find(x => x.id === L0.id), L0.field); return; }
@@ -2590,6 +2610,7 @@ function loadProject(p, msg) {
       if (!q.ref) q.ref = nextRef(LIB[q.type].pre);
       if (q.value == null || q.value === '') q.value = LIB[q.type].value;
       const legacy = q.showLabel == null ? !LIB[q.type].hideLabel : q.showLabel !== false;
+      if (q.type === 'choke') { q.type = 'inductor'; if (!q.core) q.core = 'iron'; }   // the choke merged into the inductor
       xfmrDefaults(q); stockDefaults(q); fixOldSection(q); if (q.showRef == null) q.showRef = legacy; if (q.showVal == null) q.showVal = legacy; delete q.showLabel;
     }
     sheet = was;

@@ -785,6 +785,16 @@ def('m_st_5y3', { cat: 'Tube, modern', stock: 'rect', name: '5Y3 family', pre: '
   hooks: { P1: [-20, -50], P2: [20, -50], F1: [-10, 50], F2: [10, 50] },
   draw: () => pa(stadium(20, 30), 'env') + ln(-32, -10, -8, -10) + ln(8, -10, 32, -10) + ln(-20, -10, -20, -50) + ln(20, -10, 20, -50) + filV(8, 24, 50),
   pins: { P1: { t: '4' }, P2: { t: '6' }, F1: { t: '2' }, F2: { t: '8' } } });
+// 6CA4 / EZ81 (r-type.org EZ81 B9A table): pin 1 anode 2, 3 cathode, 4 and 5 heater, 7 anode 1; pins 2, 6, 8, 9 are internal
+// connections (not drawn). Indirectly heated with its own cathode pin, so it can hide its heater like the other _ih tubes.
+const FAM_6CA4 = ['6CA4', 'EZ81', 'CV5072', 'U709', 'UU12'];
+const rectBody = () => pa(stadium(20, 30), 'env') + ln(-32, -10, -8, -10) + ln(8, -10, 32, -10) + ln(-20, -10, -20, -50) + ln(20, -10, 20, -50) + cath(-30, 30, 10, -30, 50);
+def('m_st_6ca4', { cat: 'Tube, modern', stock: 'rect', name: '6CA4 family', pre: 'V', value: '6CA4', family: FAM_6CA4,
+  tags: 'stock rectifier full-wave noval 9-pin b9a indirectly heated 6ca4 ' + FAM_6CA4.join(' ').toLowerCase(),
+  hooks: { P1: [-20, -50], P2: [20, -50], K: [-30, 50], H1: [-10, 50], H2: [10, 50] },
+  draw: () => rectBody() + pl([[-10, 50], [-10, 27], [0, 17], [10, 27], [10, 50]], 'htr'),
+  bare: { hooks: { P1: [-20, -50], P2: [20, -50], K: [-30, 50] }, draw: rectBody },
+  pins: { P1: { t: '1' }, P2: { t: '7' }, K: { t: '3' }, H1: { t: '4' }, H2: { t: '5' } } });
 // 12AX7 family: twin triodes on the 9A noval base. Section A: plate 1, grid 2, cathode 3, with the heater
 // (pins 4 and 5, centre tap 9). Section B: plate 6, grid 7, cathode 8.
 const FAM_12AX7 = ['12AX7', '12AT7', '12AU7', '12AY7', '12AV7', '12AZ7', '12BZ7', '12DW7', '5751', '7025', '6072', '6201', '6681', '5814', '6189', 'ECC81', 'ECC82', 'ECC83'];

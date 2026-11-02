@@ -1686,7 +1686,7 @@ function renderLib() {
       const stockGrp = (label, list, none) => list.length ? grp(label, list) : q ? '' : sub(label, 0, `<div class="subnote">${none}</div>`);
       const stRect = stock.filter(L => L.stock === 'rect').sort((a, b) => a.name.localeCompare(b.name, 'en', { numeric: true })),   // rectifiers in order, numbers read as numbers (6X5 before 35W4)
          stSig = stock.filter(L => !L.stock), stAA5 = stock.filter(L => L.stock === 'aa5' || (L.alsoIn || []).includes('aa5'));   // aa5: All American Five set tubes; alsoIn shows a part in a second group too
-      body = grp('Directly heated', direct) + grp('Cathode only', kOnly) + grp('Indirectly heated', withHtr)
+      body = grp('Generic: directly heated', direct) + grp('Cathode only', kOnly) + grp('Indirectly heated', withHtr)
         + stockGrp('Stock: rectifiers', stRect, 'No stock rectifiers yet.') + stockGrp('Stock: signal tubes', stSig, 'No stock signal tubes yet.')
         + stockGrp('Stock: All American Five', stAA5, 'No All American Five tubes yet.')
         + grp('Gas-filled', gas) + grp('Specialized', sp) + grp('Heaters', htrs);

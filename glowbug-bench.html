@@ -834,7 +834,9 @@ def('m_st_35w4', { cat: 'Tube, modern', stock: 'rect', alsoIn: ['aa5'], name: '3
 // 12AX7 family: twin triodes on the 9A noval base. Section A: plate 1, grid 2, cathode 3, with the heater
 // (pins 4 and 5, centre tap 9). Section B: plate 6, grid 7, cathode 8.
 const FAM_12AX7 = ['12AX7', '12AT7', '12AU7', '12AY7', '12AV7', '12AZ7', '12BZ7', '12DW7', '5751', '7025', '6072', '6201', '6681', '5814', '6189', 'ECC81', 'ECC82', 'ECC83'];
-const triodeBody = () => ci(0, 0, 30, 'env') + ln(-17, -15, 17, -15) + ln(0, -15, 0, -50) + ln(-17, 0, 17, 0, 'dash') + ln(-50, 0, -17, 0);
+// Stock triode body. Grid (Larry's look): the solid lead stops at x -19, then five even dashes (dash 5, gap 3.4, from the
+// 'dash' class) run from -15.6 to 23, so the grid reaches well across the tube and ends on a full dash.
+const triodeBody = () => ci(0, 0, 30, 'env') + ln(-17, -15, 17, -15) + ln(0, -15, 0, -50) + ln(-15.6, 0, 23, 0, 'dash') + ln(-50, 0, -19, 0);
 const ST12AX7 = {
   A: { hooks: { P: [0, -50], G: [-50, 0], K: [-20, 50], H1: [-10, 50], HCT: [0, 50], H2: [10, 50] },
        draw: () => triodeBody() + cath(-20, 19, 10, -20, 50) + pl([[-10, 50], [-10, 27], [0, 17], [10, 27], [10, 50]], 'htr') + ln(0, 17, 0, 50, 'htr'),

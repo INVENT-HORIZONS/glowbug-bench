@@ -1028,6 +1028,15 @@ for (const k in LIB) {
   const hooks = Object.fromEntries(Object.entries(L.hooks).filter(([n]) => !/^H\d$/.test(n)));
   L.bare = { hooks, draw: () => L.draw().replace(/<(?:line|polyline|polygon|path)\b[^>]*class="htr"[^>]*\/>/g, '') };
 }
+// 6267 / EF86 family: low-noise noval pentode (r-type.org EF86 B9A table): pin 1 screen g2, 2 and 7 internal shield, 3 cathode,
+// 4 and 5 heater, 6 anode, 8 suppressor g3, 9 control grid g1. Drawn as the indirectly heated pentode (so it can hide its
+// heater the same way); the shield pins are not drawn. Family from r-type.org and Wikipedia (direct equivalents, special quality).
+const FAM_6267 = ['6267', 'EF86', '6BK8', '6CF8', '6F22', 'Z729', 'CV2901', 'CV8068', 'CV10098', 'EF86SQ', 'EF806S', 'M8195', 'CV4085'];
+{ const B = LIB.m_pentode_ih;
+  def('m_st_6267', { cat: 'Tube, modern', name: '6267 family', pre: 'V', value: '6267', family: FAM_6267,
+    tags: 'stock pentode low noise noval b9a 9-pin indirectly heated ' + FAM_6267.join(' ').toLowerCase(),
+    hooks: B.hooks, draw: B.draw, bare: B.bare,
+    pins: { P: { t: '6' }, G3: { t: '8' }, G2: { t: '1', below: true }, G1: { t: '9' }, K: { t: '3' }, H1: { t: '4' }, H2: { t: '5' } } }); }
 // tubes start with no value and the designator V?; stock tubes (m_st_*) keep their tube type as the value
 for (const k in LIB) if (LIB[k].cat.startsWith('Tube') && !/^m_st_/.test(k)) LIB[k].value = '';   // stock tubes keep their type as the value
 const CATS = ['Passive', 'Semiconductors', 'Tube, modern', 'Transformer', 'Heater', 'Power', 'Misc', 'Tube, 1930s', 'Tube, 1920s'];
@@ -1335,7 +1344,7 @@ function pinGeom(p) {
     // leads leaving the top or bottom: the leftmost hook in the row labels on its left, the others on their right,
     // so closely spaced hooks (cathode and heater) never overprint; side leads label just above the lead
     const leftmost = uy && all.every(([, q]) => q[1] !== hy || q[0] >= hx);
-    const bx = hx - ux * 12 + (uy ? (leftmost ? -7 : 7) : 0), by = hy - uy * 12 + (ux ? -6 : 0);
+    const bx = hx - ux * 12 + (uy ? (leftmost ? -7 : 7) : 0), by = hy - uy * 12 + (ux ? (pin.below ? 10 : -6) : 0);   // pin.below: a side label under its lead (closely spaced leads)
     const x = bx + (pin.dx || 0), y = by + (pin.dy || 0), w = Math.max(String(t).length * 5.4, 8);
     out.push({ name, t, x, y, hx, hy, moved: !!(pin.dx || pin.dy), x0: x - w / 2 - 1, x1: x + w / 2 + 1, top: y - 7, bottom: y + 3 });
   }

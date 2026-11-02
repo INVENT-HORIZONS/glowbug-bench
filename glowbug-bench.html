@@ -551,6 +551,23 @@ def('diode_schottky', { cat: 'Semiconductors', name: 'Schottky diode', pre: 'D',
   draw: () => ln(0, 0, 13, 0) + pg([[13, -8], [13, 8], [27, 0]]) + pl([[31, 5], [31, 8], [27, 8], [27, -8], [23, -8], [23, -5]]) + ln(27, 0, 40, 0) });
 def('diode_zener', { cat: 'Semiconductors', name: 'Zener diode', pre: 'D', value: '1N4742A', hooks: { A: [0, 0], K: [40, 0] },
   draw: () => ln(0, 0, 13, 0) + pg([[13, -8], [13, 8], [27, 0]]) + pl([[31, 11], [27, 8], [27, -8], [23, -11]]) + ln(27, 0, 40, 0) });
+// More diodes, between the Zener and the LED (Larry's order): photodiode, tunnel, varactor, laser. All share the plain
+// diode's body and hooks (A at 0, K at 40). inkArrow draws a straight arrow with a filled head at (x2, y2).
+const inkArrow = (x1, y1, x2, y2) => { const L = Math.hypot(x2 - x1, y2 - y1), ux = (x2 - x1) / L, uy = (y2 - y1) / L, bx = x2 - 5 * ux, by = y2 - 5 * uy;
+  return ln(x1, y1, +bx.toFixed(2), +by.toFixed(2)) + pg([[x2, y2], [+(bx - 2.4 * uy).toFixed(2), +(by + 2.4 * ux).toFixed(2)], [+(bx + 2.4 * uy).toFixed(2), +(by - 2.4 * ux).toFixed(2)]], 'ink solid'); };
+const diodeTri = () => ln(0, 0, 13, 0) + pg([[13, -8], [13, 8], [27, 0]]);
+// photodiode: two arrows coming in toward the junction (light in), the LED's arrows reversed
+def('diode_photo', { cat: 'Semiconductors', name: 'Photodiode', pre: 'D', value: 'BPW34', tags: 'photo diode light sensor photodetector', hooks: { A: [0, 0], K: [40, 0] },
+  draw: () => diodeTri() + ln(27, -8, 27, 8) + ln(27, 0, 40, 0) + inkArrow(27, -23, 19, -12) + inkArrow(33, -23, 25, -12) });
+// tunnel (Esaki) diode: the cathode bar bent into a bracket, its arms turned back toward the anode
+def('diode_tunnel', { cat: 'Semiconductors', name: 'Tunnel diode', pre: 'D', value: '1N3716', tags: 'tunnel esaki diode negative resistance', hooks: { A: [0, 0], K: [40, 0] },
+  draw: () => diodeTri() + pl([[23, -8], [27, -8], [27, 8], [23, 8]]) + ln(27, 0, 40, 0) });
+// varactor (varicap): the cathode bar plus a parallel capacitor plate
+def('diode_varactor', { cat: 'Semiconductors', name: 'Varactor diode', pre: 'D', value: 'MV2109', tags: 'varactor varicap tuning diode variable capacitance', hooks: { A: [0, 0], K: [40, 0] },
+  draw: () => diodeTri() + ln(27, -8, 27, 8) + ln(31, -8, 31, 8) + ln(31, 0, 40, 0) });
+// laser diode: two parallel arrows straight up from the junction (coherent light out), unlike the LED's diagonal pair
+def('diode_laser', { cat: 'Semiconductors', name: 'Laser diode', pre: 'D', value: '650 nm', tags: 'laser diode ld coherent light', hooks: { A: [0, 0], K: [40, 0] },
+  draw: () => diodeTri() + ln(27, -8, 27, 8) + ln(27, 0, 40, 0) + inkArrow(17, -9, 17, -24) + inkArrow(23, -9, 23, -24) });
 // LED: the plain diode with two arrows leaving it, up and to the right (light out). p.led picks the color of the body
 // (triangle and bar) and the arrows; the leads stay ink. Colors are inline styles so they survive export.
 // Red (the default) is the app's own power-wire red. Kept clear of the reserved heater orange and magic-eye green.

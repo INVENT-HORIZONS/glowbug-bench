@@ -752,6 +752,24 @@ def('m_beam_ih', { cat: 'Tube, modern', name: 'Beam power, filament', pre: 'V', 
 /* ---- Stock tubes (types m_st_*): real tubes with their pinout. A stock part can have sections (p.unit 'A', 'B'),
    each placed on its own and linked by p.grp; the ref shows as V1A, V1B. Every section shares the ref and the
    tube type (the value). Pin numbers are filled in and shown when placed. ---- */
+// ---- Stock rectifiers (stock: 'rect'; listed under "Stock: rectifiers", 5AR4 first). Single section, so the ref has no letter.
+// 5AR4 / GZ34 (r-type.org base table): pin 1 internal, 2 heater, 4 anode 2, 6 anode 1, 8 heater + cathode. Indirectly
+// heated with the cathode tied to the heater at pin 8 inside the tube, so the cathode has no pin of its own.
+const FAM_5AR4 = ['5AR4', 'GZ34', 'CV1377', 'U77'];
+def('m_st_5ar4', { cat: 'Tube, modern', stock: 'rect', name: '5AR4 family', pre: 'V', value: '5AR4', family: FAM_5AR4,
+  tags: 'stock rectifier full-wave octal slow start indirectly heated ' + FAM_5AR4.join(' ').toLowerCase(),
+  hooks: { P1: [-20, -50], P2: [20, -50], H1: [-10, 50], H2: [10, 50] },
+  draw: () => pa(stadium(20, 30), 'env') + ln(-32, -10, -8, -10) + ln(8, -10, 32, -10) + ln(-20, -10, -20, -50) + ln(20, -10, 20, -50)
+    + ln(-26, 5, 26, 5) + ln(26, 5, 26, 24) + ln(26, 24, 10, 24) + ci(10, 24, 1.8, 'solid')
+    + pl([[-10, 50], [-10, 21], [0, 12], [10, 21], [10, 50]], 'htr'),
+  pins: { P1: { t: '4' }, P2: { t: '6' }, H1: { t: '2' }, H2: { t: '8' } } });
+// 5U4 (r-type.org base table): pin 2 filament, 4 anode 2, 6 anode 1, 8 filament (and cathode: the B+ side). Directly heated.
+const FAM_5U4 = ['5U4G', '5U4GA', '5U4GB', '5U4GT', '5U4GTY', '5AS4', '5AS4A', '5Z3S', 'U52', 'GZ31', 'VT-244', 'CV575', 'CV684'];
+def('m_st_5u4', { cat: 'Tube, modern', stock: 'rect', name: '5U4 family', pre: 'V', value: '5U4GB', family: FAM_5U4,
+  tags: 'stock rectifier full-wave octal directly heated filament 5u4 ' + FAM_5U4.join(' ').toLowerCase(),
+  hooks: { P1: [-20, -50], P2: [20, -50], F1: [-10, 50], F2: [10, 50] },
+  draw: () => pa(stadium(20, 30), 'env') + ln(-32, -10, -8, -10) + ln(8, -10, 32, -10) + ln(-20, -10, -20, -50) + ln(20, -10, 20, -50) + filV(8, 24, 50),
+  pins: { P1: { t: '4' }, P2: { t: '6' }, F1: { t: '2' }, F2: { t: '8' } } });
 // 12AX7 family: twin triodes on the 9A noval base. Section A: plate 1, grid 2, cathode 3, with the heater
 // (pins 4 and 5, centre tap 9). Section B: plate 6, grid 7, cathode 8.
 const FAM_12AX7 = ['12AX7', '12AT7', '12AU7', '12AY7', '12AV7', '12AZ7', '12BZ7', '12DW7', '5751', '7025', '6072', '6201', '6681', '5814', '6189', 'ECC81', 'ECC82', 'ECC83'];
@@ -792,7 +810,8 @@ function stockSection(p, u) {
   return Object.assign(p, { unit: u, showPins: true, pins: JSON.parse(JSON.stringify(U.pins)) });
 }
 function stockDefaults(p) {
-  const L = LIB[p.type]; if (!L || !L.units) return p;
+  const L = LIB[p.type]; if (!L) return p;
+  if (!L.units) { if (L.pins && !p.pins) Object.assign(p, { showPins: true, pins: JSON.parse(JSON.stringify(L.pins)) }); return p; }
   if (!L.units[p.unit]) p.unit = unitsOf(L)[0];
   if (!p.grp) p.grp = uid();
   if (!p.pins) stockSection(p, p.unit);
@@ -2197,9 +2216,10 @@ function partMenu(e, raw) {
     + (items.length === 1 && items[0].k === 'part' && heaterBare(items[0].o) ? `<button role="menuitem" data-m="heater"><span>${items[0].o.noHeater ? 'Show' : 'Hide'} heater</span><span></span></button>` : '')
     + (items.length === 1 && items[0].k === 'part' && isTube(items[0].o) ? `<button role="menuitem" data-m="pins"><span>${items[0].o.showPins ? 'Hide' : 'Show'} pin numbers</span><span></span></button>` : '')
     + (t.k === 'pin' ? `<button role="menuitem" data-m="editpin"><span>Edit pin number</span><span>dbl-click</span></button>` + (((t.o.pins || {})[t.pin] || {}).dx || ((t.o.pins || {})[t.pin] || {}).dy ? `<button role="menuitem" data-m="resetpin"><span>Put pin number back</span><span></span></button>` : '') : '')
+    + (items.length === 1 && items[0].k === 'part' && LIB[items[0].o.type].family ? (() => { const q = items[0].o, L = LIB[q.type];
+        return `<div class="mlabel">Tube type</div><div class="chips wide">${L.family.map(t => `<button class="chip" data-tube="${esc(t)}" aria-pressed="${t === q.value}">${esc(t)}</button>`).join('')}</div>`; })() : '')
     + (items.length === 1 && items[0].k === 'part' && LIB[items[0].o.type].units ? (() => { const q = items[0].o, L = LIB[q.type], have = groupOf(q).map(unitOf);
-        return (L.family ? `<div class="mlabel">Tube type</div><div class="chips wide">${L.family.map(t => `<button class="chip" data-tube="${esc(t)}" aria-pressed="${t === q.value}">${esc(t)}</button>`).join('')}</div>` : '')
-          + `<div class="mlabel">Sections</div>` + unitsOf(L).map(u => have.includes(u)
+        return `<div class="mlabel">Sections</div>` + unitsOf(L).map(u => have.includes(u)
             ? `<button role="menuitem" disabled><span>${esc(q.ref || L.pre + '?')}${u} placed</span><span>✓</span></button>`
             : `<button role="menuitem" data-m="unit-${u}"><span>Add section ${u} (${esc(q.ref || L.pre + '?')}${u})</span><span></span></button>`).join('')
 ; })() : '')

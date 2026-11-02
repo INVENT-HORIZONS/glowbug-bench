@@ -1670,13 +1670,14 @@ function renderLib() {
       const vac = items.filter(L => !isGas(L) && !isSp(L) && !isSt(L)), gas = items.filter(isGas), sp = items.filter(isSp), stock = items.filter(isSt);
       const direct = vac.filter(isDirect), withHtr = vac.filter(L => !isDirect(L) && /_ih$/.test(L.type)), kOnly = vac.filter(L => !isDirect(L) && !/_ih$/.test(L.type));
       const grp = (label, list) => list.length ? `<div class="subcat">${label}</div><div class="tiles">${list.map(tile).join('')}</div>` : '';
-      // two stock groups: rectifiers (defs with stock: 'rect') above signal tubes (every other m_st_ type). An empty group
+      // three stock groups: rectifiers (stock: 'rect'), signal tubes (no stock key), All American Five (stock: 'aa5'). An empty group
       // still shows its header with a note, except during a search.
       const stockGrp = (label, list, none) => list.length ? grp(label, list) : q ? '' : `<div class="subcat">${label}</div><div class="subnote">${none}</div>`;
       const stRect = stock.filter(L => L.stock === 'rect').sort((a, b) => a.name.localeCompare(b.name, 'en', { numeric: true })),   // rectifiers in order, numbers read as numbers (6X5 before 35W4)
-         stSig = stock.filter(L => L.stock !== 'rect');
+         stSig = stock.filter(L => !L.stock), stAA5 = stock.filter(L => L.stock === 'aa5');   // aa5: All American Five set tubes
       body = grp('Directly heated', direct) + grp('Cathode only', kOnly) + grp('Indirectly heated', withHtr)
         + stockGrp('Stock: rectifiers', stRect, 'No stock rectifiers yet.') + stockGrp('Stock: signal tubes', stSig, 'No stock signal tubes yet.')
+        + stockGrp('Stock: All American Five', stAA5, 'No All American Five tubes yet.')
         + grp('Gas-filled', gas) + grp('Specialized', sp);
     } else if (cat === 'Semiconductors') {
       // diodes, then bipolar transistors, then FETs, each group starting a fresh row

@@ -9,7 +9,7 @@ Open `glowbug-bench.html` in any modern browser. Everything is in the one file; 
 - **Symbol library (95 parts):** passives (including a two-terminal rheostat, film and variable capacitors and a tapped inductor), transformers (isolation, step-up, step-down, and a tall versatile transformer with 0 to 6 taps on each winding), heaters, power, semiconductors (diodes including photodiode, tunnel, varactor, laser and LED, BJTs, Darlingtons, JFETs and MOSFETs), misc (fuse, SPST switch, push button, SPDT and DPDT switches, a rotary switch with 2 to 12 positions, pilot lamp, speaker), modern tubes (including gas-filled rectifiers, glow regulators, thyratrons, a photomultiplier and two- and single-section electron-ray "magic eyes"), and 1920s and 1930s period tubes for the Vintage Tube spotlight.
 - **Hooks on a 0.1 in grid:** every connection point lands on the grid, even after rotating or flipping. Ref des and value labels move on a finer 0.05 in grid.
 - **Wiring:** click a hook to start, click to add corners, and finish on a hook or wire. Space flips the corner. Junction dots appear automatically.
-- **Wire colors:** black, red, green, blue, brown and orange. Pick the color for new wires from the swatch under the Wire tool; recolor existing wires from the properties panel or the right-click menu.
+- **Wire colors:** black, red, green, blue, brown and orange. New wires are black; recolor wires from the properties panel or the right-click menu.
 - **Editing:**
   - Drag parts and the wires follow.
   - Drag a wire segment to move it.
@@ -53,7 +53,7 @@ Open `glowbug-bench.html` in any modern browser. Everything is in the one file; 
 - **Movable blocks:** the title block and revision chart drag anywhere and stick to any corner.
 - **Project tree:** schematics are listed by file name; double-click to rename.
 - **Bench instruments:** multimeter, oscilloscope and signal generator buttons sit after Camera on the toolbar (placeholders for now).
-- **Link tool (J):** gang adjustable controls (potentiometers, rheostats, variable capacitors, and inductors or transformers with a variable core). It works like the wire tool: start on a control's arrow tip, click to add corners (straight lines at any angle, diagonals included) and end on another control's arrow tip. The thin dashed orange link follows the parts, its segments can be dragged like wire segments, and deleting either control or any piece of the link deletes the whole link.
+- **Link tool (J):** gang adjustable controls (potentiometers, rheostats, variable capacitors, and inductors or transformers with a variable core). It works exactly like the wire tool: start on a control's arrow tip, click to add corners, end on another control's arrow tip; Space flips the corner. The thin dashed orange link follows the controls, its segments drag like wire segments, and deleting either control or any piece of the link deletes the whole link.
 - **Line tool (L):** click a start and an end to draw a straight line at any angle, for arrows, outlines and notes. Lines are drawing only, never wires. Select, move, recolor, copy or delete them like anything else.
 - **Settings:** the gear at the far right of the toolbar opens the Settings dialog (empty for now).
 - **Live camera:** press K or the Camera button to float a live webcam view over the sheet, for showing your bench while you teach. Drag it, resize it from the corner dot, and use its hover bar to pick a camera, mirror the picture, switch between round and rectangle, or close it. It is never recorded and never appears in exports.

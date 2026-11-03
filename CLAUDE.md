@@ -116,6 +116,7 @@ The owner is Larry Higley (GitHub: INVENT-HORIZONS). The app started as the sche
 - **Settings (gear, far right of the toolbar, `bSettings`):** `settingsDialog()` opens an empty Settings dialog with Cancel and OK (both just close it for now; Escape or a click outside also closes). Larry will say what goes in it.
 - **Bench instrument buttons** (after Camera, behind a separator): Multimeter `bMeter`, Oscilloscope `bScope`, Signal generator `bSigGen` (Larry swapped the last two). They use Larry's own picture icons, embedded as base64 PNGs (background made transparent), in `.tb-img` buttons (img 24 px high). For now each click only shows "… coming soon" in the status bar; Larry will say what they open.
 - **Tools:** Select V, Wire W, Text T, Cut C (whole item), Snip S (one wire segment).
+  - Toolbox order (Larry's): Select, Wire, Wire color | Cut, Snip | Text, with `<hr>` separators.
   - Space flips the corner while drawing a wire.
   - Alt+wheel pans horizontally; Shift+wheel pans vertically.
 - **Local storage keys:** `gs.current`, `gs.doc`, `gs.grid`, `gs.hooks`, `gs.panelw`, `gs.closed`, `gs.wirecolor`, `gs.broken`, `gs.cam`.

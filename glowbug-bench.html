@@ -542,9 +542,10 @@ def('inductor', { cat: 'Passive', name: 'Inductor', pre: 'L', value: '2.5 mH', t
   draw: c => ln(0, 0, 10, 0) + pa(coilX(10, 0, 4)) + ln(50, 0, 60, 0) + inductorCore(c || 'air') });
 def('choke', { legacy: true, cat: 'Passive', name: 'Choke (iron core)', pre: 'L', value: '10 H', hooks: { 1: [0, 0], 2: [60, 0] },
   draw: () => ln(0, 0, 10, 0) + pa(coilX(10, 0, 4)) + ln(50, 0, 60, 0) + ln(10, -9, 50, -9) + ln(10, -12, 50, -12) });
-def('inductor_ct', { cat: 'Passive', name: 'Winding, center tap', pre: 'T', value: '6.3 V CT', tags: 'heater winding secondary air core ferrite iron variable', coreDef: 'air',
+// Inductor, tapped (formerly "Winding, center tap"; type kept so saved drawings open): the tap is marked with a junction dot.
+def('inductor_ct', { cat: 'Passive', name: 'Inductor, tapped', pre: 'T', value: '6.3 V CT', tags: 'center tap ct heater winding secondary air core ferrite iron variable', coreDef: 'air',
   hooks: { 1: [0, 0], 2: [60, 0], CT: [30, 20] }, drawArg: p => coreOf(p),
-  draw: c => ln(0, 0, 10, 0) + pa(coilX(10, 0, 4)) + ln(50, 0, 60, 0) + ln(30, 0, 30, 20) + inductorCore(c || 'air') });
+  draw: c => ln(0, 0, 10, 0) + pa(coilX(10, 0, 4)) + ln(50, 0, 60, 0) + ln(30, 0, 30, 20) + ci(30, 0, 3, 'ink solid') + inductorCore(c || 'air') });
 def('diode', { cat: 'Semiconductors', name: 'Diode (solid-state)', pre: 'D', value: '1N4007', hooks: { A: [0, 0], K: [40, 0] },
   draw: () => ln(0, 0, 13, 0) + pg([[13, -8], [13, 8], [27, 0]]) + ln(27, -8, 27, 8) + ln(27, 0, 40, 0) });
 def('diode_schottky', { cat: 'Semiconductors', name: 'Schottky diode', pre: 'D', value: '1N5819', hooks: { A: [0, 0], K: [40, 0] },

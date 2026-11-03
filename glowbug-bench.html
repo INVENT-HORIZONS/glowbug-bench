@@ -671,23 +671,37 @@ function xfmr(pct, sct, core) {
   if (pct) s += ln(0, 30, 10, 30); if (sct) s += ln(40, 30, 50, 30);
   return s;
 }
-def('transformer', { cat: 'Transformer', name: 'Transformer, isolation', pre: 'T', value: 'Isolation', tags: 'isolation 1:1', layout: 'xfmr', hooks: { P1: [0, 0], P2: [0, 60], S1: [50, 0], S2: [50, 60] }, draw: c => xfmr(0, 0, c) });
+def('transformer', { cat: 'Transformer', name: 'Transformer, isolation', pre: 'T', value: 'Isolation', tags: 'isolation 1:1 center tap ct', layout: 'xfmr', ctap: true, hooks: { P1: [0, 0], P2: [0, 60], S1: [50, 0], S2: [50, 60] }, draw: c => xfmr(0, 0, c) });
 def('transformer_sct', { legacy: true, cat: 'Transformer', name: 'Transformer, secondary CT', pre: 'T', value: '350-0-350 V', hooks: { P1: [0, 0], P2: [0, 60], S1: [50, 0], S2: [50, 60], SCT: [50, 30] }, draw: c => xfmr(0, 1, c) });
 def('transformer_ul', { legacy: true, cat: 'Transformer', name: 'Output transformer, ultra-linear', pre: 'T', value: '6.6 kΩ : 8 Ω, UL', tags: 'ul ultralinear push-pull screen tap opt',
   hooks: { P1: [0, 0], UL1: [0, 20], CT: [0, 40], UL2: [0, 60], P2: [0, 80], S1: [50, 10], S2: [50, 70] },
   draw: c => pa(coilY(10, 0, 8, 1)) + pa(coilY(40, 10, 6, -1)) + coreSVG(c || 'iron', -4, 84)
     + [0, 20, 40, 60, 80].map(y => ln(0, y, 10, y)).join('') + ln(40, 10, 50, 10) + ln(40, 70, 50, 70) });
 // general-purpose step-down / step-up: more turns drawn on the higher-voltage winding
-def('transformer_down', { cat: 'Transformer', name: 'Transformer, step-down', pre: 'T', value: 'Stepdown', tags: 'step down stepdown power mains', layout: 'xfmr',
+def('transformer_down', { cat: 'Transformer', name: 'Transformer, step-down', pre: 'T', value: 'Stepdown', tags: 'step down stepdown power mains center tap ct', layout: 'xfmr', ctap: true,
   hooks: { P1: [0, 0], P2: [0, 60], S1: [50, 10], S2: [50, 50] },
   draw: c => ln(0, 0, 10, 0) + ln(10, 0, 10, 10) + pa(coilY(10, 10, 4, 1)) + ln(10, 50, 10, 60) + ln(10, 60, 0, 60)
     + ln(50, 10, 40, 10) + ln(40, 10, 40, 20) + pa(coilY(40, 20, 2, -1)) + ln(40, 40, 40, 50) + ln(40, 50, 50, 50)
     + coreSVG(c || 'iron', 4, 56) });
-def('transformer_up', { cat: 'Transformer', name: 'Transformer, step-up', pre: 'T', value: 'Stepup', tags: 'step up stepup', layout: 'xfmr',
+def('transformer_up', { cat: 'Transformer', name: 'Transformer, step-up', pre: 'T', value: 'Stepup', tags: 'step up stepup center tap ct', layout: 'xfmr', ctap: true,
   hooks: { P1: [0, 10], P2: [0, 50], S1: [50, 0], S2: [50, 60] },
   draw: c => ln(0, 10, 10, 10) + ln(10, 10, 10, 20) + pa(coilY(10, 20, 2, 1)) + ln(10, 40, 10, 50) + ln(10, 50, 0, 50)
     + ln(50, 0, 40, 0) + ln(40, 0, 40, 10) + pa(coilY(40, 10, 4, -1)) + ln(40, 50, 40, 60) + ln(40, 60, 50, 60)
     + coreSVG(c || 'iron', 4, 56) });
+// Center taps for the isolation, step-down and step-up transformers (defs with ctap: true), chosen per part from the
+// right-click menu or Properties: p.pct adds hook PCT at the middle of the primary, p.sct hook SCT at the middle of the
+// secondary. Every winding of these three is centred on y 30 with an even number of loops, so the tap sits where two
+// loops meet and on the grid; it is a plain lead out to the hook column, like the versatile transformer's taps.
+function ctapBuild(L, pct, sct) {
+  const hooks = Object.assign({}, L.hooks); if (pct) hooks.PCT = [0, 30]; if (sct) hooks.SCT = [50, 30];
+  return { hooks, draw: c => L.draw(c) + (pct ? ln(0, 30, 10, 30) : '') + (sct ? ln(40, 30, 50, 30) : '') };
+}
+function setCtap(p, side, on) {
+  const k = side === 'p' ? 'pct' : 'sct'; if (!!p[k] === !!on) return;
+  snapshot(); if (on) p[k] = true; else delete p[k];      // hooks never move; wires left on a removed tap stay where they were
+  finishWires(); render(); renderSel(); changed();
+  setMsg(`${p.ref || LIB[p.type].name}: ${side === 'p' ? 'primary' : 'secondary'} center tap ${on ? 'added' : 'removed'}`);
+}
 // Versatile: the isolation look, sized by loops. Each winding is a list of sections (terminal or tap to the next tap or
 // terminal), each a number of loops; one loop is 0.1 in, so every tap lands on the grid. p.pw / p.sw hold the lists.
 // The taller winding sets the height; the shorter one is centred beside it. Taps are hooks PT1.. and ST1.., top down.
@@ -1186,6 +1200,11 @@ function shapeOf(p) {
   if (L.windings) {   // versatile transformer: shape set by its loop lists
     const w = windingsOf(p), n = w.pw.join('.') + '|' + w.sw.join('.'), c = L._v || (L._v = {});
     if (!c[n]) { const v = versBuild(w.pw, w.sw); c[n] = { hooks: v.hooks, draw: v.draw, bb: measureBB(v.draw, v.hooks) }; }
+    return c[n];
+  }
+  if (L.ctap && (p.pct || p.sct)) {   // isolation / step-down / step-up with optional center taps (p.pct, p.sct)
+    const n = (p.pct ? 'p' : '') + (p.sct ? 's' : ''), c = L._ct || (L._ct = {});
+    if (!c[n]) { const v = ctapBuild(L, !!p.pct, !!p.sct); c[n] = { hooks: v.hooks, draw: v.draw, bb: measureBB(v.draw, v.hooks) }; }
     return c[n];
   }
   const vs = varyList(L); if (!vs.length) return L;
@@ -1839,6 +1858,7 @@ function renderProps() {
       ${heaterBare(p) ? `<div class="field"><label>Heater</label><label style="display:flex;gap:5px;align-items:center;color:inherit"><input type="checkbox" id="pHtr"${p.noHeater ? '' : ' checked'}> show heater</label></div>` : ''}
       ${p.type === 'diode_led' ? `<div class="field"><label for="pLed">Color</label><select id="pLed">${LED_COLORS.map(([k, n]) => `<option value="${k}"${k === ledCol(p) ? ' selected' : ''}>${n}</option>`).join('')}</select></div>` : ''}
       ${isXfmr(p) ? `<div class="field"><label>Outline</label><label style="display:flex;gap:5px;align-items:center;color:inherit"><input type="checkbox" id="pXbox"${p.box ? ' checked' : ''}> light gray box</label></div>` : ''}
+      ${L.ctap ? `<div class="field"><label>Center taps</label><span style="display:flex;gap:12px;flex-wrap:wrap"><label style="display:flex;gap:5px;align-items:center;color:inherit"><input type="checkbox" id="pPct"${p.pct ? ' checked' : ''}> primary</label><label style="display:flex;gap:5px;align-items:center;color:inherit"><input type="checkbox" id="pSct"${p.sct ? ' checked' : ''}> secondary</label></span></div>` : ''}
       ${L.windings ? `<div class="row-btns"><button data-act="windings">Configure windings…</button></div>` : ''}
       ${varyList(L).map((v, k) => `<div class="field"><label for="pVary${k}">${v.label}</label><select id="pVary${k}" data-vk="${v.key}">${Array.from({ length: v.max - v.min + 1 }, (_, i) => v.min + i).map(n => `<option${n === varyVal(p, v) ? ' selected' : ''}>${n}</option>`).join('')}</select></div>`).join('')}
       <div class="field"><label for="pRef">Ref des</label><input type="text" id="pRef" value="${esc(p.ref)}" spellcheck="false"></div>
@@ -1855,6 +1875,8 @@ function renderProps() {
     if ($('pHtr')) $('pHtr').onchange = e => setHeater(p, e.target.checked);
     if ($('pTube')) $('pTube').onchange = e => setTubeType(p, e.target.value);
     if ($('pLed')) $('pLed').onchange = e => setLedColor(p, e.target.value);
+    if ($('pPct')) $('pPct').onchange = e => setCtap(p, 'p', e.target.checked);
+    if ($('pSct')) $('pSct').onchange = e => setCtap(p, 's', e.target.checked);
     if ($('pXbox')) $('pXbox').onchange = e => { snapshot(); p.box = e.target.checked; render(); renderSel(); changed(); };
     if (isXfmr(p)) for (const f of ['pri', 'sec']) {
       bind('pW' + f, e => { p[f] = e.value; if (e.value.trim() && !fieldShown(p, f)) { setShown(p, f, true); $('pWs' + f).checked = true; } });
@@ -2407,6 +2429,8 @@ function partMenu(e, raw) {
     + (items.length === 1 && items[0].k === 'part' && isXfmr(items[0].o) ? (() => { const q = items[0].o;
         return coreMenu(q)
           + `<button role="menuitemcheckbox" data-m="xbox" aria-checked="${!!q.box}"><span>${q.box ? '✓ ' : ''}Gray outline box</span><span>${q.box ? 'on' : 'off'}</span></button>`
+          + (LIB[q.type].ctap ? `<div class="mlabel">Center taps</div>` + [['p', 'pct', 'Primary center tap'], ['s', 'sct', 'Secondary center tap']].map(([sd, k, n]) =>
+              `<button role="menuitemcheckbox" data-m="ctap-${sd}" aria-checked="${!!q[k]}"><span>${q[k] ? '✓ ' : ''}${n}</span><span>${q[k] ? 'on' : 'off'}</span></button>`).join('') : '')
           + `<div class="mlabel">Winding text</div>` + ['pri', 'sec'].map(f => fieldShown(q, f)
           ? `<button role="menuitem" data-m="wedit-${f}"><span>Edit ${FIELD_NAME[f]}</span><span>dbl-click</span></button><button role="menuitem" data-m="whide-${f}"><span>Hide ${FIELD_NAME[f]}</span><span></span></button>`
           : `<button role="menuitem" data-m="wadd-${f}"><span>${(q[f] || '').trim() ? 'Show' : 'Add'} ${FIELD_NAME[f]}</span><span></span></button>`).join(''); })() : '')
@@ -2443,6 +2467,7 @@ function partMenu(e, raw) {
     if (m === 'edit') { const L0 = selLabel; if (L0) editInPlace(sheet.parts.find(x => x.id === L0.id), L0.field); return; }
     if (m === 'heater') { setHeater(items[0].o, !!items[0].o.noHeater); return; }
     if (m.startsWith('unit-')) { addSection(items[0].o, m.slice(5)); return; }
+    if (m === 'ctap-p' || m === 'ctap-s') { const q = items[0].o, sd = m.slice(-1); setCtap(q, sd, !q[sd === 'p' ? 'pct' : 'sct']); return; }
     if (m === 'xbox') { const q = items[0].o; snapshot(); q.box = !q.box; render(); renderSel(); changed(); setMsg(`${q.ref || LIB[q.type].name}: gray outline box ${q.box ? 'on' : 'off'}`); return; }
     if (m === 'windings') { windingDialog(items[0].o); return; }
     if (m === 'pins') { const q = items[0].o; snapshot(); q.showPins = !q.showPins; if (q.showPins) { q.pins = q.pins || {}; for (const n of Object.keys(shapeOf(q).hooks)) q.pins[n] = q.pins[n] || { t: 'p?' }; } render(); changed(); setMsg(q.showPins ? 'Pin numbers shown. Double-click one to edit it; drag it to move it.' : 'Pin numbers hidden. Their text is kept.'); return; }

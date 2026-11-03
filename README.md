@@ -17,6 +17,7 @@ Open `glowbug-bench.html` in any modern browser. Everything is in the one file; 
   - Double-click a part, its ref des or its value to edit.
   - Delete on a selected label hides it instead of deleting anything.
 - **Pin numbers on tubes:** right-click a tube and choose Show pin numbers. Each hook gets a `p?` label you can double-click to edit (Tab moves to the next pin) and drag anywhere; a moved label is tied back to its pin with a dotted line.
+- **Center taps:** right-click an isolation, step-down or step-up transformer (or use Properties) to add a primary center tap, a secondary center tap, or both. Each tap is a new connection point at the middle of its winding.
 - **Versatile transformer:** each winding is drawn with a number of loops (one loop is 0.1 in), so you can show a step-up or step-down ratio and put taps anywhere. Use it for center taps, ultra-linear taps, multi-tap power transformers and the like.
   - **Configure windings…** (right-click or Properties) opens a dialog with a live preview. Set the loops in each section between terminals and taps, add a tap in the middle of any section, or remove a tap. This makes asymmetric taps. Even out taps spreads them evenly again. The shorter winding is centered beside the taller one.
   - Wires stay on their taps: taps that move drag their wires along, and a removed tap leaves its wires where they were.

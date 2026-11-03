@@ -1547,7 +1547,20 @@ function lineEl(l, attrs) {
   if (sh === 'rect') { const [x0, y0, x1, y1] = lineBB(l); return `<rect x="${x0}" y="${y0}" width="${x1 - x0}" height="${y1 - y0}" ${attrs}/>`; }
   return `<line x1="${l.a[0]}" y1="${l.a[1]}" x2="${l.b[0]}" y2="${l.b[1]}" ${attrs}/>`;
 }
-const lineSVG = l => lineEl(l, `style="stroke:${wcol(l.color || 'ink')};stroke-width:1.4;stroke-linecap:round;stroke-linejoin:round;fill:none"`);
+// Pen for lines, circles and rectangles (Larry): color, width (l.w) and line style (l.dash). The Properties panel shows the
+// pen while a drawing tool is on (it sets the pen for new shapes, remembered in gs.pen) and for a selected shape.
+const PEN_W = [[0.8, 'Hairline'], [1.4, 'Thin'], [2, 'Medium'], [3, 'Thick'], [4.5, 'Heavy']];
+const PEN_DASH = [['solid', 'Solid'], ['dash', 'Dashed'], ['long', 'Long dash'], ['dot', 'Dotted'], ['dashdot', 'Dash dot']];
+const penDash = (d, w) => ({ dash: `${+(4 * w + 2).toFixed(1)} ${+(3 * w + 1).toFixed(1)}`, long: `${+(8 * w + 4).toFixed(1)} ${+(3 * w + 2).toFixed(1)}`,
+  dot: `0 ${+(2.5 * w + 1.5).toFixed(1)}`, dashdot: `${+(5 * w + 2).toFixed(1)} ${+(2 * w + 1.5).toFixed(1)} 0 ${+(2 * w + 1.5).toFixed(1)}` }[d] || '');
+let pen = (q => ({ color: typeof q.color === 'string' ? q.color : 'ink',   // wcol() falls back to ink for an unknown key
+  w: PEN_W.some(x => x[0] === q.w) ? q.w : 1.4, dash: PEN_DASH.some(x => x[0] === q.dash) ? q.dash : 'solid' }))(lsGet('gs.pen', {}) || {});
+const savePen = () => lsSet('gs.pen', pen);
+const lineSVG = l => { const w = l.w || 1.4, d = penDash(l.dash, w); return lineEl(l, `style="stroke:${wcol(l.color || 'ink')};stroke-width:${w};stroke-linecap:round;stroke-linejoin:round;fill:none${d ? `;stroke-dasharray:${d}` : ''}"`); };
+// the pen fields for the Properties panel: color swatches, pen size and line style
+const penFields = (color, w, dash) => `<div class="field"><label>Color</label>${swatchRow(color)}</div>
+      <div class="field"><label for="pPenW">Pen size</label><select id="pPenW">${PEN_W.map(([v, n]) => `<option value="${v}"${v === w ? ' selected' : ''}>${n} (${v} px)</option>`).join('')}</select></div>
+      <div class="field"><label for="pPenD">Line style</label><select id="pPenD">${PEN_DASH.map(([v, n]) => `<option value="${v}"${v === dash ? ' selected' : ''}>${n}</option>`).join('')}</select></div>`;
 const lineBB = l => { if (shapeOfL(l) === 'circle') { const r = radOf(l); return [l.a[0] - r, l.a[1] - r, l.a[0] + r, l.a[1] + r]; } return [Math.min(l.a[0], l.b[0]), Math.min(l.a[1], l.b[1]), Math.max(l.a[0], l.b[0]), Math.max(l.a[1], l.b[1])]; };
 // distance from p to the drawn outline (hit testing)
 function lineDist(p, l) {
@@ -1725,7 +1738,7 @@ function renderOver() {
   }
   if (SHAPE_TOOLS.includes(mode)) {
     s += `<line class="cursor-x" x1="${mouse[0] - 6}" y1="${mouse[1]}" x2="${mouse[0] + 6}" y2="${mouse[1]}"/><line class="cursor-x" x1="${mouse[0]}" y1="${mouse[1] - 6}" x2="${mouse[0]}" y2="${mouse[1] + 6}"/>`;
-    if (lineDraft) s += lineSVG({ a: lineDraft.a, b: mouse, shape: lineDraft.shape });
+    if (lineDraft) s += lineSVG({ a: lineDraft.a, b: mouse, shape: lineDraft.shape, color: pen.color, w: pen.w, dash: pen.dash });
   }
   if (band) s += `<rect class="band" x="${Math.min(band.a[0], band.b[0])}" y="${Math.min(band.a[1], band.b[1])}" width="${Math.abs(band.b[0] - band.a[0])}" height="${Math.abs(band.b[1] - band.a[1])}"/>`;
   $('layerOver').innerHTML = s;
@@ -1946,6 +1959,11 @@ function armPlace(type) { placeType = type; placeRot = 0; placeFlip = false; set
 
 function renderProps() {
   const b = $('propBody'), items = selItems();
+  if (!items.length && SHAPE_TOOLS.includes(mode)) {
+    b.innerHTML = `<div class="what">${SHAPE_NAME[mode]} tool<small>pen for new lines, circles and rectangles</small></div>
+      ${penFields(pen.color, pen.w, pen.dash)}
+      <div class="empty">${mode === 'circle' ? 'Click the center, then a point on the edge.' : mode === 'rect' ? 'Click one corner, then the opposite corner.' : 'Click the start, then the end.'}</div>`; return;
+  }
   if (!items.length) { b.innerHTML = `<div class="empty">Select a part, wire or text to edit it. Click a part in the library to place it; click any hook to start a wire.</div>`; return; }
   if (items.length > 1) {
     b.innerHTML = `<div class="what">${items.length} items selected<small>${items.filter(i => i.k === 'part').length} parts · ${items.filter(i => i.k === 'wire').length} wires · ${items.filter(i => i.k === 'text').length} texts${items.some(i => i.k === 'line') ? ` · ${items.filter(i => i.k === 'line').length} lines` : ''}${items.some(i => i.k === 'link') ? ` · ${items.filter(i => i.k === 'link').length} links` : ''}</small></div>
@@ -1998,7 +2016,7 @@ function renderProps() {
     const l = it.o, sh = shapeOfL(l), bb = lineBB(l), len = Math.hypot(l.b[0] - l.a[0], l.b[1] - l.a[1]);
     const size = sh === 'circle' ? `radius ${(len / G).toFixed(1)}` : sh === 'rect' ? `${(bb[2] - bb[0]) / G} × ${(bb[3] - bb[1]) / G}` : `${(len / G).toFixed(1)}`;
     b.innerHTML = `<div class="what">${SHAPE_NAME[sh]}<small>${size} grid units · drawing only, not a wire</small></div>
-      <div class="field"><label>Color</label>${swatchRow(l.color || 'ink')}</div>
+      ${penFields(l.color || 'ink', l.w || 1.4, l.dash || 'solid')}
       <div class="empty">Drag it to move it. Draw more with the Line (L), Circle (O) and Rectangle (B) tools.</div>
       <div class="row-btns"><button data-act="dup">Duplicate</button><button class="del" data-act="del">Delete</button></div>`;
   } else if (it.k === 'wire') {
@@ -2020,8 +2038,16 @@ function renderProps() {
     $('tTone').onchange = e => { snapshot(); t.tone = e.target.value; render(); changed(); };
   }
 }
+// pen size and line style: for the selected lines/shapes, or the pen for new ones while a drawing tool is on
+$('propBody').addEventListener('change', e => {
+  if (e.target.id !== 'pPenW' && e.target.id !== 'pPenD') return;
+  const key = e.target.id === 'pPenW' ? 'w' : 'dash', v = key === 'w' ? +e.target.value : e.target.value;
+  const ls = selItems().filter(i => i.k === 'line').map(i => i.o);
+  if (ls.length) { snapshot(); for (const l of ls) { if ((key === 'w' && v === 1.4) || (key === 'dash' && v === 'solid')) delete l[key]; else l[key] = v; } render(); changed(); return; }
+  if (SHAPE_TOOLS.includes(mode)) { pen[key] = v; savePen(); renderOver(); }
+});
 $('propBody').addEventListener('click', e => {
-  const wc = e.target.closest('[data-wc]'); if (wc) { colorWires(wc.dataset.wc); return; }
+  const wc = e.target.closest('[data-wc]'); if (wc) { if (!selItems().length && SHAPE_TOOLS.includes(mode)) { pen.color = wc.dataset.wc; savePen(); renderProps(); renderOver(); return; } colorWires(wc.dataset.wc); return; }
   const a = e.target.closest('[data-act]'); if (!a) return;
   if (a.dataset.act.startsWith('unit-')) { const it = selItems()[0]; if (it && it.k === 'part') addSection(it.o, a.dataset.act.slice(5)); return; }
   ({ windings: () => { const it = selItems()[0]; if (it && it.k === 'part') windingDialog(it.o); }, rot: rotateSel, flip: () => flipSel('h'), flipv: () => flipSel('v'), dup: duplicate, del: deleteSel, lreset: () => { snapshot(); for (const it of selItems()) if (it.k === 'part') { Object.assign(it.o, { lx: 0, ly: 0, rdx: 0, rdy: 0, vdx: 0, vdy: 0, pdx: 0, pdy: 0, sdx: 0, sdy: 0 }); } render(); changed(); } })[a.dataset.act]();
@@ -2711,7 +2737,7 @@ function lineClick(p) {
   if (!lineDraft) { lineDraft = { a: p, shape: sh }; setMsg(sh === 'circle' ? 'Click a point on the edge to set the size. Esc or right-click cancels.' : sh === 'rect' ? 'Click the opposite corner. Esc or right-click cancels.' : 'Click where the line ends. Esc or right-click cancels.'); renderOver(); return; }
   const a = lineDraft.a; lineDraft = null;
   if ((a[0] === p[0] && a[1] === p[1]) || (sh === 'rect' && (a[0] === p[0] || a[1] === p[1]))) { renderOver(); return; }      // nothing to draw
-  snapshot(); const l = { id: uid(), a: [...a], b: [...p] }; if (sh) l.shape = sh; linesOf(sheet).push(l);
+  snapshot(); const l = { id: uid(), a: [...a], b: [...p] }; if (sh) l.shape = sh; if (pen.color !== 'ink') l.color = pen.color; if (pen.w !== 1.4) l.w = pen.w; if (pen.dash !== 'solid') l.dash = pen.dash; linesOf(sheet).push(l);
   render(); renderOver(); changed(); setMsg(`${SHAPE_NAME[sh || 'line']} added. Click to start another, or press V to select.`);
 }
 function addText(p) {
@@ -2773,7 +2799,7 @@ function setMode(m) {
   mode = m; if (m !== 'place') placeType = null;
   $('mSelect').setAttribute('aria-pressed', m === 'select'); $('mWire').setAttribute('aria-pressed', m === 'wire'); $('mText').setAttribute('aria-pressed', m === 'text'); $('mLine').setAttribute('aria-pressed', m === 'line'); $('mCircle').setAttribute('aria-pressed', m === 'circle'); $('mRect').setAttribute('aria-pressed', m === 'rect'); $('mLink').setAttribute('aria-pressed', m === 'link'); $('mCut').setAttribute('aria-pressed', m === 'cut'); $('mSnip').setAttribute('aria-pressed', m === 'snip');
   $('view').className = 'view mode-' + m; $('stMode').textContent = MODE_LABEL[m]; $('hint').innerHTML = HINT[m];
-  renderLib(); renderOver(); updateButtons();
+  renderLib(); renderOver(); updateButtons(); renderProps();
 }
 $('mSelect').onclick = () => setMode('select');
 $('mWire').onclick = () => setMode('wire');

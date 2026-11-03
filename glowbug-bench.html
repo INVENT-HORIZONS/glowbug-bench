@@ -1115,7 +1115,7 @@ const FAM_6267 = ['6267', 'EF86', '6BK8', '6CF8', '6F22', 'Z729', 'CV2901', 'CV8
 for (const k in LIB) if (LIB[k].cat.startsWith('Tube') && !/^m_st_/.test(k)) LIB[k].value = '';   // stock tubes keep their type as the value
 // The panel's "Tubes" section is the 'Tube, modern' category (the parts keep their cat values) and also takes in the parts of
 // TUBE_EXTRA as groups at its bottom: Heaters, then the 1930s and 1920s period tubes.
-const CATS = ['Passive', 'Semiconductors', 'Tube, modern', 'Transformer', 'Power', 'Misc'];
+const CATS = ['Power', 'Passive', 'Semiconductors', 'Tube, modern', 'Transformer', 'Misc'];
 const CAT_LABEL = { 'Tube, modern': 'Tubes' };
 const TUBE_EXTRA = ['Heater', 'Tube, 1930s', 'Tube, 1920s'];
 

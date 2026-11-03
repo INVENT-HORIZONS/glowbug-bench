@@ -1558,21 +1558,54 @@ const linkEnds = k => (k.pts && k.pts.length >= 2 ? k.pts : null);
 const linkSVG = pts => `<polyline points="${pts.map(q => q.join(',')).join(' ')}" style="stroke:${LINK_COL};stroke-width:1.1;stroke-dasharray:4 3;stroke-linecap:round;stroke-linejoin:round;fill:none"/>`;
 const ptsAttr = pts => pts.map(q => q.join(',')).join(' ');
 let linkDraft = null;               // { p: start part, pts: [tip, …], hv } while a link is being drawn, like wireDraft
+// A link end is tied either to a control's arrow tip (k.a / k.b: part id) or, like a wire ending on another wire, to a
+// point on another link (k.ta / k.tb: that link's id) so three or more controls can share one gang. A tied end stays on
+// its host link: when the host's segment is dragged or its control moves, the end slides to the nearest point on it.
+function nearestOnPath(path, q) {
+  let best = null, bd = Infinity;
+  for (let i = 0; i < path.length - 1; i++) {
+    const a = path[i], b = path[i + 1], dx = b[0] - a[0], dy = b[1] - a[1], L = dx * dx + dy * dy;
+    const t = L ? Math.max(0, Math.min(1, ((q[0] - a[0]) * dx + (q[1] - a[1]) * dy) / L)) : 0, pt = [+(a[0] + t * dx).toFixed(2), +(a[1] + t * dy).toFixed(2)], d = Math.hypot(pt[0] - q[0], pt[1] - q[1]);
+    if (d < bd) { bd = d; best = pt; }
+  }
+  return best ? { pt: best, d: bd } : null;
+}
 function syncLinks() {
   if (!sheet || !sheet.links) return;
-  const by = new Map(sheet.parts.map(q => [q.id, q]));
-  for (const k of sheet.links) {
-    const a = by.get(k.a), b = by.get(k.b), ta = a && linkWorld(a), tb = b && linkWorld(b); if (!ta || !tb) continue;
-    if (k.v !== 2 || !Array.isArray(k.pts) || k.pts.length < 2) { k.pts = [ta, tb]; k.v = 2; continue; }   // older links: start over as one run
-    const s0 = k.pts[0]; if (s0[0] !== ta[0] || s0[1] !== ta[1]) moveWireEnd(k, 0, [ta[0] - s0[0], ta[1] - s0[1]]);
-    const s1 = k.pts[k.pts.length - 1]; if (s1[0] !== tb[0] || s1[1] !== tb[1]) moveWireEnd(k, k.pts.length - 1, [tb[0] - s1[0], tb[1] - s1[1]]);
-    k.pts = simplify(k.pts);
+  const by = new Map(sheet.parts.map(q => [q.id, q])), lk = new Map(sheet.links.map(k => [k.id, k]));
+  const target = (k, end) => {          // where this end belongs now
+    const pid = end ? k.b : k.a, tid = end ? k.tb : k.ta;
+    if (pid) { const q = by.get(pid); return q ? linkWorld(q) : null; }
+    const h = tid && lk.get(tid); if (!h || !h.pts || h.pts.length < 2) return null;
+    const cur = end ? k.pts[k.pts.length - 1] : k.pts[0], n = nearestOnPath(h.pts, cur); return n && n.pt;
+  };
+  for (const k of sheet.links) if (k.v !== 2 || !Array.isArray(k.pts) || k.pts.length < 2) {   // older links: start over as one run
+    const ta = k.a && by.get(k.a) && linkWorld(by.get(k.a)), tb = k.b && by.get(k.b) && linkWorld(by.get(k.b)); if (ta && tb) { k.pts = [ta, tb]; k.v = 2; }
+  }
+  for (let pass = 0; pass < 3; pass++) for (const k of sheet.links) {     // tip ends first, then ends tied to links (chains settle in a few passes)
+    if (!k.pts || k.pts.length < 2) continue;
+    for (const end of [0, 1]) {
+      if (pass && (end ? k.b : k.a)) continue;
+      const t = target(k, end); if (!t) continue;
+      const i = end ? k.pts.length - 1 : 0, c = k.pts[i];
+      if (Math.abs(c[0] - t[0]) > 0.01 || Math.abs(c[1] - t[1]) > 0.01) { moveWireEnd(k, i, [t[0] - c[0], t[1] - c[1]]); k.pts = simplify(k.pts); }
+    }
   }
 }
-// Larry: if any part of a link goes, the whole link goes. A link is dropped as soon as either control is deleted or stops
-// being adjustable (its core set away from variable); cutting or snipping any segment of it deletes the whole link too.
-// Run at the top of every render, after the change's own snapshot, so Ctrl+Z brings the link back with the change.
-const pruneLinks = () => { if (!sheet || !sheet.links || !sheet.links.length) return; const by = new Map(sheet.parts.map(q => [q.id, q])); sheet.links = sheet.links.filter(k => k.a !== k.b && by.has(k.a) && by.has(k.b) && linkWorld(by.get(k.a)) && linkWorld(by.get(k.b))); };
+// Larry: if any part of a link goes, the whole link goes. A link is dropped as soon as a control it is tied to is deleted
+// or stops being adjustable (its core set away from variable), or the link one of its ends is tied to is dropped (so a
+// gang falls apart one whole link at a time); cutting or snipping any segment of it deletes the whole link too.
+// Run at the top of every render, after the change's own snapshot, so Ctrl+Z brings the links back with the change.
+function pruneLinks() {
+  if (!sheet || !sheet.links || !sheet.links.length) return;
+  const by = new Map(sheet.parts.map(q => [q.id, q]));
+  for (let again = true; again;) {
+    const ids = new Set(sheet.links.map(k => k.id)), n = sheet.links.length;
+    const ok = (pid, tid, self) => pid ? by.has(pid) && !!linkWorld(by.get(pid)) : !!tid && tid !== self && ids.has(tid);
+    sheet.links = sheet.links.filter(k => ok(k.a, k.ta, k.id) && ok(k.b, k.tb, k.id) && !(k.a && k.a === k.b));
+    again = sheet.links.length !== n;
+  }
+}
 // Larry removed the toolbox wire-color button (2026-11-03): new wires are black; recolor them in Properties or the right-click menu
 let drawColor = 'ink';
 const swatchRow = cur => `<div class="swatches" role="group" aria-label="Wire color">${WIRE_COLORS.map(c => `<button class="sw" data-wc="${c.k}" title="${c.name}" aria-label="${c.name}" aria-pressed="${c.k === cur}" style="background:${c.c}"></button>`).join('')}</div>`;
@@ -1593,7 +1626,7 @@ function render() {
   for (const h of allHooks()) if ((cnt.get(key(h.pos)) || 0) >= 3 && sheet.wires.some(w => [w.pts[0], w.pts.at(-1)].some(e => key(e) === key(h.pos)))) dots.add(key(h.pos));
   const dotColor = k => { const w = sheet.wires.find(w => w.color && w.pts.some(q => key(q) === k)); return w ? ` style="fill:${wcol(w.color)}"` : ''; };
   ws += [...dots].map(k => { const [x, y] = k.split(','); return `<circle class="jdot"${dotColor(k)} cx="${x}" cy="${y}" r="3"/>`; }).join('');
-  $('layerWires').innerHTML = linesOf(sheet).map(lineSVG).join('') + ws + linksOf(sheet).map(k => { const e = linkEnds(k); return e ? linkSVG(e) : ''; }).join('');
+  $('layerWires').innerHTML = linesOf(sheet).map(lineSVG).join('') + ws + linksOf(sheet).map(k => { const e = linkEnds(k); return e ? linkSVG(e) + [[k.ta, e[0]], [k.tb, e[e.length - 1]]].filter(x => x[0]).map(x => `<circle cx="${x[1][0]}" cy="${x[1][1]}" r="2.4" style="fill:${LINK_COL}"/>`).join('') : ''; }).join('');
   $('layerText').innerHTML = sheet.texts.map(textSVG).join('');
   renderSel(); renderHooks(cnt); renderDoc(); applyView();
   $('stCount').textContent = `${sheet.parts.length} part${sheet.parts.length === 1 ? '' : 's'} · ${sheet.wires.length} wire${sheet.wires.length === 1 ? '' : 's'}`;
@@ -1667,7 +1700,7 @@ function renderOver() {
   }
   if (mode === 'link') {
     // the arrow-tip link points stay invisible (Larry); the cursor turns to a crosshair over one instead
-    if (linkDraft) { const q = linkTarget(mouseRaw), end = q && q !== linkDraft.p ? linkWorld(q) : mouse; s += linkSVG([...linkDraft.pts, ...elbow(linkDraft.pts.at(-1), end, linkDraft.hv).slice(1)]); }
+    if (linkDraft) { const q = linkTarget(mouseRaw), L = q && q !== linkDraft.p ? null : linkAt(mouseRaw), end = q && q !== linkDraft.p ? linkWorld(q) : L && L.k.id !== linkDraft.ta ? L.pt : mouse; s += linkSVG([...linkDraft.pts, ...elbow(linkDraft.pts.at(-1), end, linkDraft.hv).slice(1)]); }
   }
   if (mode === 'line') {
     s += `<line class="cursor-x" x1="${mouse[0] - 6}" y1="${mouse[1]}" x2="${mouse[0] + 6}" y2="${mouse[1]}"/><line class="cursor-x" x1="${mouse[0]}" y1="${mouse[1] - 6}" x2="${mouse[0]}" y2="${mouse[1] + 6}"/>`;
@@ -1936,7 +1969,7 @@ function renderProps() {
       $('pWs' + f).onchange = e => { snapshot(); setShown(p, f, e.target.checked); render(); changed(); };
     }
   } else if (it.k === 'link') {
-    const k = it.o, nm = id => { const q = sheet.parts.find(x => x.id === id); return q ? esc(refText(q) || LIB[q.type].name) : '?'; };
+    const k = it.o, nm = id => { if (!id) return 'a link'; const q = sheet.parts.find(x => x.id === id); return q ? esc(refText(q) || LIB[q.type].name) : '?'; };
     b.innerHTML = `<div class="what">Link<small>${nm(k.a)} ↔ ${nm(k.b)} · ganged controls</small></div>
       <div class="empty">The dashed line joins the two arrow tips and follows the parts when they move. Add more with the Link tool (J).</div>
       <div class="row-btns"><button class="del" data-act="del">Delete</button></div>`;
@@ -2119,9 +2152,15 @@ function deleteSel() {
   sheet.parts = sheet.parts.filter(p => !sel.has(p.id)); sheet.wires = sheet.wires.filter(w => !sel.has(w.id)); sheet.texts = sheet.texts.filter(t => !sel.has(t.id)); sheet.lines = linesOf(sheet).filter(l => !sel.has(l.id)); sheet.links = linksOf(sheet).filter(k => !sel.has(k.id)); pruneLinks();
   sel.clear(); render(); changed(); setMsg(`Deleted ${n} item${n > 1 ? 's' : ''}`);
 }
+// the links a copy can carry: every tie (control or host link) inside the copy
+function copyLinks(pids) {
+  let ks = linksOf(sheet).filter(k => (!k.a || pids.has(k.a)) && (!k.b || pids.has(k.b)));
+  for (let n = -1; n !== ks.length;) { n = ks.length; const ids = new Set(ks.map(k => k.id)); ks = ks.filter(k => (!k.ta || ids.has(k.ta)) && (!k.tb || ids.has(k.tb))); }
+  return ks;
+}
 function copySel() {
   const items = selItems(); if (!items.length) return;
-  clip = JSON.stringify({ parts: items.filter(i => i.k === 'part').map(i => i.o), wires: items.filter(i => i.k === 'wire').map(i => i.o), texts: items.filter(i => i.k === 'text').map(i => i.o), lines: items.filter(i => i.k === 'line').map(i => i.o), links: (ids => linksOf(sheet).filter(k => ids.has(k.a) && ids.has(k.b)))(new Set(items.filter(i => i.k === 'part').map(i => i.o.id))) });
+  clip = JSON.stringify({ parts: items.filter(i => i.k === 'part').map(i => i.o), wires: items.filter(i => i.k === 'wire').map(i => i.o), texts: items.filter(i => i.k === 'text').map(i => i.o), lines: items.filter(i => i.k === 'line').map(i => i.o), links: copyLinks(new Set(items.filter(i => i.k === 'part').map(i => i.o.id))) });
   setMsg(`Copied ${items.length} item${items.length > 1 ? 's' : ''}`);
 }
 function paste(dx = 20, dy = 20) {
@@ -2133,8 +2172,10 @@ function paste(dx = 20, dy = 20) {
   for (const w of c.wires) { w.id = uid(); w.pts = w.pts.map(q => [q[0] + dx, q[1] + dy]); sheet.wires.push(w); sel.add(w.id); }
   for (const t of c.texts) { t.id = uid(); t.x += dx; t.y += dy; sheet.texts.push(t); sel.add(t.id); }
   c.lines = c.lines || []; for (const l of c.lines) { l.id = uid(); l.a = [l.a[0] + dx, l.a[1] + dy]; l.b = [l.b[0] + dx, l.b[1] + dy]; linesOf(sheet).push(l); sel.add(l.id); }
-  for (const k of c.links || []) if (newId[k.a] && newId[k.b]) { const n = { id: uid(), a: newId[k.a], b: newId[k.b], v: k.v, pts: (k.pts || []).map(q => [q[0] + dx, q[1] + dy]) }; linksOf(sheet).push(n); sel.add(n.id); }
-  clip = JSON.stringify({ parts: c.parts, wires: c.wires, texts: c.texts, lines: c.lines, links: (c.links || []).map(k => ({ ...k, a: newId[k.a], b: newId[k.b] })) });
+  const newLk = {}; for (const k of c.links || []) newLk[k.id] = uid();
+  const remap = k => { const n = { id: newLk[k.id], a: k.a ? newId[k.a] || null : null, b: k.b ? newId[k.b] || null : null, v: k.v, pts: (k.pts || []).map(q => [q[0] + dx, q[1] + dy]) }; if (k.ta) n.ta = newLk[k.ta]; if (k.tb) n.tb = newLk[k.tb]; return n; };
+  const pl = (c.links || []).map(remap); for (const n of pl) { linksOf(sheet).push(n); sel.add(n.id); }
+  clip = JSON.stringify({ parts: c.parts, wires: c.wires, texts: c.texts, lines: c.lines, links: pl.map(n => ({ ...n, pts: n.pts.map(q => [q[0] - dx, q[1] - dy]) })) });
   render(); changed();
 }
 function duplicate() { copySel(); paste(); }
@@ -2263,7 +2304,7 @@ svg.addEventListener('pointermove', e => {
   if (mode === 'select') {
     const t = h ? null : hit(raw);
     svg.style.cursor = h ? 'crosshair' : (!t && blockAt(raw)) ? 'grab' : t ? (t.k === 'wire' || t.k === 'link' ? (t.o.pts[t.seg][1] === t.o.pts[t.seg + 1][1] ? 'ns-resize' : 'ew-resize') : 'move') : 'default';
-  } else svg.style.cursor = mode === 'link' ? (linkTarget(raw) ? 'crosshair' : linkDraft ? 'cell' : 'default') : '';
+  } else svg.style.cursor = mode === 'link' ? (linkTarget(raw) || linkAt(raw) ? 'crosshair' : linkDraft ? 'cell' : 'default') : '';
   if (mode === 'cut' || mode === 'snip') { const t = hit(raw); cutHover = t; $('stMsg').textContent = t ? (t.k === 'label' ? `Click to hide this ${FIELD_NAME[t.field]}` : `Click to cut ${t.k === 'part' ? (t.o.ref || LIB[t.o.type].name) : t.k === 'wire' && mode === 'snip' ? 'this segment' : t.k}`) : ''; }
   renderOver();
 });
@@ -2612,20 +2653,35 @@ function linkTarget(raw) {
 }
 // the wire tool's corner rule: from a to b, horizontal first (hv) or vertical first
 function elbow(a, b, hv) { if (a[0] === b[0] || a[1] === b[1]) return [a, b]; return [a, hv ? [b[0], a[1]] : [a[0], b[1]], b]; }
-// Link tool clicks, the same as wireClick: start on a control's arrow tip, each click adds an elbow to the clicked point,
-// and the link finishes on another control's arrow tip. Space flips the corner, Backspace removes the last point.
+// the link under the pointer and the nearest point on it (for tying a link end onto another link)
+function linkAt(raw) {
+  const tol = 6 / view.z + 1; let best = null;
+  for (const k of linksOf(sheet)) { const n = k.pts && k.pts.length >= 2 && nearestOnPath(k.pts, raw); if (n && n.d < tol && (!best || n.d < best.d)) best = { k, pt: n.pt, d: n.d }; }
+  return best;
+}
+// Link tool clicks, the same as wireClick: start on a control's arrow tip or on an existing link, each click adds an elbow
+// to the clicked point, and the link finishes on another control's arrow tip or on another link (a T, marked with a dot),
+// so three or more controls can be ganged. Space flips the corner, Backspace removes the last point.
 function linkClick(raw, p) {
   const q = linkTarget(raw), nm = x => refText(x) || LIB[x.type].name;
   if (!linkDraft) {
-    if (!q) { setMsg('Start on an adjustable control: a potentiometer, rheostat, variable capacitor, or an inductor or transformer with a variable core.'); return; }
-    linkDraft = { p: q, pts: [linkWorld(q)], hv: true }; setMsg(`Linking ${nm(q)}: click to add corners, then click the control to gang it with. Space flips the corner, Backspace removes the last corner, Esc cancels.`); renderOver(); return;
+    if (q) { linkDraft = { p: q, pts: [linkWorld(q)], hv: true }; setMsg(`Linking ${nm(q)}: click to add corners, then end on another control or on a link. Space flips the corner, Backspace removes the last corner, Esc cancels.`); renderOver(); return; }
+    const L = linkAt(raw);
+    if (L) { linkDraft = { p: null, ta: L.k.id, pts: [L.pt], hv: true }; setMsg('Branching from a link: click to add corners, then end on a control. Space flips the corner, Esc cancels.'); renderOver(); return; }
+    setMsg('Start on an adjustable control (a potentiometer, rheostat, variable capacitor, or an inductor or transformer with a variable core) or on an existing link.'); return;
   }
-  const last = linkDraft.pts.at(-1);
-  if (!q || q === linkDraft.p) { if (last[0] !== p[0] || last[1] !== p[1]) linkDraft.pts.push(...elbow(last, p, linkDraft.hv).slice(1)); renderOver(); return; }
-  const a = linkDraft.p, pts = simplify([...linkDraft.pts, ...elbow(last, linkWorld(q), linkDraft.hv).slice(1)]); linkDraft = null;
-  if (linksOf(sheet).some(k => (k.a === a.id && k.b === q.id) || (k.a === q.id && k.b === a.id))) { renderOver(); setMsg(`${nm(a)} and ${nm(q)} are already linked.`); return; }
-  snapshot(); linksOf(sheet).push({ id: uid(), a: a.id, b: q.id, v: 2, pts });
-  render(); renderOver(); changed(); setMsg(`Linked ${nm(a)} and ${nm(q)}. Start another link, or press V to select.`);
+  const last = linkDraft.pts.at(-1), L = !q || q === linkDraft.p ? linkAt(raw) : null;
+  const endOnLink = L && L.k.id !== linkDraft.ta && linkDraft.pts.length > 0 && (last[0] !== L.pt[0] || last[1] !== L.pt[1]);
+  if ((!q || q === linkDraft.p) && !endOnLink) { if (last[0] !== p[0] || last[1] !== p[1]) linkDraft.pts.push(...elbow(last, p, linkDraft.hv).slice(1)); renderOver(); return; }
+  const d = linkDraft; linkDraft = null;
+  if (!d.p && !q) { renderOver(); setMsg('A link needs a control at one end at least.'); return; }
+  const endPt = q && q !== d.p ? linkWorld(q) : L.pt, pts = simplify([...d.pts, ...elbow(last, endPt, d.hv).slice(1)]);
+  if (d.p && q && q !== d.p && linksOf(sheet).some(k => (k.a === d.p.id && k.b === q.id) || (k.a === q.id && k.b === d.p.id))) { renderOver(); setMsg(`${nm(d.p)} and ${nm(q)} are already linked.`); return; }
+  const k = { id: uid(), a: d.p ? d.p.id : null, b: q && q !== d.p ? q.id : null, v: 2, pts };
+  if (d.ta) k.ta = d.ta; if (!k.b) k.tb = L.k.id;
+  snapshot(); linksOf(sheet).push(k);
+  render(); renderOver(); changed();
+  setMsg(k.b && k.a ? `Linked ${nm(d.p)} and ${nm(q)}. Start another link, or press V to select.` : 'Link joined onto the gang. Start another link, or press V to select.');
 }
 function lineClick(p) {
   if (!lineDraft) { lineDraft = { a: p }; setMsg('Click where the line ends. Esc or right-click cancels.'); renderOver(); return; }
@@ -2804,7 +2860,8 @@ function loadProject(p, msg) {
     s.wires = (Array.isArray(s.wires) ? s.wires : []).filter(w => w && Array.isArray(w.pts)).map(w => ({ id: w.id || uid(), pts: simplify(w.pts.filter(okPt).map(q => [snap(+q[0]), snap(+q[1])])), ...(WIRE_COLORS.some(c => c.k === w.color && c.k !== 'ink') ? { color: w.color } : {}) })).filter(w => w.pts.length >= 2);
     s.texts = (Array.isArray(s.texts) ? s.texts : []).filter(t => t && isFinite(t.x) && isFinite(t.y)).map(t => Object.assign({ text: '', size: 12, tone: 'ink' }, t));
     s.lines = (Array.isArray(s.lines) ? s.lines : []).filter(l => l && okPt(l.a) && okPt(l.b)).map(l => Object.assign({ id: uid() }, l));
-    s.links = (Array.isArray(s.links) ? s.links : []).filter(k => k && typeof k.a === 'string' && typeof k.b === 'string' && k.a !== k.b).map(k => ({ id: k.id || uid(), a: k.a, b: k.b, ...(k.v === 2 ? { v: 2 } : {}), pts: (Array.isArray(k.pts) ? k.pts : []).filter(okPt).map(q => [+q[0], +q[1]]) }));
+    const sid = x => typeof x === 'string' && x ? x : null;
+    s.links = (Array.isArray(s.links) ? s.links : []).filter(k => k && (sid(k.a) || sid(k.ta)) && (sid(k.b) || sid(k.tb))).map(k => ({ id: k.id || uid(), a: sid(k.a), b: sid(k.b), ...(sid(k.ta) && !sid(k.a) ? { ta: k.ta } : {}), ...(sid(k.tb) && !sid(k.b) ? { tb: k.tb } : {}), ...(k.v === 2 ? { v: 2 } : {}), pts: (Array.isArray(k.pts) ? k.pts : []).filter(okPt).map(q => [+q[0], +q[1]]) }));
     if (!s.id) s.id = uid(); if (typeof s.name !== 'string') s.name = 'Sheet';
     if (!SIZES[s.size]) s.size = 'A'; if (s.orient !== 'P') s.orient = 'L';
     if (!s.file) s.file = slugFile(s.name);

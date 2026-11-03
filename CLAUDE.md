@@ -116,7 +116,10 @@ The owner is Larry Higley (GitHub: INVENT-HORIZONS). The app started as the sche
 - **Settings (gear, far right of the toolbar, `bSettings`):** `settingsDialog()` opens an empty Settings dialog with Cancel and OK (both just close it for now; Escape or a click outside also closes). Larry will say what goes in it.
 - **Bench instrument buttons** (after Camera, behind a separator): Multimeter `bMeter`, Oscilloscope `bScope`, Signal generator `bSigGen` (Larry swapped the last two). They use Larry's own picture icons, embedded as base64 PNGs (background made transparent), in `.tb-img` buttons (img 24 px high). For now each click only shows "… coming soon" in the status bar; Larry will say what they open.
 - **Tools:** Select V, Wire W, Text T, Cut C (whole item), Snip S (one wire segment).
-  - Toolbox order (Larry's): Select, Wire, Wire color | Cut, Snip | Text, with `<hr>` separators.
+  - Toolbox order (Larry's): Select, Wire, Wire color | Cut, Snip | Line, Text, with `<hr>` separators.
+- **Line tool (L, `mLine`):** straight graphic lines at any angle, no corners (Larry: "diagonal only, no kinks"); its icon is a short diagonal stroke, smaller than the wire icon. Click the start, click the end; ends snap to the grid; Esc or right-click cancels a line in progress and right-click with none in progress leaves the tool. Lines are drawing only, never wires: no hooks, no connectivity, no junction dots.
+  - Model: `sheet.lines` = `[{ id, a: [x, y], b: [x, y], color? }]` (read through `linesOf(sheet)`, cleaned on load). Drawn by `lineSVG` with inline styles (1.4 px, wire palette colors) into `layerWires` ahead of the wires, so exports carry them.
+  - Selection kind `'line'`: click, Shift-click and the marquee select them; drag or arrow keys move them; Cut, Snip, Delete, copy/paste/duplicate, select all, Fit and undo all include them. The wire color swatches (right-click, Properties) recolor selected lines too (`colorWires`).
   - Space flips the corner while drawing a wire.
   - Alt+wheel pans horizontally; Shift+wheel pans vertically.
 - **Local storage keys:** `gs.current`, `gs.doc`, `gs.grid`, `gs.hooks`, `gs.panelw`, `gs.closed`, `gs.wirecolor`, `gs.broken`, `gs.cam`.

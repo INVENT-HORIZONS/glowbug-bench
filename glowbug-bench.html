@@ -1759,7 +1759,7 @@ function renderLib() {
       body = grp('Generic: directly heated', direct) + grp('Cathode only', kOnly) + grp('Generic: indirectly heated', withHtr)
         + stockGrp('Stock: rectifiers', stRect, 'No stock rectifiers yet.') + stockGrp('Stock: signal tubes', stSig, 'No stock signal tubes yet.')
         + stockGrp('Stock: All American Five', stAA5, 'No All American Five tubes yet.')
-        + grp('Gas-filled', gas) + grp('Specialized', sp) + grp('Heaters', htrs) + grp('Period: 1930s', p30) + grp('Period: 1920s', p20);
+        + grp('Generic: gas filled', gas) + grp('Specialized', sp) + grp('Heaters', htrs) + grp('Period: 1930s', p30) + grp('Period: 1920s', p20);
     } else if (cat === 'Semiconductors') {
       // diodes, then bipolar transistors (and Darlingtons), then FETs, each its own folding group
       const dio = items.filter(L => /^diode/.test(L.type)), bjt = items.filter(L => /^(npn|pnp)/.test(L.type));
@@ -1772,6 +1772,8 @@ function renderLib() {
 }
 const libClosed = new Set(lsGet('gs.closed', ['Tube, modern|Period: 1920s']));
 // the 1930s and 1920s sections became groups inside Tubes: carry a closed section over to its group
+// renamed subgroup headers keep their folded state
+for (const [o, n] of [['Gas-filled', 'Generic: gas filled']]) if (libClosed.delete('Tube, modern|' + o)) { libClosed.add('Tube, modern|' + n); lsSet('gs.closed', [...libClosed]); }
 for (const d of ['1930s', '1920s']) if (libClosed.delete('Tube, ' + d)) { libClosed.add('Tube, modern|Period: ' + d); lsSet('gs.closed', [...libClosed]); }
 $('lib').addEventListener('toggle', e => { const d = e.target; if (!d.dataset || !d.dataset.cat || $('search').value) return; d.open ? libClosed.delete(d.dataset.cat) : libClosed.add(d.dataset.cat); lsSet('gs.closed', [...libClosed]); }, true);
 $('lib').addEventListener('click', e => { const t = e.target.closest('[data-type]'); if (!t) return; armPlace(t.dataset.type); });

@@ -77,7 +77,7 @@ The owner is Larry Higley (GitHub: INVENT-HORIZONS). The app started as the sche
      - 6SL7 family (`m_st_6sl7`, `FAM_6SL7`): its own part at Larry's request, sharing the 6SN7's sections (`units: ST6SN7`; r-type.org 6SL7GT table confirms the same 8BD pins). The 6SL7 types were moved out of the 6SN7 family, so each type is in one family only.
      - 6267 family (`m_st_6267`, `FAM_6267`, single section): the EF86 pentode on B9A (r-type.org EF86 table: 1 g2, 2 and 7 internal shield, not drawn, 3 k, 4 and 5 h, 6 a, 8 g3, 9 g1). Defined after the `_ih` loop so it can reuse `m_pentode_ih`'s hooks, draw and `bare`. Its screen-grid pin label uses `below: true`, a pin option that puts a side label under its lead instead of above, for closely spaced leads.
      - Section A's heater can be hidden the same way (`p.noHeater`, `setHeater`, `heaterBare`, right-click "Hide heater" or the Properties checkbox): the section's `bare` shape keeps P, G and K exactly where they are, so only the heater hooks come and go and a wire left on a heater pin can never land on the cathode.
-  4. Gas-filled, types starting `m_gas`, marked with a solid dot
+  4. Generic: gas filled (header; formerly "Gas-filled", its folded state carried over), types starting `m_gas`, marked with a solid dot
   5. Specialized, types starting `m_sp_`: photomultiplier, then the single-section eye, then the two-section eye
   6. Heaters: the standalone heater parts (`cat: 'Heater'`: heater, center tap, triangle, center tap triangle).
   7. Period: 1930s (`cat: 'Tube, 1930s'`).

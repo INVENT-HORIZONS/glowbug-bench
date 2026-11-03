@@ -531,6 +531,12 @@ def('capacitor', { cat: 'Passive', name: 'Capacitor', pre: 'C', value: '0.022 µ
 // Film capacitor: the capacitor with its right plate curved (the electrolytic's curve, without the + mark). Non-polarized.
 def('cap_film', { cat: 'Passive', name: 'Film capacitor', pre: 'C', value: '0.1 µF', tags: 'film polyester polypropylene mylar foil coupling non-polarized', hooks: { 1: [0, 0], 2: [40, 0] },
   draw: () => ln(0, 0, 17, 0) + ln(17, -10, 17, 10) + pa('M26 -10 Q21 0 26 10') + ln(23.5, 0, 40, 0) });
+// Variable capacitor: the plain capacitor with a diagonal adjust arrow up and to the right through both plates.
+def('cap_var', { cat: 'Passive', name: 'Variable capacitor', pre: 'C', value: '365 pF', tags: 'variable capacitor tuning trimmer air variable gang adjustable',
+  hooks: { 1: [0, 0], 2: [40, 0] },
+  draw: () => { const ax = 9, ay = 13, bx = 31, by = -13, L = Math.hypot(bx - ax, by - ay), ux = (bx - ax) / L, uy = (by - ay) / L, hx = bx - ux * 7, hy = by - uy * 7;
+    return ln(0, 0, 17, 0) + ln(17, -10, 17, 10) + ln(23, -10, 23, 10) + ln(23, 0, 40, 0)
+      + ln(ax, ay, +hx.toFixed(2), +hy.toFixed(2)) + pg([[bx, by], [+(hx - uy * 3.2).toFixed(2), +(hy + ux * 3.2).toFixed(2)], [+(hx + uy * 3.2).toFixed(2), +(hy - ux * 3.2).toFixed(2)]], 'ink solid'); } });
 def('electrolytic', { cat: 'Passive', name: 'Electrolytic', pre: 'C', value: '47 µF 450 V', hooks: { '+': [0, 0], '−': [40, 0] },
   draw: () => ln(0, 0, 17, 0) + ln(17, -10, 17, 10) + pa('M26 -10 Q21 0 26 10') + ln(23, 0, 40, 0) + ln(8, -10, 8, -4) + ln(5, -7, 11, -7) });
 // Inductor with a core (Larry merged the choke into it): p.core is air (the default: no lines), ferrite (dashed), iron

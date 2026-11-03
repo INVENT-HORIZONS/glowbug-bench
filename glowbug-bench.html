@@ -2680,8 +2680,9 @@ function linkClick(raw, p) {
   const k = { id: uid(), a: d.p ? d.p.id : null, b: q && q !== d.p ? q.id : null, v: 2, pts };
   if (d.ta) k.ta = d.ta; if (!k.b) k.tb = L.k.id;
   snapshot(); linksOf(sheet).push(k);
+  setMode('select');                  // Larry: once a link is made, go back to the Select tool
   render(); renderOver(); changed();
-  setMsg(k.b && k.a ? `Linked ${nm(d.p)} and ${nm(q)}. Start another link, or press V to select.` : 'Link joined onto the gang. Start another link, or press V to select.');
+  setMsg(k.b && k.a ? `Linked ${nm(d.p)} and ${nm(q)}. Press J to draw another link.` : 'Link joined onto the gang. Press J to draw another link.');
 }
 function lineClick(p) {
   if (!lineDraft) { lineDraft = { a: p }; setMsg('Click where the line ends. Esc or right-click cancels.'); renderOver(); return; }

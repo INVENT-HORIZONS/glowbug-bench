@@ -746,6 +746,23 @@ def('switch_spdt', { cat: 'Misc', name: 'Switch, SPDT', pre: 'S', value: 'SPDT',
   draw: () => throwSw(0) });
 def('switch_dpdt', { cat: 'Misc', name: 'Switch, DPDT', pre: 'S', value: 'DPDT', tags: 'switch dpdt double pole double throw changeover toggle', hooks: { C1: [0, 0], '1A': [40, -10], '1B': [40, 10], C2: [0, 40], '2A': [40, 30], '2B': [40, 50] },
   draw: () => throwSw(0) + throwSw(40) + ln(20, -5, 20, 35, 'dash') });
+// Rotary switch, built for 2-12 positions (right-click "Positions", default 5). The common lead C comes in from the left to the
+// pivot at (20, 0); the contacts sit on an arc around the pivot, 20 apart vertically (like the SPDT) so every lead runs straight
+// right to its hook (1 at the top) on the grid. The wiper is an arrow from the pivot to contact 1. The arc grows with the count.
+function rotaryBuild(n) {
+  const ys = Array.from({ length: n }, (_, k) => 10 * (2 * k - n + 1)), m = Math.max(...ys.map(Math.abs));
+  const R = Math.max(30, 10 * Math.ceil(m / Math.sin(68 * Math.PI / 180) / 10)), hx = 20 + R + 20, hooks = { C: [0, 0] };
+  ys.forEach((y, k) => { hooks[k + 1] = [hx, y]; });
+  const draw = () => {
+    let d = ln(0, 0, 17, 0) + ci(20, 0, 3);
+    ys.forEach(y => { const x = +(20 + Math.sqrt(R * R - y * y)).toFixed(2); d += ci(x, y, 2.5) + ln(+(x + 2.5).toFixed(2), y, hx, y); });
+    const x1 = 20 + Math.sqrt(R * R - ys[0] * ys[0]), y1 = ys[0], L = Math.hypot(x1 - 20, y1), ux = (x1 - 20) / L, uy = y1 / L;
+    return d + inkArrow(+(20 + 3 * ux).toFixed(2), +(3 * uy).toFixed(2), +(20 + (L - 6) * ux).toFixed(2), +((L - 6) * uy).toFixed(2));
+  };
+  return { hooks, draw };
+}
+def('switch_rotary', Object.assign({ cat: 'Misc', name: 'Switch, rotary', pre: 'S', value: 'Rotary', tags: 'rotary switch selector wafer positions multi position band switch',
+  vary: { key: 'pos', label: 'Positions', min: 2, max: 12, def: 5, build: rotaryBuild } }, rotaryBuild(5)));
 def('lamp', { cat: 'Misc', name: 'Pilot lamp', pre: 'PL', value: '6.3 V', hooks: { 1: [0, 0], 2: [40, 0] },
   draw: () => ln(0, 0, 10, 0) + ci(20, 0, 10) + pa('M13 0 C13 -8 27 -8 27 0 M17 0 C17 6 23 6 23 0') + ln(30, 0, 40, 0) });
 def('speaker', { cat: 'Misc', name: 'Speaker', pre: 'LS', value: '8 Ω', hooks: { 1: [0, 0], 2: [0, 20] },

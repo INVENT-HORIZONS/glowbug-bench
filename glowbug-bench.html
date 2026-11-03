@@ -2357,6 +2357,10 @@ function partDialog(p) {
   $('pdRef').focus(); $('pdRef').select();
 }
 svg.addEventListener('contextmenu', e => e.preventDefault());
+// The app's own menu opens on the right button's press, right under the pointer, so the browser's contextmenu event can land
+// on that menu (or elsewhere in the app) and the browser's own menu would pop up over it (seen in Firefox). Suppress the
+// browser menu everywhere in the app except text fields, where it is still wanted for cut, copy, paste and spelling.
+document.addEventListener('contextmenu', e => { if (!e.target.closest('input, textarea, [contenteditable="true"]')) e.preventDefault(); });
 function blockMenu(e, which) {
   const cur = (sheet[which + 'Pos'] || {}).c || BLOCK_DEFAULT[which];
   menuEl = document.createElement('div'); menuEl.className = 'menu'; menuEl.setAttribute('role', 'menu');

@@ -736,6 +736,16 @@ def('fuse', { cat: 'Misc', name: 'Fuse', pre: 'F', value: '2 A', hooks: { 1: [0,
   draw: () => ln(0, 0, 15, 0) + `<rect class="ink" x="15" y="-6" width="30" height="12"/>` + ln(15, 0, 45, 0) + ln(45, 0, 60, 0) });
 def('switch', { cat: 'Misc', name: 'Switch', pre: 'S', value: 'SPST', hooks: { 1: [0, 0], 2: [40, 0] },
   draw: () => ln(0, 0, 10, 0) + ci(13, 0, 3) + ci(27, 0, 3) + ln(15, -2, 28, -11) + ln(30, 0, 40, 0) });
+// Push button (normally open): the switch's two contacts with a bar above them pushed by a plunger.
+def('pushbutton', { cat: 'Misc', name: 'Push button', pre: 'S', value: 'NO', tags: 'push button pushbutton momentary switch tactile normally open', hooks: { 1: [0, 0], 2: [40, 0] },
+  draw: () => ln(0, 0, 10, 0) + ci(13, 0, 3) + ci(27, 0, 3) + ln(10, -7, 30, -7) + ln(20, -7, 20, -17) + ln(15, -17, 25, -17) + ln(30, 0, 40, 0) });
+// SPDT and DPDT: the switch's pivot contact and blade, with two throws at y -10 and +10; the blade rests on the upper throw.
+// In the DPDT the second pole sits 40 below and a dashed line ties the blades together.
+const throwSw = (y) => ln(0, y, 10, y) + ci(13, y, 3) + ci(27, y - 10, 3) + ci(27, y + 10, 3) + ln(15.5, y - 1.8, 24.6, y - 8.2) + ln(30, y - 10, 40, y - 10) + ln(30, y + 10, 40, y + 10);
+def('switch_spdt', { cat: 'Misc', name: 'Switch, SPDT', pre: 'S', value: 'SPDT', tags: 'switch spdt single pole double throw changeover toggle', hooks: { C: [0, 0], 1: [40, -10], 2: [40, 10] },
+  draw: () => throwSw(0) });
+def('switch_dpdt', { cat: 'Misc', name: 'Switch, DPDT', pre: 'S', value: 'DPDT', tags: 'switch dpdt double pole double throw changeover toggle', hooks: { C1: [0, 0], '1A': [40, -10], '1B': [40, 10], C2: [0, 40], '2A': [40, 30], '2B': [40, 50] },
+  draw: () => throwSw(0) + throwSw(40) + ln(20, -5, 20, 35, 'dash') });
 def('lamp', { cat: 'Misc', name: 'Pilot lamp', pre: 'PL', value: '6.3 V', hooks: { 1: [0, 0], 2: [40, 0] },
   draw: () => ln(0, 0, 10, 0) + ci(20, 0, 10) + pa('M13 0 C13 -8 27 -8 27 0 M17 0 C17 6 23 6 23 0') + ln(30, 0, 40, 0) });
 def('speaker', { cat: 'Misc', name: 'Speaker', pre: 'LS', value: '8 Ω', hooks: { 1: [0, 0], 2: [0, 20] },

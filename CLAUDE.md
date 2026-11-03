@@ -83,6 +83,7 @@ The owner is Larry Higley (GitHub: INVENT-HORIZONS). The app started as the sche
   7. Period: 1930s (`cat: 'Tube, 1930s'`).
   8. Period: 1920s (`cat: 'Tube, 1920s'`), folded by default.
   Groups 6 to 8 are pulled into the list by the panel's item filter (`TUBE_EXTRA`).
+- **Misc** group, in order: fuse, switch (SPST), push button (`pushbutton`, value `NO`: the switch contacts with a bar and plunger above), Switch, SPDT (`switch_spdt`: hooks C, 1 at [40,-10], 2 at [40,10]) and Switch, DPDT (`switch_dpdt`: C1, 1A, 1B, then C2, 2A, 2B 40 lower, blades tied by a dashed line), pilot lamp, speaker. The SPDT/DPDT poles are drawn by `throwSw(y)`; the blade rests on the upper throw.
 - **Period tubes** are drawn in the style of their era. 1920s tubes are sideways with zigzag grids, and 1930s tubes are the same rotated 90°. From 1937 on, the modern symbols apply.
 - **Parts with an adjustable shape** declare `vary: { key, label, min, max, def, build(n) }`, or a list of settings `vary: [{ key, label, min, max, def }, …]` plus `build({ key: n, … })` on the def. Read settings with `varyList(L)` / `varyVal(p, v)`, change them with `setVary(p, n, key)`, and always read the shape through `shapeOf(p)`. Never use `LIB[type].hooks` directly for a placed part.
   - The photomultiplier, `pmtBuild(n)`, takes 2 to 14 dynodes. K and D1 stay fixed.

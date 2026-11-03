@@ -389,6 +389,8 @@ button, input, select, textarea { font: inherit; color: inherit; box-sizing: bor
     <span class="tb-spacer"></span>
     <button class="tb" id="bImport" title="Open a .json project file"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15V3M7 10l5 5 5-5M4 15v5h16v-5"/></svg><span class="lb">Import</span></button>
     <button class="tb" id="bExport" title="Export the sheet" aria-haspopup="menu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12M7 8l5-5 5 5M4 15v5h16v-5"/></svg><span class="lb">Export</span></button>
+    <span class="sep"></span>
+    <button class="tb" id="bSettings" title="Settings" aria-haspopup="dialog"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"><path d="M10.3 2.5h3.4l.5 2.6a7.5 7.5 0 0 1 1.9 1.1l2.5-.9 1.7 2.9-2 1.8a7.6 7.6 0 0 1 0 2.2l2 1.8-1.7 2.9-2.5-.9a7.5 7.5 0 0 1-1.9 1.1l-.5 2.6h-3.4l-.5-2.6a7.5 7.5 0 0 1-1.9-1.1l-2.5.9-1.7-2.9 2-1.8a7.6 7.6 0 0 1 0-2.2l-2-1.8 1.7-2.9 2.5.9a7.5 7.5 0 0 1 1.9-1.1z"/><circle cx="12" cy="12" r="3"/></svg></button>
     <input type="file" id="fileIn" accept=".json,application/json" hidden>
     <input type="file" id="logoIn" accept="image/png,image/jpeg,image/svg+xml,image/webp" hidden>
   </header>
@@ -2714,6 +2716,22 @@ $('bOpen').onclick = openProjects;
 
 /* import / export */
 $('bImport').onclick = () => $('fileIn').click();
+// Settings: an empty dialog for now (Larry will add settings later). Cancel, Escape or a click outside closes it; OK closes it too.
+function settingsDialog() {
+  closeMenu(); finishEdit(false);
+  const back = document.createElement('div'); back.className = 'dlg-back';
+  back.innerHTML = `<form class="dlg" role="dialog" aria-modal="true" aria-labelledby="stT" style="width:min(420px,100%)">
+    <h2 id="stT">Settings</h2><div style="min-height:140px"></div>
+    <div class="foot"><button type="button" id="stCancel">Cancel</button><button type="submit" class="pri" id="stOk">OK</button></div></form>`;
+  document.body.appendChild(back);
+  const close = () => back.remove();
+  back.addEventListener('pointerdown', e => { if (e.target === back) close(); });
+  back.addEventListener('keydown', e => { if (e.key === 'Escape') close(); e.stopPropagation(); });
+  $('stCancel').onclick = close;
+  back.querySelector('form').addEventListener('submit', e => { e.preventDefault(); close(); });
+  $('stOk').focus();
+}
+$('bSettings').onclick = settingsDialog;
 $('fileIn').onchange = async e => {
   const f = e.target.files[0]; e.target.value = ''; if (!f) return;
   try { const p = JSON.parse(await f.text()); if (!p.sheets) throw 0; p.id = uid(); loadProject(p, `Opened ${f.name}`); changed(); }

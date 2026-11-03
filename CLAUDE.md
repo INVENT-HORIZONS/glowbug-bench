@@ -111,6 +111,7 @@ The owner is Larry Higley (GitHub: INVENT-HORIZONS). The app started as the sche
 - **Step-up and step-down** (`transformer_up`, `transformer_down`) are drawn with 4 coil turns on the higher-voltage winding and 2 on the lower. Values `Stepup` and `Stepdown`.
 - **Flips:** Flip horizontal (X) and Flip vertical (Y) mirror a part about the center of its hooks, so a two-ended part reverses in place. Hooks that still land on wires keep them.
 - **Browser context menu:** the app's right-click menu opens on the button press, so the browser's `contextmenu` event can land on it and Firefox showed its own menu on top (fixed 2026-11-03). A document-level handler suppresses the browser menu everywhere except inputs, textareas and contenteditable, where cut/copy/paste is still wanted.
+- **Settings (gear, far right of the toolbar, `bSettings`):** `settingsDialog()` opens an empty Settings dialog with Cancel and OK (both just close it for now; Escape or a click outside also closes). Larry will say what goes in it.
 - **Tools:** Select V, Wire W, Text T, Cut C (whole item), Snip S (one wire segment).
   - Space flips the corner while drawing a wire.
   - Alt+wheel pans horizontally; Shift+wheel pans vertically.

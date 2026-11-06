@@ -454,6 +454,8 @@ button, input, select, textarea { font: inherit; color: inherit; box-sizing: bor
     </svg>
     <div class="hint" id="hint"></div>
     <div class="meter" id="meter" hidden role="region" aria-label="Multimeter"><span class="meter-t">Multimeter</span><button class="meter-x" id="meterClose" title="Close the multimeter" aria-label="Close multimeter"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+    <div class="meter" id="scope" hidden role="region" aria-label="Oscilloscope"><span class="meter-t">Oscilloscope</span><button class="meter-x" id="scopeClose" title="Close the oscilloscope" aria-label="Close oscilloscope"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+    <div class="meter" id="siggen" hidden role="region" aria-label="Signal generator"><span class="meter-t">Signal generator</span><button class="meter-x" id="siggenClose" title="Close the signal generator" aria-label="Close signal generator"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
     <div class="cam" id="cam" hidden role="region" aria-label="Live camera view">
       <div class="cam-frame"><video id="camVid" autoplay muted playsinline></video><div class="cam-wait" id="camWait">Starting camera…</div></div>
       <div class="cam-bar">
@@ -3008,8 +3010,6 @@ function settingsDialog() {
   $('stOk').focus();
 }
 $('bSettings').onclick = settingsDialog;
-// Bench instruments (multimeter, signal generator, oscilloscope): buttons only for now; Larry will say what each one opens.
-for (const [id, name] of [['bSigGen', 'Signal generator'], ['bScope', 'Oscilloscope']]) $(id).onclick = () => setMsg(name + ': coming soon');
 $('fileIn').onchange = async e => {
   const f = e.target.files[0]; e.target.value = ''; if (!f) return;
   try { const p = JSON.parse(await f.text()); if (!p.sheets) throw 0; p.id = uid(); loadProject(p, `Opened ${f.name}`); changed(); }
@@ -3177,24 +3177,26 @@ $('camPick').onclick = async e => {
   window.addEventListener('pagehide', camStopTracks);
 })();
 
-// Multimeter (Larry, 2026-11-06): the Multimeter button shows or hides a shaded rectangle floating over the sheet, dragged
-// anywhere inside the canvas area; its spot is remembered in gs.meter. A DOM overlay like the camera, so it is never
-// exported or saved with the drawing. The meter itself comes later.
-(() => {
-  const el = $('meter'), cfg = Object.assign({ x: null, y: null, on: false }, lsGet('gs.meter', {}) || {}), save = () => lsSet('gs.meter', cfg);
+// Bench instrument panels (Larry, 2026-11-06): the Multimeter, Oscilloscope and Signal generator buttons each show or hide
+// their own white card hovering over the sheet (drop shadow), dragged anywhere inside the canvas area; each one's spot
+// and shown/hidden state are remembered (gs.meter, gs.scope, gs.siggen). DOM overlays like the camera, so they are never
+// exported or saved with the drawing. What goes inside them comes later.
+function instPanel(id, btn, name, slot) {
+  const el = $(id), key = 'gs.' + id, cfg = Object.assign({ x: null, y: null, on: false }, lsGet(key, {}) || {}), save = () => lsSet(key, cfg);
   const place = () => {
     const vr = $('view').getBoundingClientRect(), w = el.offsetWidth, h = el.offsetHeight, pad = 8;
-    if (cfg.x == null || cfg.y == null) { cfg.x = Math.round((vr.width - w) / 2); cfg.y = 24; }   // first time: top center
+    if (cfg.x == null || cfg.y == null) { cfg.x = Math.round(vr.width / 2 - w / 2 + (slot - 1) * 40); cfg.y = 24 + slot * 40; }   // first time: near the top, staggered
     cfg.x = Math.max(pad, Math.min(cfg.x, vr.width - w - pad)); cfg.y = Math.max(pad, Math.min(cfg.y, vr.height - h - pad));
     el.style.left = cfg.x + 'px'; el.style.top = cfg.y + 'px';
   };
-  const show = on => { cfg.on = on; el.hidden = !on; $('bMeter').setAttribute('aria-pressed', on); if (on) place(); save(); setMsg(on ? 'Multimeter shown: drag it anywhere on the sheet' : 'Multimeter hidden'); };
-  $('bMeter').onclick = () => show(el.hidden);
-  $('meterClose').onclick = e => { e.stopPropagation(); show(false); };
+  const front = () => { document.querySelectorAll('.meter').forEach(x => x.style.zIndex = 29); el.style.zIndex = 31; };   // the one you touch comes forward
+  const show = on => { cfg.on = on; el.hidden = !on; $(btn).setAttribute('aria-pressed', on); if (on) { place(); front(); } save(); setMsg(on ? `${name} shown: drag it anywhere on the sheet` : `${name} hidden`); };
+  $(btn).onclick = () => show(el.hidden);
+  $(id + 'Close').onclick = e => { e.stopPropagation(); show(false); };
   let st = null;
   el.addEventListener('pointerdown', e => {
     if (e.button !== 0 || e.target.closest('.meter-x')) { e.stopPropagation(); return; }
-    e.preventDefault(); e.stopPropagation();
+    e.preventDefault(); e.stopPropagation(); front();
     st = { px: e.clientX, py: e.clientY, x: cfg.x, y: cfg.y }; el.setPointerCapture(e.pointerId); el.classList.add('drag');
   });
   el.addEventListener('pointermove', e => { if (!st) return; cfg.x = st.x + e.clientX - st.px; cfg.y = st.y + e.clientY - st.py; place(); });
@@ -3202,8 +3204,11 @@ $('camPick').onclick = async e => {
   el.addEventListener('pointerup', end); el.addEventListener('pointercancel', end);
   ['dblclick', 'contextmenu', 'wheel'].forEach(t => el.addEventListener(t, e => { e.stopPropagation(); if (t === 'contextmenu') e.preventDefault(); }));
   new ResizeObserver(() => { if (!el.hidden) place(); }).observe($('view'));
-  if (cfg.on) requestAnimationFrame(() => show(true));
-})();
+  if (cfg.on) requestAnimationFrame(() => { cfg.on = true; el.hidden = false; $(btn).setAttribute('aria-pressed', true); place(); });
+}
+instPanel('meter', 'bMeter', 'Multimeter', 0);
+instPanel('scope', 'bScope', 'Oscilloscope', 1);
+instPanel('siggen', 'bSigGen', 'Signal generator', 2);
 
 /* =====================================================================
    START

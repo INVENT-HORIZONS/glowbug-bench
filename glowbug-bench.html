@@ -336,9 +336,10 @@ button, input, select, textarea { font: inherit; color: inherit; box-sizing: bor
   .app.panel-open .panel { visibility: visible; }
   .app.panel-open .view { visibility: hidden; }
 }
-/* ---------- multimeter panel (Larry, 2026-11-06: for now a shaded, draggable rectangle over the sheet; never exported) ---------- */
-.meter { position: absolute; z-index: 29; left: 0; top: 0; width: 240px; height: 150px; touch-action: none; user-select: none; cursor: grab;
-  background: rgba(23, 18, 14, .14); border: 1.5px solid rgba(23, 18, 14, .45); border-radius: 6px; box-shadow: 0 6px 18px rgba(20, 12, 4, .18); }
+/* ---------- multimeter panel (Larry, 2026-11-06: a white card hovering over the sheet, draggable; never exported) ---------- */
+.meter { position: absolute; z-index: 29; left: 0; top: 0; width: 280px; height: 160px; touch-action: none; user-select: none; cursor: grab;
+  background: #FFFFFF; border: 2px solid #17120E; border-radius: 0;
+  box-shadow: 5px 6px 7px rgba(0, 0, 0, .32); }   /* Larry's look: pure white card with a soft shadow down and to the right, as if hovering */
 .meter[hidden] { display: none; }
 .meter.drag { cursor: grabbing; }
 .meter-t { position: absolute; left: 8px; top: 5px; font: 600 11px/1 var(--mono, monospace); letter-spacing: .08em; text-transform: uppercase; color: rgba(23, 18, 14, .7); pointer-events: none; }

@@ -336,6 +336,15 @@ button, input, select, textarea { font: inherit; color: inherit; box-sizing: bor
   .app.panel-open .panel { visibility: visible; }
   .app.panel-open .view { visibility: hidden; }
 }
+/* ---------- multimeter panel (Larry, 2026-11-06: for now a shaded, draggable rectangle over the sheet; never exported) ---------- */
+.meter { position: absolute; z-index: 29; left: 0; top: 0; width: 240px; height: 150px; touch-action: none; user-select: none; cursor: grab;
+  background: rgba(23, 18, 14, .14); border: 1.5px solid rgba(23, 18, 14, .45); border-radius: 6px; box-shadow: 0 6px 18px rgba(20, 12, 4, .18); }
+.meter[hidden] { display: none; }
+.meter.drag { cursor: grabbing; }
+.meter-t { position: absolute; left: 8px; top: 5px; font: 600 11px/1 var(--mono, monospace); letter-spacing: .08em; text-transform: uppercase; color: rgba(23, 18, 14, .7); pointer-events: none; }
+.meter-x { position: absolute; right: 4px; top: 3px; width: 20px; height: 20px; border: 0; border-radius: 4px; background: transparent; color: rgba(23, 18, 14, .7); cursor: pointer; display: grid; place-items: center; padding: 0; }
+.meter-x:hover { background: rgba(23, 18, 14, .12); }
+.meter-x svg { width: 12px; height: 12px; }
 /* ---------- live camera window (floats over the sheet; never part of an export) ---------- */
 .cam { position: absolute; z-index: 30; left: 0; top: 0; touch-action: none; user-select: none; cursor: grab; }
 .cam[hidden] { display: none; }
@@ -443,6 +452,7 @@ button, input, select, textarea { font: inherit; color: inherit; box-sizing: bor
       </g>
     </svg>
     <div class="hint" id="hint"></div>
+    <div class="meter" id="meter" hidden role="region" aria-label="Multimeter"><span class="meter-t">Multimeter</span><button class="meter-x" id="meterClose" title="Close the multimeter" aria-label="Close multimeter"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
     <div class="cam" id="cam" hidden role="region" aria-label="Live camera view">
       <div class="cam-frame"><video id="camVid" autoplay muted playsinline></video><div class="cam-wait" id="camWait">Starting camera…</div></div>
       <div class="cam-bar">
@@ -2998,7 +3008,7 @@ function settingsDialog() {
 }
 $('bSettings').onclick = settingsDialog;
 // Bench instruments (multimeter, signal generator, oscilloscope): buttons only for now; Larry will say what each one opens.
-for (const [id, name] of [['bMeter', 'Multimeter'], ['bSigGen', 'Signal generator'], ['bScope', 'Oscilloscope']]) $(id).onclick = () => setMsg(name + ': coming soon');
+for (const [id, name] of [['bSigGen', 'Signal generator'], ['bScope', 'Oscilloscope']]) $(id).onclick = () => setMsg(name + ': coming soon');
 $('fileIn').onchange = async e => {
   const f = e.target.files[0]; e.target.value = ''; if (!f) return;
   try { const p = JSON.parse(await f.text()); if (!p.sheets) throw 0; p.id = uid(); loadProject(p, `Opened ${f.name}`); changed(); }
@@ -3164,6 +3174,34 @@ $('camPick').onclick = async e => {
   ['dblclick', 'contextmenu', 'wheel'].forEach(t => camEl.addEventListener(t, e => { e.stopPropagation(); if (t === 'contextmenu') e.preventDefault(); }));
   new ResizeObserver(() => { if (camOn) camPlace(); }).observe($('view'));
   window.addEventListener('pagehide', camStopTracks);
+})();
+
+// Multimeter (Larry, 2026-11-06): the Multimeter button shows or hides a shaded rectangle floating over the sheet, dragged
+// anywhere inside the canvas area; its spot is remembered in gs.meter. A DOM overlay like the camera, so it is never
+// exported or saved with the drawing. The meter itself comes later.
+(() => {
+  const el = $('meter'), cfg = Object.assign({ x: null, y: null, on: false }, lsGet('gs.meter', {}) || {}), save = () => lsSet('gs.meter', cfg);
+  const place = () => {
+    const vr = $('view').getBoundingClientRect(), w = el.offsetWidth, h = el.offsetHeight, pad = 8;
+    if (cfg.x == null || cfg.y == null) { cfg.x = Math.round((vr.width - w) / 2); cfg.y = 24; }   // first time: top center
+    cfg.x = Math.max(pad, Math.min(cfg.x, vr.width - w - pad)); cfg.y = Math.max(pad, Math.min(cfg.y, vr.height - h - pad));
+    el.style.left = cfg.x + 'px'; el.style.top = cfg.y + 'px';
+  };
+  const show = on => { cfg.on = on; el.hidden = !on; $('bMeter').setAttribute('aria-pressed', on); if (on) place(); save(); setMsg(on ? 'Multimeter shown: drag it anywhere on the sheet' : 'Multimeter hidden'); };
+  $('bMeter').onclick = () => show(el.hidden);
+  $('meterClose').onclick = e => { e.stopPropagation(); show(false); };
+  let st = null;
+  el.addEventListener('pointerdown', e => {
+    if (e.button !== 0 || e.target.closest('.meter-x')) { e.stopPropagation(); return; }
+    e.preventDefault(); e.stopPropagation();
+    st = { px: e.clientX, py: e.clientY, x: cfg.x, y: cfg.y }; el.setPointerCapture(e.pointerId); el.classList.add('drag');
+  });
+  el.addEventListener('pointermove', e => { if (!st) return; cfg.x = st.x + e.clientX - st.px; cfg.y = st.y + e.clientY - st.py; place(); });
+  const end = () => { if (!st) return; st = null; el.classList.remove('drag'); save(); };
+  el.addEventListener('pointerup', end); el.addEventListener('pointercancel', end);
+  ['dblclick', 'contextmenu', 'wheel'].forEach(t => el.addEventListener(t, e => { e.stopPropagation(); if (t === 'contextmenu') e.preventDefault(); }));
+  new ResizeObserver(() => { if (!el.hidden) place(); }).observe($('view'));
+  if (cfg.on) requestAnimationFrame(() => show(true));
 })();
 
 /* =====================================================================

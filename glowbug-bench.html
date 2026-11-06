@@ -3253,5 +3253,41 @@ downloadsP.then(d => { if (!d) $('bExport').title = 'Export is not available in 
   }
   if (dirty) saveNow(); else if (cur && cur.sheets) setSave('ok', 'Saved in this browser');
 })();
+
+// Browser check (Larry, 2026-11-06): Glowbug Bench is built for Google Chrome and Microsoft Edge. On any other browser a
+// popup says so on every start; the app still runs if the user carries on. Detected from the browser's brand list
+// (navigator.userAgentData) where there is one, otherwise from the user-agent string. Skipped under test automation.
+function browserName() {
+  const ua = navigator.userAgent || '', brands = (navigator.userAgentData && navigator.userAgentData.brands || []).map(b => b.brand);
+  if (brands.includes('Microsoft Edge') || /\bEdg(e|A|iOS)?\//.test(ua)) return 'Microsoft Edge';
+  if (/\bOPR\/|Opera/.test(ua) || brands.includes('Opera')) return 'Opera';
+  if (brands.includes('Brave') || navigator.brave) return 'Brave';
+  if (/Vivaldi/.test(ua)) return 'Vivaldi';
+  if (/SamsungBrowser/.test(ua)) return 'Samsung Internet';
+  if (/YaBrowser/.test(ua)) return 'Yandex';
+  if (/Firefox\/|FxiOS/.test(ua)) return 'Firefox';
+  if (brands.includes('Google Chrome') || ((/Chrome\/|CriOS/.test(ua)) && /Google Inc/.test(navigator.vendor || '') && !brands.length)) return 'Google Chrome';
+  if (/Safari\//.test(ua) && /Apple/.test(navigator.vendor || '')) return 'Safari';
+  if (brands.includes('Chromium') || /Chrome\//.test(ua)) return 'a Chromium-based browser';
+  return 'an unrecognized browser';
+}
+(() => {
+  if (navigator.webdriver) return;
+  const name = browserName(); if (name === 'Google Chrome' || name === 'Microsoft Edge') return;
+  const back = document.createElement('div'); back.className = 'dlg-back';
+  back.innerHTML = `<div class="dlg" role="alertdialog" aria-modal="true" aria-labelledby="brT" aria-describedby="brD">
+    <h2 id="brT">Unsupported browser</h2>
+    <div id="brD" style="padding:4px 16px 8px;line-height:1.5">
+      <p style="margin:0 0 8px">Glowbug Bench is built for <b>Google Chrome</b> or <b>Microsoft Edge</b>. You appear to be using <b>${esc(name)}</b>.</p>
+      <p style="margin:0">Some features, such as the camera, saving and exporting, may not work correctly here. Please open this file in Chrome or Edge.</p>
+    </div>
+    <div class="foot"><button type="button" class="pri" id="brOk">OK</button></div></div>`;
+  document.body.appendChild(back);
+  const close = () => back.remove();
+  $('brOk').onclick = close;
+  back.addEventListener('keydown', e => { if (e.key === 'Escape' || e.key === 'Enter') close(); e.stopPropagation(); });
+  $('brOk').focus();
+  setMsg(`Unsupported browser: ${name}. Glowbug Bench is built for Chrome or Edge.`);
+})();
 })();
 </script>

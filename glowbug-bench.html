@@ -337,6 +337,22 @@ button, input, select, textarea { font: inherit; color: inherit; box-sizing: bor
   .app.panel-open .view { visibility: hidden; }
 }
 /* ---------- instrument cards (voltmeters, ammeters, scope and generator channels): white cards hovering over the sheet, draggable; never exported ---------- */
+.pdfw { position: absolute; z-index: 32; left: 0; top: 0; display: flex; flex-direction: column; background: #FFFFFF; border: 2px solid #17120E;
+  box-shadow: 5px 6px 7px rgba(0, 0, 0, .32); min-width: 320px; min-height: 240px; }
+.pdfw[hidden] { display: none; }
+.pdfw-bar { display: flex; align-items: center; gap: 6px; height: 30px; padding: 0 4px 0 8px; background: #E6E0D6; border-bottom: 1px solid #B4B4B4; cursor: grab; user-select: none; touch-action: none; flex: none; }
+.pdfw.drag .pdfw-bar { cursor: grabbing; }
+.pdfw-t { flex: 1; min-width: 0; font: 600 12px/1 var(--font-mono, monospace); color: #17120E; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pdfw-bar button { height: 22px; border: 1px solid #B4B4B4; border-radius: 3px; background: #FFFFFF; cursor: pointer; padding: 0 8px; font: 500 12px system-ui, sans-serif; }
+.pdfw-bar button:hover { background: #F2EEE8; }
+.pdfw-bar select { height: 22px; max-width: 180px; font: 500 12px system-ui, sans-serif; }
+.pdfw-body { flex: 1; position: relative; min-height: 0; }
+.pdfw-body iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; background: #525659; }
+.pdfw-empty { position: absolute; inset: 0; display: grid; place-items: center; text-align: center; padding: 20px; color: #6E6A64; font: 14px/1.5 system-ui, sans-serif; }
+.pdfw.over .pdfw-empty { background: #F6EFE2; outline: 2px dashed #9A5210; outline-offset: -10px; }
+.pdfw-grip { position: absolute; right: 0; bottom: 0; width: 16px; height: 16px; cursor: nwse-resize; touch-action: none;
+  background: linear-gradient(135deg, transparent 50%, #8C8C8C 50%, #8C8C8C 58%, transparent 58%, transparent 70%, #8C8C8C 70%, #8C8C8C 78%, transparent 78%); }
+.pdfw.drag iframe, .pdfw.size iframe { pointer-events: none; }   /* keep the pointer while dragging over the PDF */
 .inst { position: absolute; z-index: 29; left: 0; top: 0; width: 280px; height: 160px; touch-action: none; user-select: none; cursor: grab;
   background: #FFFFFF; border: 2px solid #17120E; border-radius: 0;
   box-shadow: 5px 6px 7px rgba(0, 0, 0, .32); }   /* Larry's look: pure white card with a soft shadow down and to the right, as if hovering */
@@ -415,6 +431,8 @@ button, input, select, textarea { font: inherit; color: inherit; box-sizing: bor
     <span class="sep"></span>
     <button class="tb" id="bLed" title="LED"><svg viewBox="0 0 24 24" style="width:24px;height:26px" stroke-linecap="round" stroke-linejoin="round"><path d="M9.6 18.6V23.2M14.4 18.6V21.6" fill="none" stroke="#8C8C8C" stroke-width="1.3"/><path d="M7.2 18.6V9.6a4.8 4.8 0 0 1 9.6 0v9z" fill="#D8352A" stroke="#7A1A14" stroke-width="0.9"/><rect x="6.2" y="17.2" width="11.6" height="2" rx="0.6" fill="#C42A20" stroke="#7A1A14" stroke-width="0.8"/><path d="M9.4 9.2a2.6 2.6 0 0 1 2.4-2.4" fill="none" stroke="#FFFFFF" stroke-width="1.1" opacity="0.85"/><path d="M3.2 5.2L5 6.6M20.8 5.2L19 6.6M12 0.8V2.4" fill="none" stroke="#D8352A" stroke-width="1.2"/></svg></button>
     <button class="tb" id="bBulb" title="Incandescent bulb"><svg viewBox="0 0 24 24" style="width:24px;height:26px" stroke-linecap="round" stroke-linejoin="round"><path d="M8.6 16.4c0-2.6-3.4-4.2-3.4-7.8a6.8 6.8 0 0 1 13.6 0c0 3.6-3.4 5.2-3.4 7.8z" fill="#FFF1B8" stroke="#6E6A64" stroke-width="1"/><path d="M10.2 16.4V11.4M13.8 16.4V11.4M10.2 11.4l0.9-1.4 0.9 1.4 0.9-1.4 0.9 1.4" fill="none" stroke="#C2571A" stroke-width="0.9"/><path d="M8.6 16.4h6.8v4.6h-6.8z" fill="#B9B4AC" stroke="#5A5550" stroke-width="0.9"/><path d="M8.6 17.9h6.8M8.6 19.5h6.8" fill="none" stroke="#5A5550" stroke-width="0.8"/><path d="M10.4 21h3.2l-0.8 1.8h-1.6z" fill="#3E3934"/><path d="M7.6 6.2a4.6 4.6 0 0 1 2.6-2.4" fill="none" stroke="#FFFFFF" stroke-width="1.1"/></svg></button>
+    <span class="sep"></span>
+    <button class="tb" id="bPdf" title="Datasheet viewer (PDF)" aria-pressed="false"><svg viewBox="0 0 24 24" style="width:24px;height:26px" stroke-linejoin="round"><path d="M5 1.8h9.4l4.8 4.8v15.6H5z" fill="#FFFFFF" stroke="#5A5550" stroke-width="1.1"/><path d="M14.4 1.8v4.8h4.8" fill="#E6E0D6" stroke="#5A5550" stroke-width="1.1"/><path d="M7.6 9.6h7.8M7.6 12h9M7.6 19.8h9" fill="none" stroke="#B9B4AC" stroke-width="1"/><rect x="2.6" y="13.6" width="13.4" height="6.2" rx="1" fill="#C42A20"/><text x="9.3" y="18.6" text-anchor="middle" style="font:800 5.2px system-ui,Arial,sans-serif;fill:#FFFFFF;letter-spacing:.2px">PDF</text></svg></button>
     <span class="tb-spacer"></span>
     <button class="tb" id="bImport" title="Open a .json project file"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15V3M7 10l5 5 5-5M4 15v5h16v-5"/></svg><span class="lb">Import</span></button>
     <button class="tb" id="bExport" title="Export the sheet" aria-haspopup="menu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12M7 8l5-5 5 5M4 15v5h16v-5"/></svg><span class="lb">Export</span></button>
@@ -3372,6 +3390,72 @@ $('bSlider').onclick = () => setMsg('Slider: coming soon');
 // LED and Incandescent bulb (Larry, 2026-11-07): toolbar buttons behind their own separator; what they do comes later
 $('bLed').onclick = () => setMsg('LED: coming soon');
 $('bBulb').onclick = () => setMsg('Incandescent bulb: coming soon');
+// Datasheet viewer (Larry, 2026-11-07): a floating window over the canvas that shows PDFs (tube data sheets and the like) in the
+// browser's own PDF viewer, so scrolling, zoom, page jumps, search and print come built in. Open… or drop PDFs on it; the PDFs
+// opened this session are listed in the picker. Files aren't saved with the project; the window's place and size are (gs.pdf).
+const pdfDocs = [];                    // { name, url } for this session
+let pdfWin = null, pdfCur = -1;
+const pdfGeo = (q => ({ x: +q.x || 60, y: +q.y || 40, w: +q.w || 640, h: +q.h || 720 }))(lsGet('gs.pdf', {}) || {});
+function pdfWindow() {
+  if (pdfWin) return pdfWin;
+  const el = document.createElement('div'); el.className = 'pdfw'; el.setAttribute('role', 'dialog'); el.setAttribute('aria-label', 'Datasheet viewer');
+  el.innerHTML = `<div class="pdfw-bar"><span class="pdfw-t">Datasheets</span><select class="pdfw-sel" aria-label="Open datasheets" hidden></select>
+      <button type="button" class="pdfw-open" title="Open a PDF file">Open…</button>
+      <button type="button" class="pdfw-x" title="Close the viewer" aria-label="Close" style="border:0;background:transparent;font-size:16px;padding:0 6px">×</button></div>
+    <div class="pdfw-body"><div class="pdfw-empty">Click <b>&nbsp;Open…&nbsp;</b> or drop a PDF data sheet here.<br>Scroll to page through it; zoom with the viewer's + / − buttons or Ctrl + wheel.</div></div>
+    <div class="pdfw-grip" title="Drag to resize"></div><input type="file" accept="application/pdf,.pdf" multiple hidden>`;
+  $('view').appendChild(el); pdfWin = el;
+  const inp = el.querySelector('input[type=file]'), sel = el.querySelector('.pdfw-sel');
+  el.querySelector('.pdfw-open').onclick = () => inp.click();
+  inp.onchange = () => { pdfAdd([...inp.files]); inp.value = ''; };
+  el.querySelector('.pdfw-x').onclick = () => pdfShow(false);
+  sel.onchange = () => pdfOpen(+sel.value);
+  ['dragenter', 'dragover'].forEach(t => el.addEventListener(t, e => { if ([...(e.dataTransfer?.types || [])].includes('Files')) { e.preventDefault(); el.classList.add('over'); } }));
+  el.addEventListener('dragleave', e => { if (!el.contains(e.relatedTarget)) el.classList.remove('over'); });
+  el.addEventListener('drop', e => { e.preventDefault(); el.classList.remove('over'); pdfAdd([...e.dataTransfer.files]); });
+  ['pointerdown', 'dblclick', 'contextmenu', 'wheel'].forEach(t => el.addEventListener(t, e => { e.stopPropagation(); if (t === 'contextmenu' && !e.target.closest('select')) e.preventDefault(); }));
+  const bar = el.querySelector('.pdfw-bar'), grip = el.querySelector('.pdfw-grip');
+  let st = null;
+  const down = (e, kind) => { if (e.button !== 0 || e.target.closest('button, select')) return; e.preventDefault(); st = { kind, px: e.clientX, py: e.clientY, ...pdfGeo }; e.currentTarget.setPointerCapture(e.pointerId); el.classList.add(kind); };
+  const move = e => { if (!st) return; const dx = e.clientX - st.px, dy = e.clientY - st.py;
+    if (st.kind === 'drag') { pdfGeo.x = st.x + dx; pdfGeo.y = st.y + dy; } else { pdfGeo.w = Math.max(320, st.w + dx); pdfGeo.h = Math.max(240, st.h + dy); } pdfPlace(); };
+  const up = () => { if (!st) return; el.classList.remove(st.kind); st = null; lsSet('gs.pdf', pdfGeo); };
+  bar.addEventListener('pointerdown', e => down(e, 'drag')); grip.addEventListener('pointerdown', e => down(e, 'size'));
+  for (const h of [bar, grip]) { h.addEventListener('pointermove', move); h.addEventListener('pointerup', up); h.addEventListener('pointercancel', up); }
+  return el;
+}
+function pdfPlace() {   // keep the window inside the canvas area
+  if (!pdfWin || pdfWin.hidden) return;
+  const vr = $('view').getBoundingClientRect(), pad = 6, g = pdfGeo;
+  g.w = Math.min(g.w, Math.max(320, vr.width - 2 * pad)); g.h = Math.min(g.h, Math.max(240, vr.height - 2 * pad));
+  g.x = Math.max(pad, Math.min(g.x, vr.width - g.w - pad)); g.y = Math.max(pad, Math.min(g.y, vr.height - g.h - pad));
+  Object.assign(pdfWin.style, { left: g.x + 'px', top: g.y + 'px', width: g.w + 'px', height: g.h + 'px' });
+}
+function pdfShow(on) {
+  const el = pdfWindow(); el.hidden = !on; $('bPdf').setAttribute('aria-pressed', on);
+  if (on) { pdfPlace(); if (!pdfDocs.length) el.querySelector('.pdfw-open').focus(); }
+}
+function pdfAdd(files) {
+  const pdfs = files.filter(f => f.type === 'application/pdf' || /\.pdf$/i.test(f.name));
+  if (!pdfs.length) { if (files.length) setMsg('That is not a PDF file.'); return; }
+  for (const f of pdfs) {
+    const i = pdfDocs.findIndex(d => d.name === f.name);
+    const d = { name: f.name, url: URL.createObjectURL(f.type === 'application/pdf' ? f : new Blob([f], { type: 'application/pdf' })) };
+    if (i >= 0) { URL.revokeObjectURL(pdfDocs[i].url); pdfDocs[i] = d; } else pdfDocs.push(d);
+  }
+  pdfOpen(pdfDocs.findIndex(d => d.name === pdfs[pdfs.length - 1].name));
+}
+function pdfOpen(i) {
+  const d = pdfDocs[i]; if (!d) return; pdfCur = i;
+  const el = pdfWindow(), body = el.querySelector('.pdfw-body'), sel = el.querySelector('.pdfw-sel');
+  if (navigator.pdfViewerEnabled === false) body.innerHTML = `<div class="pdfw-empty">This browser can't show PDFs inside the page.<br><a href="${d.url}" target="_blank" rel="noopener">Open ${esc(d.name)} in a new tab</a></div>`;
+  else { body.innerHTML = `<iframe title="${esc(d.name)}"></iframe>`; body.querySelector('iframe').src = d.url; }
+  el.querySelector('.pdfw-t').textContent = d.name;
+  sel.innerHTML = pdfDocs.map((x, k) => `<option value="${k}"${k === i ? ' selected' : ''}>${esc(x.name)}</option>`).join(''); sel.hidden = pdfDocs.length < 2;
+  setMsg(`Showing ${d.name}`);
+}
+$('bPdf').onclick = () => pdfShow(!pdfWin || pdfWin.hidden);
+window.addEventListener('resize', pdfPlace);
 // Active Plot: click the button, then click the canvas to drop it, or drag from the button and let go over the canvas
 function placePlot(p) {
   snapshot(); const l = { id: uid(), ...plotAt(p) }; linesOf(sheet).push(l);

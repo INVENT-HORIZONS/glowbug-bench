@@ -459,6 +459,7 @@ button, input, select, textarea { font: inherit; color: inherit; box-sizing: bor
         <g id="layerParts"></g>
         <g id="layerWires"></g>
         <g id="layerText"></g>
+        <g id="layerPlots"></g>
         <g id="layerSel"></g>
         <g id="layerHooks"></g>
         <g id="layerOver"></g>
@@ -1570,6 +1571,8 @@ const PLOT_DIV = 20, PLOT_STEP = 40, PLOT_MIN = [160, 120], PLOT_DEF = [320, 240
 const isPlot = l => l && l.shape === 'plot';
 const plotFrame = l => { const x0 = Math.min(l.a[0], l.b[0]), y0 = Math.min(l.a[1], l.b[1]); return [x0, y0, x0 + Math.max(PLOT_MIN[0], Math.abs(l.b[0] - l.a[0])), y0 + Math.max(PLOT_MIN[1] + PLOT_TB, Math.abs(l.b[1] - l.a[1]))]; };
 const plotArea = l => { const f = plotFrame(l); return [f[0], f[1] + PLOT_TB, f[2], f[3]]; };
+// the topmost Active Plot card under raw (title bar or area)
+const plotCardAt = raw => { const ls = linesOf(sheet); for (let i = ls.length - 1; i >= 0; i--) { if (!isPlot(ls[i])) continue; const f = plotFrame(ls[i]); if (raw[0] >= f[0] && raw[0] <= f[2] && raw[1] >= f[1] && raw[1] <= f[3]) return ls[i]; } return null; };
 // the plot area under raw, topmost first (it belongs to the plot, so a click there never reaches what the card covers)
 const plotAreaAt = raw => { const ls = linesOf(sheet); for (let i = ls.length - 1; i >= 0; i--) { if (!isPlot(ls[i])) continue; const a = plotArea(ls[i]); if (raw[0] >= a[0] && raw[0] <= a[2] && raw[1] > a[1] && raw[1] <= a[3]) return ls[i]; } return null; };
 function plotSVG(l) {
@@ -1722,7 +1725,8 @@ function render() {
   for (const h of allHooks()) if ((cnt.get(key(h.pos)) || 0) >= 3 && sheet.wires.some(w => [w.pts[0], w.pts.at(-1)].some(e => key(e) === key(h.pos)))) dots.add(key(h.pos));
   const dotColor = k => { const w = sheet.wires.find(w => w.color && w.pts.some(q => key(q) === k)); return w ? ` style="fill:${wcol(w.color)}"` : ''; };
   ws += [...dots].map(k => { const [x, y] = k.split(','); return `<circle class="jdot"${dotColor(k)} cx="${x}" cy="${y}" r="3"/>`; }).join('');
-  $('layerWires').innerHTML = linesOf(sheet).filter(isPlot).map(lineSVG).join('') + linesOf(sheet).filter(l => !isPlot(l)).map(lineSVG).join('') + ws + linksOf(sheet).map(k => { const e = linkEnds(k); return e ? linkSVG(e) + [[k.ta, e[0]], [k.tb, e[e.length - 1]]].filter(x => x[0]).map(x => `<circle cx="${x[1][0]}" cy="${x[1][1]}" r="2.4" style="fill:${LINK_COL}"/>`).join('') : ''; }).join('');
+  $('layerPlots').innerHTML = linesOf(sheet).filter(isPlot).map(lineSVG).join('');   // Active Plots sit above all schematic content (Larry: nothing bleeds through)
+  $('layerWires').innerHTML = linesOf(sheet).filter(l => !isPlot(l)).map(lineSVG).join('') + ws + linksOf(sheet).map(k => { const e = linkEnds(k); return e ? linkSVG(e) + [[k.ta, e[0]], [k.tb, e[e.length - 1]]].filter(x => x[0]).map(x => `<circle cx="${x[1][0]}" cy="${x[1][1]}" r="2.4" style="fill:${LINK_COL}"/>`).join('') : ''; }).join('');
   $('layerText').innerHTML = sheet.texts.map(textSVG).join('');
   renderSel(); renderHooks(cnt); renderDoc(); applyView();
   $('stCount').textContent = `${sheet.parts.length} part${sheet.parts.length === 1 ? '' : 's'} · ${sheet.wires.length} wire${sheet.wires.length === 1 ? '' : 's'}`;
@@ -1732,6 +1736,7 @@ function renderHooks(cnt = connectivity()) {
   if (!showHooks) { $('layerHooks').innerHTML = ''; return; }
   const hot = hoverHook ? key(hoverHook.pos) : '';
   $('layerHooks').innerHTML = allHooks().map(h => {
+    if (plotCardAt(h.pos)) return '';   // covered by an Active Plot
     const k = key(h.pos), connected = (cnt.get(k) || 0) >= 2;
     if (connected && k !== hot) return '';
     return `<circle class="hookc${k === hot ? ' hot' : ''}" cx="${h.pos[0]}" cy="${h.pos[1]}" r="${k === hot ? 4.5 : 3.2}"/>`;
@@ -2304,7 +2309,7 @@ let drag = null, band = null, hoverHook = null, panning = null, spaceDown = fals
 function toWorld(e) { const r = svg.getBoundingClientRect(); return [(e.clientX - r.left - view.x) / view.z, (e.clientY - r.top - view.y) / view.z]; }
 function hookAt(p, tol = 6) {
   let best = null, bd = tol / Math.max(view.z, .6) + 2;
-  for (const h of allHooks()) { const d = Math.hypot(h.pos[0] - p[0], h.pos[1] - p[1]); if (d < bd) { bd = d; best = h; } }
+  for (const h of allHooks()) { const d = Math.hypot(h.pos[0] - p[0], h.pos[1] - p[1]); if (d < bd && !plotCardAt(h.pos)) { bd = d; best = h; } }   // hooks under an Active Plot are covered
   return best;
 }
 function distSeg(p, a, b) {
@@ -2314,13 +2319,8 @@ function distSeg(p, a, b) {
 }
 function hit(p) {
   const tol = 5 / view.z + 1;
+  { const pc = plotCardAt(p); if (pc) return p[1] <= plotFrame(pc)[1] + PLOT_TB ? { k: 'line', o: pc } : null; }   // an Active Plot covers everything under it: its title bar grabs it, its area is kept for cursors and probing
   for (let i = sheet.texts.length - 1; i >= 0; i--) { const b = textBB(sheet.texts[i]); if (p[0] >= b[0] && p[0] <= b[2] && p[1] >= b[1] && p[1] <= b[3]) return { k: 'text', o: sheet.texts[i] }; }
-  if (plotAreaAt(p)) {   // over an Active Plot's area only what is drawn on top of the card counts; the card itself is grabbed by its title bar
-    for (const w of sheet.wires) for (let i = 0; i < w.pts.length - 1; i++) if (distSeg(p, w.pts[i], w.pts[i + 1]) < tol) return { k: 'wire', o: w, seg: i };
-    for (const l of linesOf(sheet)) if (!isPlot(l) && lineDist(p, l) < tol) return { k: 'line', o: l };
-    for (const k of linksOf(sheet)) { const e = linkEnds(k); if (e) for (let i = 0; i < e.length - 1; i++) if (distSeg(p, e[i], e[i + 1]) < tol) return { k: 'link', o: k, seg: i }; }
-    return null;
-  }
   for (let i = sheet.parts.length - 1; i >= 0; i--) {   // pin numbers
     const q = sheet.parts[i];
     for (const g of pinGeom(q)) if (p[0] >= g.x0 - 1 && p[0] <= g.x1 + 1 && p[1] >= g.top - 1 && p[1] <= g.bottom + 1) return { k: 'pin', o: q, pin: g.name };
@@ -2426,7 +2426,7 @@ svg.addEventListener('pointermove', e => {
     return;
   }
   if (band) { band.b = raw; renderOver(); return; }
-  const h = (mode === 'select' && !plotAreaAt(raw)) || mode === 'wire' ? hookAt(raw) : null;
+  const h = (mode === 'select' || mode === 'wire') && !plotCardAt(raw) ? hookAt(raw) : null;
   if ((h && key(h.pos)) !== (hoverHook && key(hoverHook.pos))) { hoverHook = h; renderHooks(); }
   if (mode === 'select') {
     const t = h ? null : hit(raw);
@@ -3091,7 +3091,7 @@ function sheetSVG(withBg = true, whole = false) {
   if (whole) { const [SW, SH] = sheetDims(sheet); x0 = 0; y0 = 0; x1 = SW; y1 = SH; }
   else { if (!bbs.length) return null; const pad = 16; x0 = Math.min(...bbs.map(b => b[0])) - pad; y0 = Math.min(...bbs.map(b => b[1])) - pad; x1 = Math.max(...bbs.map(b => b[2])) + pad; y1 = Math.max(...bbs.map(b => b[3])) + pad; }
   const css = `.ink{stroke:#17120E;fill:none;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}.solid{fill:#17120E}.tgt{stroke:#2F8A45;fill:none;stroke-width:1.8;stroke-linecap:round}.env{stroke:#17120E;fill:none;stroke-width:1.8}.htr{stroke:#E8912D;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}.dash{stroke:#17120E;fill:none;stroke-width:1.6;stroke-dasharray:5 3.4}.xbox{fill:none;stroke:#B4B4B4;stroke-width:1.2}.dotl{stroke:#17120E;fill:none;stroke-width:2;stroke-linecap:round;stroke-dasharray:0 4.2}.wire{stroke:#17120E;fill:none;stroke-width:1.4;stroke-linecap:round;stroke-linejoin:round}.jdot{fill:#17120E}.lbl{font-family:'Libre Franklin','Franklin Gothic Book',Arial,sans-serif;font-size:11px;fill:#17120E}.lbl .ref,.lbl.ref{font-weight:600}.pinno{font-family:'Libre Franklin','Franklin Gothic Book',Arial,sans-serif;font-size:8.5px;fill:#17120E}.pinlead{stroke:#5C5248;stroke-width:.8;stroke-dasharray:1.2 2;fill:none}.stxt{font-family:'Libre Franklin','Franklin Gothic Book',Arial,sans-serif;white-space:pre}.fr{stroke:#17120E;fill:none;stroke-width:1.1}.fr-b{stroke:#17120E;fill:none;stroke-width:2}.fr-lab{font-family:'JetBrains Mono',Consolas,monospace;font-size:7.5px;letter-spacing:.08em;fill:#5C5248}.fr-val{font-family:'Libre Franklin','Franklin Gothic Book',Arial,sans-serif;fill:#17120E}.fr-zone{font-family:'JetBrains Mono',Consolas,monospace;font-size:10px;fill:#5C5248}.fr-co{font-family:'Big Shoulders Display','Arial Narrow',sans-serif;font-weight:800;fill:#17120E}`;
-  const body = ((whole ? $('layerFrame').innerHTML : '') + $('layerParts').innerHTML + $('layerWires').innerHTML + $('layerText').innerHTML).replace(/var\(--ink\)/g, '#17120E').replace(/var\(--paper\)/g, '#FBF8F3');
+  const body = ((whole ? $('layerFrame').innerHTML : '') + $('layerParts').innerHTML + $('layerWires').innerHTML + $('layerText').innerHTML + $('layerPlots').innerHTML).replace(/var\(--ink\)/g, '#17120E').replace(/var\(--paper\)/g, '#FBF8F3');
   return { w: x1 - x0, h: y1 - y0, svg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${x0} ${y0} ${x1 - x0} ${y1 - y0}" width="${x1 - x0}" height="${y1 - y0}"><style>${css}</style>${withBg ? `<rect x="${x0}" y="${y0}" width="${x1 - x0}" height="${y1 - y0}" fill="#FBF8F3"/>` : ''}${body}</svg>` };
 }
 const fileBase = () => (sheet.file || slugFile(sheet.name)).replace(/\.[a-z0-9]+$/i, '') || 'schematic';

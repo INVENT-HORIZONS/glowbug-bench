@@ -66,7 +66,7 @@ button, input, select, textarea { font: inherit; color: inherit; box-sizing: bor
 .tb svg { width: 18px; height: 18px; flex: none; }
 /* bench-instrument buttons use Larry's picture icons instead of line art */
 .tb-img { padding: 0 6px; }
-.tb-img img { height: 24px; width: auto; display: block; }
+.tb-img img { height: 24px; width: auto; display: block; -webkit-user-drag: none; user-select: none; }
 .tb:hover:not(:disabled) { background: var(--chrome-2); border-color: var(--line); }
 .tb:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 .tb:disabled { opacity: .35; cursor: default; }
@@ -405,7 +405,7 @@ button, input, select, textarea { font: inherit; color: inherit; box-sizing: bor
     <button class="tb tb-img" id="bScope" title="Oscilloscope"><img src="data:image/png;base64,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" alt=""></button>
     <button class="tb tb-img" id="bSigGen" title="Signal generator"><img src="data:image/png;base64,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" alt=""></button>
     <span class="sep"></span>
-    <button class="tb tb-img" id="bPlot" title="Active Plot"><img src="data:image/png;base64,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" alt=""></button>
+    <button class="tb tb-img" id="bPlot" title="Active Plot"><img draggable="false" src="data:image/png;base64,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" alt=""></button>
     <span class="tb-spacer"></span>
     <button class="tb" id="bImport" title="Open a .json project file"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15V3M7 10l5 5 5-5M4 15v5h16v-5"/></svg><span class="lb">Import</span></button>
     <button class="tb" id="bExport" title="Export the sheet" aria-haspopup="menu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12M7 8l5-5 5 5M4 15v5h16v-5"/></svg><span class="lb">Export</span></button>
@@ -1483,6 +1483,7 @@ function applyView() {
   const sh = $('sheetShadow'); sh.setAttribute('x', 4 / view.z); sh.setAttribute('y', 5 / view.z); sh.setAttribute('width', SW); sh.setAttribute('height', SH);
   $('gridRect').style.display = showGrid ? '' : 'none';
   $('stZoom').textContent = Math.round(view.z * 100) + '%';
+  if (plotHandleOf()) renderSel();     // keep the plot's resize handle the same size on screen
 }
 function partSVG(p, extra = '') {
   return `<g transform="translate(${p.x} ${p.y}) rotate(${(p.rot || 0) * 90}) scale(${p.flip ? -1 : 1} 1)"${extra}>${hasBox(p) ? (b => `<rect class="xbox" x="${b[0]}" y="${b[1]}" width="${b[2] - b[0]}" height="${b[3] - b[1]}" rx="2"/>`)(localBB(p)) : ''}${shapeOf(p).draw(isXfmr(p) ? p.core || 'iron' : LIB[p.type].drawArg ? LIB[p.type].drawArg(p) : undefined)}</g>`;
@@ -1550,14 +1551,45 @@ const wstyle = w => w.color && w.color !== 'ink' ? ` style="stroke:${wcol(w.colo
 let lineDraft = null;               // { a: [x, y] } while a line is being drawn
 // Circle and Rectangle tools (Larry, under Line) make the same kind of drawing-only item, with l.shape set: a circle is
 // its center a and a point b on the edge (radius |b - a|); a rectangle is two opposite corners a and b. Unset = line.
-const SHAPE_TOOLS = ['line', 'circle', 'rect'], SHAPE_NAME = { line: 'Line', circle: 'Circle', rect: 'Rectangle' };
+const SHAPE_TOOLS = ['line', 'circle', 'rect'], SHAPE_NAME = { line: 'Line', circle: 'Circle', rect: 'Rectangle', plot: 'Active Plot' };
+// Active Plot (Larry, 2026-11-07): placed like a part from the toolbar button, then moved, resized from its corner handle and
+// deleted like any item. It is the same drawing-only item as a rectangle with l.shape = 'plot' (a = top-left, b = bottom-right),
+// drawn as an empty four-quadrant Cartesian plot: white card, light grid every PLOT_DIV, X and Y axes through the middle.
+// Sizes are multiples of PLOT_STEP so the axes always land on a grid line. No waveform data yet.
+const PLOT_DIV = 20, PLOT_STEP = 40, PLOT_MIN = [160, 120], PLOT_DEF = [320, 240];
+const isPlot = l => l && l.shape === 'plot';
+const plotFrame = l => { const x0 = Math.min(l.a[0], l.b[0]), y0 = Math.min(l.a[1], l.b[1]); return [x0, y0, x0 + Math.max(PLOT_MIN[0], Math.abs(l.b[0] - l.a[0])), y0 + Math.max(PLOT_MIN[1], Math.abs(l.b[1] - l.a[1]))]; };
+function plotSVG(l) {
+  const [x0, y0, x1, y1] = plotFrame(l), cx = (x0 + x1) / 2, cy = (y0 + y1) / 2, m = 8, t = 3, hd = 5;
+  let g = '', tk = '';
+  for (let x = cx - PLOT_DIV; x > x0 + 1; x -= PLOT_DIV) g += `M${x} ${y0}V${y1}`;
+  for (let x = cx + PLOT_DIV; x < x1 - 1; x += PLOT_DIV) g += `M${x} ${y0}V${y1}`;
+  for (let y = cy - PLOT_DIV; y > y0 + 1; y -= PLOT_DIV) g += `M${x0} ${y}H${x1}`;
+  for (let y = cy + PLOT_DIV; y < y1 - 1; y += PLOT_DIV) g += `M${x0} ${y}H${x1}`;
+  for (let x = cx - PLOT_DIV; x > x0 + m + hd; x -= PLOT_DIV) tk += `M${x} ${cy - t}V${cy + t}`;
+  for (let x = cx + PLOT_DIV; x < x1 - m - hd; x += PLOT_DIV) tk += `M${x} ${cy - t}V${cy + t}`;
+  for (let y = cy - PLOT_DIV; y > y0 + m + hd; y -= PLOT_DIV) tk += `M${cx - t} ${y}H${cx + t}`;
+  for (let y = cy + PLOT_DIV; y < y1 - m - hd; y += PLOT_DIV) tk += `M${cx - t} ${y}H${cx + t}`;
+  const ink = '#17120E', ah = (x, y, dx, dy) => `<path d="M${x} ${y}l${-dx * hd - dy * 2.6} ${-dy * hd - dx * 2.6}l${dy * 5.2} ${dx * 5.2}z" style="fill:${ink};stroke:none"/>`;
+  return `<g class="aplot"><rect x="${x0}" y="${y0}" width="${x1 - x0}" height="${y1 - y0}" style="fill:#FFFFFF;stroke:#8C8C8C;stroke-width:1.4"/>`
+    + `<path d="${g}" style="fill:none;stroke:#DDD7CE;stroke-width:0.7"/>`
+    + `<path d="M${x0 + m} ${cy}H${x1 - m}M${cx} ${y0 + m}V${y1 - m}${tk}" style="fill:none;stroke:${ink};stroke-width:1.1"/>`
+    + ah(x1 - m, cy, 1, 0) + ah(x0 + m, cy, -1, 0) + ah(cx, y0 + m, 0, -1) + ah(cx, y1 - m, 0, 1)
+    + `<text x="${x1 - m - 2}" y="${cy - 7}" style="font:italic 11px Georgia,serif;fill:${ink};text-anchor:end">x</text>`
+    + `<text x="${cx + 7}" y="${y0 + m + 9}" style="font:italic 11px Georgia,serif;fill:${ink}">y</text></g>`;
+}
+const plotSize = (a, raw) => [a[0] + Math.max(PLOT_MIN[0], Math.round((raw[0] - a[0]) / PLOT_STEP) * PLOT_STEP), a[1] + Math.max(PLOT_MIN[1], Math.round((raw[1] - a[1]) / PLOT_STEP) * PLOT_STEP)];
+const plotAt = c => { const a = [snap(c[0] - PLOT_DEF[0] / 2), snap(c[1] - PLOT_DEF[1] / 2)]; return { a, b: [a[0] + PLOT_DEF[0], a[1] + PLOT_DEF[1]], shape: 'plot' }; };
+// the resize handle sits on the bottom-right corner of a plot when it is the only thing selected
+const plotHandleOf = () => { if (sel.size !== 1) return null; const l = linesOf(sheet).find(x => sel.has(x.id)); return isPlot(l) ? l : null; };
+function plotHandleAt(raw) { const l = plotHandleOf(); if (!l) return null; const f = plotFrame(l), tol = 7 / view.z; return Math.abs(raw[0] - f[2]) <= tol && Math.abs(raw[1] - f[3]) <= tol ? l : null; }
 const shapeOfL = l => l.shape || 'line';
 const radOf = l => Math.hypot(l.b[0] - l.a[0], l.b[1] - l.a[1]);
 // the outline as one SVG element: attrs is a class or an inline style
 function lineEl(l, attrs) {
   const sh = shapeOfL(l);
   if (sh === 'circle') return `<circle cx="${l.a[0]}" cy="${l.a[1]}" r="${+radOf(l).toFixed(2)}" ${attrs}/>`;
-  if (sh === 'rect') { const [x0, y0, x1, y1] = lineBB(l); return `<rect x="${x0}" y="${y0}" width="${x1 - x0}" height="${y1 - y0}" ${attrs}/>`; }
+  if (sh === 'rect' || sh === 'plot') { const [x0, y0, x1, y1] = lineBB(l); return `<rect x="${x0}" y="${y0}" width="${x1 - x0}" height="${y1 - y0}" ${attrs}/>`; }
   return `<line x1="${l.a[0]}" y1="${l.a[1]}" x2="${l.b[0]}" y2="${l.b[1]}" ${attrs}/>`;
 }
 // Pen for lines, circles and rectangles (Larry): color, width (l.w) and line style (l.dash). The Properties panel shows the
@@ -1569,17 +1601,18 @@ const penDash = (d, w) => ({ dash: `${+(4 * w + 2).toFixed(1)} ${+(3 * w + 1).to
 let pen = (q => ({ color: typeof q.color === 'string' ? q.color : 'ink',   // wcol() falls back to ink for an unknown key
   w: PEN_W.some(x => x[0] === q.w) ? q.w : 1.4, dash: PEN_DASH.some(x => x[0] === q.dash) ? q.dash : 'solid' }))(lsGet('gs.pen', {}) || {});
 const savePen = () => lsSet('gs.pen', pen);
-const lineSVG = l => { const w = l.w || 1.4, d = penDash(l.dash, w); return lineEl(l, `style="stroke:${wcol(l.color || 'ink')};stroke-width:${w};stroke-linecap:round;stroke-linejoin:round;fill:none${d ? `;stroke-dasharray:${d}` : ''}"`); };
+const lineSVG = l => { if (isPlot(l)) return plotSVG(l); const w = l.w || 1.4, d = penDash(l.dash, w); return lineEl(l, `style="stroke:${wcol(l.color || 'ink')};stroke-width:${w};stroke-linecap:round;stroke-linejoin:round;fill:none${d ? `;stroke-dasharray:${d}` : ''}"`); };
 // the pen fields for the Properties panel: color swatches, pen size and line style
 const penFields = (color, w, dash) => `<div class="field"><label>Color</label>${swatchRow(color)}</div>
       <div class="field"><label for="pPenW">Pen size</label><select id="pPenW">${PEN_W.map(([v, n]) => `<option value="${v}"${v === w ? ' selected' : ''}>${n} (${v} px)</option>`).join('')}</select></div>
       <div class="field"><label for="pPenD">Line style</label><select id="pPenD">${PEN_DASH.map(([v, n]) => `<option value="${v}"${v === dash ? ' selected' : ''}>${n}</option>`).join('')}</select></div>`;
-const lineBB = l => { if (shapeOfL(l) === 'circle') { const r = radOf(l); return [l.a[0] - r, l.a[1] - r, l.a[0] + r, l.a[1] + r]; } return [Math.min(l.a[0], l.b[0]), Math.min(l.a[1], l.b[1]), Math.max(l.a[0], l.b[0]), Math.max(l.a[1], l.b[1])]; };
+const lineBB = l => { if (isPlot(l)) return plotFrame(l); if (shapeOfL(l) === 'circle') { const r = radOf(l); return [l.a[0] - r, l.a[1] - r, l.a[0] + r, l.a[1] + r]; } return [Math.min(l.a[0], l.b[0]), Math.min(l.a[1], l.b[1]), Math.max(l.a[0], l.b[0]), Math.max(l.a[1], l.b[1])]; };
 // distance from p to the drawn outline (hit testing)
 function lineDist(p, l) {
   const sh = shapeOfL(l);
   if (sh === 'circle') return Math.abs(Math.hypot(p[0] - l.a[0], p[1] - l.a[1]) - radOf(l));
-  if (sh === 'rect') { const [x0, y0, x1, y1] = lineBB(l), c = [[x0, y0], [x1, y0], [x1, y1], [x0, y1]]; return Math.min(...c.map((q, i) => distSeg(p, q, c[(i + 1) % 4]))); }
+  if (sh === 'plot') { const [x0, y0, x1, y1] = plotFrame(l); if (p[0] >= x0 && p[0] <= x1 && p[1] >= y0 && p[1] <= y1) return 0; }
+  if (sh === 'rect' || sh === 'plot') { const [x0, y0, x1, y1] = lineBB(l), c = [[x0, y0], [x1, y0], [x1, y1], [x0, y1]]; return Math.min(...c.map((q, i) => distSeg(p, q, c[(i + 1) % 4]))); }
   return distSeg(p, l.a, l.b);
 }
 const linesOf = sh => sh.lines || (sh.lines = []);
@@ -1657,7 +1690,7 @@ function pruneLinks() {
 let drawColor = 'ink';
 const swatchRow = cur => `<div class="swatches" role="group" aria-label="Wire color">${WIRE_COLORS.map(c => `<button class="sw" data-wc="${c.k}" title="${c.name}" aria-label="${c.name}" aria-pressed="${c.k === cur}" style="background:${c.c}"></button>`).join('')}</div>`;
 function colorWires(k) {   // recolor the selected wires
-  const ws = selItems().filter(i => i.k === 'wire' || i.k === 'line').map(i => i.o); if (!ws.length) return false;
+  const ws = selItems().filter(i => i.k === 'wire' || (i.k === 'line' && !isPlot(i.o))).map(i => i.o); if (!ws.length) return false;
   snapshot(); for (const w of ws) { if (k === 'ink') delete w.color; else w.color = k; }
   render(); changed(); setMsg(`${ws.length === 1 ? (selItems().some(i => i.k === 'line') ? 'Line' : 'Wire') : ws.length + ' items'} set to ${WIRE_COLORS.find(c => c.k === k).name.split(' ')[0].toLowerCase()}`); return true;
 }
@@ -1673,7 +1706,7 @@ function render() {
   for (const h of allHooks()) if ((cnt.get(key(h.pos)) || 0) >= 3 && sheet.wires.some(w => [w.pts[0], w.pts.at(-1)].some(e => key(e) === key(h.pos)))) dots.add(key(h.pos));
   const dotColor = k => { const w = sheet.wires.find(w => w.color && w.pts.some(q => key(q) === k)); return w ? ` style="fill:${wcol(w.color)}"` : ''; };
   ws += [...dots].map(k => { const [x, y] = k.split(','); return `<circle class="jdot"${dotColor(k)} cx="${x}" cy="${y}" r="3"/>`; }).join('');
-  $('layerWires').innerHTML = linesOf(sheet).map(lineSVG).join('') + ws + linksOf(sheet).map(k => { const e = linkEnds(k); return e ? linkSVG(e) + [[k.ta, e[0]], [k.tb, e[e.length - 1]]].filter(x => x[0]).map(x => `<circle cx="${x[1][0]}" cy="${x[1][1]}" r="2.4" style="fill:${LINK_COL}"/>`).join('') : ''; }).join('');
+  $('layerWires').innerHTML = linesOf(sheet).filter(isPlot).map(lineSVG).join('') + linesOf(sheet).filter(l => !isPlot(l)).map(lineSVG).join('') + ws + linksOf(sheet).map(k => { const e = linkEnds(k); return e ? linkSVG(e) + [[k.ta, e[0]], [k.tb, e[e.length - 1]]].filter(x => x[0]).map(x => `<circle cx="${x[1][0]}" cy="${x[1][1]}" r="2.4" style="fill:${LINK_COL}"/>`).join('') : ''; }).join('');
   $('layerText').innerHTML = sheet.texts.map(textSVG).join('');
   renderSel(); renderHooks(cnt); renderDoc(); applyView();
   $('stCount').textContent = `${sheet.parts.length} part${sheet.parts.length === 1 ? '' : 's'} · ${sheet.wires.length} wire${sheet.wires.length === 1 ? '' : 's'}`;
@@ -1694,6 +1727,7 @@ function renderSel() {
   for (const w of sheet.wires) if (sel.has(w.id)) s += `<polyline class="selwire" points="${w.pts.map(p => p.join(',')).join(' ')}"/>`;
   for (const t of sheet.texts) if (sel.has(t.id)) { const b = textBB(t); s += `<rect class="selbox" x="${b[0] - 2}" y="${b[1] - 2}" width="${b[2] - b[0] + 4}" height="${b[3] - b[1] + 4}" rx="2"/>`; }
   for (const l of linesOf(sheet)) if (sel.has(l.id)) s += lineEl(l, 'class="selwire" style="fill:none"');
+  { const l = plotHandleOf(); if (l) { const f = plotFrame(l), r = 4.5 / view.z; s += `<rect x="${f[2] - r}" y="${f[3] - r}" width="${2 * r}" height="${2 * r}" style="fill:#FFFFFF;stroke:${LINK_COL};stroke-width:${1.4 / view.z}"/>`; } }
   for (const k of linksOf(sheet)) if (sel.has(k.id)) { const e = linkEnds(k); if (e) s += `<polyline class="selwire" points="${ptsAttr(e)}"/>`; }
   if (selLabel) { const q = sheet.parts.find(x => x.id === selLabel.id), l = q && labelLines(q).find(x => x.field === selLabel.field);
     if (l) s += `<rect class="selbox" style="stroke-dasharray:none;stroke-width:1.4" x="${l.x0 - 3}" y="${l.top - 2}" width="${l.x1 - l.x0 + 6}" height="${l.bottom - l.top + 4}" rx="2"/>`; else selLabel = null; }
@@ -1719,7 +1753,7 @@ function cutAt(raw, segOnly) {
     sheet.wires.splice(i, 1, ...keep); what = 'one wire segment';
   }
   else if (t.k === 'wire') { sheet.wires = sheet.wires.filter(w => w !== t.o); what = segOnly ? 'one wire segment' : 'wire'; }
-  else if (t.k === 'line') { sheet.lines = linesOf(sheet).filter(x => x !== t.o); what = 'line'; }
+  else if (t.k === 'line') { sheet.lines = linesOf(sheet).filter(x => x !== t.o); what = isPlot(t.o) ? 'Active Plot' : 'line'; }
   else if (t.k === 'link') { sheet.links = linksOf(sheet).filter(x => x !== t.o); what = 'link'; }
   else { sheet.texts = sheet.texts.filter(x => x !== t.o); what = 'text'; }
   sel.delete(t.o.id); render(); renderOver(); changed();
@@ -1738,6 +1772,7 @@ function renderOver() {
     else if (t.k === 'text') { const b = textBB(t.o); s += `<rect class="cutmark" x="${b[0] - 2}" y="${b[1] - 2}" width="${b[2] - b[0] + 4}" height="${b[3] - b[1] + 4}" rx="2"/>`; }
     else if (t.k === 'label') { const l = labelLines(t.o).find(x => x.field === t.field); if (l) s += `<rect class="cutmark" x="${l.x0 - 3}" y="${l.top - 2}" width="${l.x1 - l.x0 + 6}" height="${l.bottom - l.top + 4}" rx="2"/>`; }
   }
+  if (mode === 'plot') s += `<g class="ghost">${plotSVG(plotAt(mouse))}</g>`;
   if (mode === 'place' && placeType) {
     s += `<g class="ghost">${partSVG({ type: placeType, x: mouse[0], y: mouse[1], rot: placeRot, flip: placeFlip })}</g>`;
   }
@@ -1980,7 +2015,7 @@ function renderProps() {
   if (!items.length) { b.innerHTML = `<div class="empty">Select a part, wire or text to edit it. Click a part in the library to place it; click any hook to start a wire.</div>`; return; }
   if (items.length > 1) {
     b.innerHTML = `<div class="what">${items.length} items selected<small>${items.filter(i => i.k === 'part').length} parts · ${items.filter(i => i.k === 'wire').length} wires · ${items.filter(i => i.k === 'text').length} texts${items.some(i => i.k === 'line') ? ` · ${items.filter(i => i.k === 'line').length} lines` : ''}${items.some(i => i.k === 'link') ? ` · ${items.filter(i => i.k === 'link').length} links` : ''}</small></div>
-      ${items.some(i => i.k === 'wire' || i.k === 'line') ? `<div class="field"><label>Color</label>${swatchRow((() => { const cs = new Set(items.filter(i => i.k === 'wire' || i.k === 'line').map(i => i.o.color || 'ink')); return cs.size === 1 ? [...cs][0] : ''; })())}</div>` : ''}
+      ${items.some(i => i.k === 'wire' || (i.k === 'line' && !isPlot(i.o))) ? `<div class="field"><label>Color</label>${swatchRow((() => { const cs = new Set(items.filter(i => i.k === 'wire' || i.k === 'line').map(i => i.o.color || 'ink')); return cs.size === 1 ? [...cs][0] : ''; })())}</div>` : ''}
       <div class="row-btns"><button data-act="rot">Rotate</button><button data-act="dup">Duplicate</button><button class="del" data-act="del">Delete</button></div>`; return;
   }
   const it = items[0];
@@ -2025,6 +2060,11 @@ function renderProps() {
     b.innerHTML = `<div class="what">Link<small>${nm(k.a)} ↔ ${nm(k.b)} · ganged controls</small></div>
       <div class="empty">The dashed line joins the two arrow tips and follows the parts when they move. Add more with the Link tool (J).</div>
       <div class="row-btns"><button class="del" data-act="del">Delete</button></div>`;
+  } else if (it.k === 'line' && isPlot(it.o)) {
+    const f = plotFrame(it.o);
+    b.innerHTML = `<div class="what">Active Plot<small>${(f[2] - f[0]) / G} × ${(f[3] - f[1]) / G} grid units · empty four-quadrant plot</small></div>
+      <div class="empty">Drag it to move it; drag the corner handle (bottom right) to resize it. No waveform data yet.</div>
+      <div class="row-btns"><button data-act="dup">Duplicate</button><button class="del" data-act="del">Delete</button></div>`;
   } else if (it.k === 'line') {
     const l = it.o, sh = shapeOfL(l), bb = lineBB(l), len = Math.hypot(l.b[0] - l.a[0], l.b[1] - l.a[1]);
     const size = sh === 'circle' ? `radius ${(len / G).toFixed(1)}` : sh === 'rect' ? `${(bb[2] - bb[0]) / G} × ${(bb[3] - bb[1]) / G}` : `${(len / G).toFixed(1)}`;
@@ -2055,7 +2095,7 @@ function renderProps() {
 $('propBody').addEventListener('change', e => {
   if (e.target.id !== 'pPenW' && e.target.id !== 'pPenD') return;
   const key = e.target.id === 'pPenW' ? 'w' : 'dash', v = key === 'w' ? +e.target.value : e.target.value;
-  const ls = selItems().filter(i => i.k === 'line').map(i => i.o);
+  const ls = selItems().filter(i => i.k === 'line' && !isPlot(i.o)).map(i => i.o);
   if (ls.length) { snapshot(); for (const l of ls) { if ((key === 'w' && v === 1.4) || (key === 'dash' && v === 'solid')) delete l[key]; else l[key] = v; } render(); changed(); return; }
   if (SHAPE_TOOLS.includes(mode)) { pen[key] = v; savePen(); renderOver(); }
 });
@@ -2281,16 +2321,18 @@ svg.addEventListener('pointerdown', e => {
   if (e.button !== 2) closeMenu();
   if (editing) finishEdit(true);
   if (e.button === 1 || (e.button === 0 && spaceDown)) { panning = { sx: e.clientX, sy: e.clientY, vx: view.x, vy: view.y }; $('view').classList.add('panning'); return; }
-  if (e.button === 2) { if (mode === 'link') { if (linkDraft) { linkDraft = null; renderOver(); } else setMode('select'); return; } if (SHAPE_TOOLS.includes(mode)) { if (lineDraft) { lineDraft = null; renderOver(); } else setMode('select'); return; } if (mode === 'wire' && wireDraft) finishDraft(); else if (mode === 'place') setMode('select'); else if (mode === 'select') partMenu(e, raw); return; }
+  if (e.button === 2) { if (mode === 'plot') { setMode('select'); return; } if (mode === 'link') { if (linkDraft) { linkDraft = null; renderOver(); } else setMode('select'); return; } if (SHAPE_TOOLS.includes(mode)) { if (lineDraft) { lineDraft = null; renderOver(); } else setMode('select'); return; } if (mode === 'wire' && wireDraft) finishDraft(); else if (mode === 'place') setMode('select'); else if (mode === 'select') partMenu(e, raw); return; }
   const dbl = e.button === 0 && isDouble(e);
   if (dbl && (mode === 'select' || (mode === 'wire' && wireDraft))) { e.preventDefault(); if (drag) drag = null; onDouble(raw); return; }
   if (mode === 'place') { placePart(p); return; }
+  if (mode === 'plot') { placePlot(p); return; }
   if (mode === 'text') { addText(p); return; }
   if (SHAPE_TOOLS.includes(mode)) { lineClick(p); return; }
   if (mode === 'link') { linkClick(raw, p); return; }
   if (mode === 'cut' || mode === 'snip') { cutAt(raw, mode === 'snip'); return; }
   if (mode === 'wire') { wireClick(p, raw); return; }
   // select mode
+  { const pl = plotHandleAt(raw); if (pl) { snapshot(); drag = { kind: 'plotsize', o: pl, a: plotFrame(pl).slice(0, 2), start: p, moved: false }; return; } }
   const h = hookAt(raw);
   const target = hit(raw);
   if (h && !(target && target.k === 'label')) { setMode('wire'); wireClick(h.pos, raw); return; }
@@ -2352,6 +2394,7 @@ svg.addEventListener('pointermove', e => {
     }
     else if (drag.kind === 'pin') { const dx = snapL(raw[0]) - drag.start[0], dy = snapL(raw[1]) - drag.start[1]; if (dx || dy) drag.moved = true; const pn = drag.o.pins[drag.pin]; pn.dx = drag.ox + dx; pn.dy = drag.oy + dy; render(); }
     else if (drag.kind === 'label') { const dx = snapL(raw[0]) - drag.start[0], dy = snapL(raw[1]) - drag.start[1]; if (dx || dy) drag.moved = true; drag.o[drag.k + 'dx'] = drag.ox + dx; drag.o[drag.k + 'dy'] = drag.oy + dy; render(); }
+    else if (drag.kind === 'plotsize') { const nb = plotSize(drag.a, raw), o = drag.o; if (nb[0] !== o.b[0] || nb[1] !== o.b[1]) { o.a = [...drag.a]; o.b = nb; drag.moved = true; render(); renderProps(); } }
     else if (drag.kind === 'seg') {
       const pts = drag.pts.map(q => [...q]);
       if (drag.horiz) { pts[drag.i][1] += dy; pts[drag.i + 1][1] += dy; } else { pts[drag.i][0] += dx; pts[drag.i + 1][0] += dx; }
@@ -2364,7 +2407,7 @@ svg.addEventListener('pointermove', e => {
   if ((h && key(h.pos)) !== (hoverHook && key(hoverHook.pos))) { hoverHook = h; renderHooks(); }
   if (mode === 'select') {
     const t = h ? null : hit(raw);
-    svg.style.cursor = h ? 'crosshair' : (!t && blockAt(raw)) ? 'grab' : t ? (t.k === 'wire' || t.k === 'link' ? (t.o.pts[t.seg][1] === t.o.pts[t.seg + 1][1] ? 'ns-resize' : 'ew-resize') : 'move') : 'default';
+    svg.style.cursor = !h && plotHandleAt(raw) ? 'nwse-resize' : h ? 'crosshair' : (!t && blockAt(raw)) ? 'grab' : t ? (t.k === 'wire' || t.k === 'link' ? (t.o.pts[t.seg][1] === t.o.pts[t.seg + 1][1] ? 'ns-resize' : 'ew-resize') : 'move') : 'default';
   } else svg.style.cursor = mode === 'link' ? (linkTarget(raw) || linkAt(raw) ? 'crosshair' : linkDraft ? 'cell' : 'default') : '';
   if (mode === 'cut' || mode === 'snip') { const t = hit(raw); cutHover = t; $('stMsg').textContent = t ? (t.k === 'label' ? `Click to hide this ${FIELD_NAME[t.field]}` : `Click to cut ${t.k === 'part' ? (t.o.ref || LIB[t.o.type].name) : t.k === 'wire' && mode === 'snip' ? 'this segment' : t.k}`) : ''; }
   renderOver();
@@ -2373,7 +2416,7 @@ svg.addEventListener('pointerup', e => {
   if (panning) { panning = null; $('view').classList.remove('panning'); return; }
   if (drag) {
     if (drag.kind === 'block') { const moved = drag.moved; drag = null; if (moved) { render(); changed(); } return; }
-    if ((drag.kind === 'move' || drag.kind === 'label' || drag.kind === 'pin') && !drag.moved) undoStack.pop();
+    if ((drag.kind === 'move' || drag.kind === 'label' || drag.kind === 'pin' || drag.kind === 'plotsize') && !drag.moved) undoStack.pop();
     if (drag.kind === 'seg') { if (drag.w.pts.length === drag.pts.length && drag.w.pts.every((q, i) => q[0] === drag.pts[i][0] && q[1] === drag.pts[i][1])) { drag.w.pts = simplify(drag.pts); undoStack.pop(); } else drag.w.pts = simplify(drag.w.pts); }
     finishWires(); drag = null; render(); changed(); return;
   }
@@ -2631,7 +2674,7 @@ function partMenu(e, raw) {
     + (items.length === 1 && items[0].k === 'part' && LIB[items[0].o.type].vary ? (() => { const q = items[0].o;
         return varyList(LIB[q.type]).map(v => { const cur = varyVal(q, v);
           return `<div class="mlabel">${v.label}</div><div class="chips">${Array.from({ length: v.max - v.min + 1 }, (_, i) => v.min + i).map(n => `<button class="chip" data-vary="${v.key}:${n}" aria-pressed="${n === cur}">${n}</button>`).join('')}</div>`; }).join(''); })() : '')
-    + (items.some(i => i.k === 'wire' || i.k === 'line') ? `<div class="mlabel">${items.some(i => i.k === 'wire') ? 'Wire color' : 'Line color'}</div>${swatchRow((() => { const cs = new Set(items.filter(i => i.k === 'wire' || i.k === 'line').map(i => i.o.color || 'ink')); return cs.size === 1 ? [...cs][0] : ''; })())}` : '')
+    + (items.some(i => i.k === 'wire' || (i.k === 'line' && !isPlot(i.o))) ? `<div class="mlabel">${items.some(i => i.k === 'wire') ? 'Wire color' : 'Line color'}</div>${swatchRow((() => { const cs = new Set(items.filter(i => i.k === 'wire' || i.k === 'line').map(i => i.o.color || 'ink')); return cs.size === 1 ? [...cs][0] : ''; })())}` : '')
     + `<button role="menuitem" data-m="dup"><span>Duplicate</span><span>Ctrl+D</span></button>`
     + (selLabel ? `<button role="menuitem" data-m="del"><span>Hide ${FIELD_NAME[selLabel.field]}</span><span>Del</span></button>`
                 : `<button role="menuitem" data-m="del" style="color:var(--danger)"><span>Delete${many}</span><span>Del</span></button>`);
@@ -2792,7 +2835,7 @@ function finishDraft() {
 /* =====================================================================
    MODES, KEYS, TOOLBAR
    ===================================================================== */
-const MODE_LABEL = { select: 'Select', wire: 'Wire', text: 'Text', line: 'Line', circle: 'Circle', rect: 'Rectangle', link: 'Link', place: 'Place', cut: 'Cut', snip: 'Snip' };
+const MODE_LABEL = { select: 'Select', wire: 'Wire', text: 'Text', line: 'Line', circle: 'Circle', rect: 'Rectangle', link: 'Link', place: 'Place', plot: 'Active Plot', cut: 'Cut', snip: 'Snip' };
 const HINT = {
   select: '<b>Drag</b> to move · <b>Click a hook</b> to wire · <b>Double-click</b> a part or its label to edit · <b>Right-click</b> to rotate, flip or delete · wheel zooms, Shift+wheel pans up/down, Alt+wheel pans left/right',
   wire: '<b>Click</b> to add corners · end on a <b>hook</b> or wire · <b>Space</b> flips the corner · <b>Backspace</b> removes the last corner · <b>Esc</b> cancels',
@@ -2803,6 +2846,7 @@ const HINT = {
   line: '<b>Click</b> the start, then <b>click</b> the end: one straight line at any angle · lines are drawing only, not wires · <b>Esc</b> or right-click cancels',
   snip: '<b>Click</b> a wire segment to cut just that segment · parts and text are deleted · click a ref des or value to hide it · <b>Esc</b> back to Select',
   cut: '<b>Click</b> a part, wire or text to delete it · click a ref des or value to hide it · <b>Ctrl+Z</b> undoes · <b>Esc</b> back to Select',
+  plot: '<b>Click</b> to drop the Active Plot · then drag it to move and drag its corner to resize · <b>Esc</b> or right-click stops',
   place: '<b>Click</b> to drop the part · <b>R</b> rotate · <b>X</b> flip H · <b>Y</b> flip V · <b>Esc</b> stop placing',
 };
 function setMode(m) {
@@ -2810,7 +2854,7 @@ function setMode(m) {
   if (m !== mode || !SHAPE_TOOLS.includes(m)) lineDraft = null;
   if (m !== 'link') linkDraft = null;
   mode = m; if (m !== 'place') placeType = null;
-  $('mSelect').setAttribute('aria-pressed', m === 'select'); $('mWire').setAttribute('aria-pressed', m === 'wire'); $('mText').setAttribute('aria-pressed', m === 'text'); $('mLine').setAttribute('aria-pressed', m === 'line'); $('mCircle').setAttribute('aria-pressed', m === 'circle'); $('mRect').setAttribute('aria-pressed', m === 'rect'); $('mLink').setAttribute('aria-pressed', m === 'link'); $('mCut').setAttribute('aria-pressed', m === 'cut'); $('mSnip').setAttribute('aria-pressed', m === 'snip');
+  $('mSelect').setAttribute('aria-pressed', m === 'select'); $('mWire').setAttribute('aria-pressed', m === 'wire'); $('mText').setAttribute('aria-pressed', m === 'text'); $('mLine').setAttribute('aria-pressed', m === 'line'); $('mCircle').setAttribute('aria-pressed', m === 'circle'); $('mRect').setAttribute('aria-pressed', m === 'rect'); $('mLink').setAttribute('aria-pressed', m === 'link'); $('mCut').setAttribute('aria-pressed', m === 'cut'); $('mSnip').setAttribute('aria-pressed', m === 'snip'); $('bPlot').setAttribute('aria-pressed', m === 'plot');
   $('view').className = 'view mode-' + m; $('stMode').textContent = MODE_LABEL[m]; $('hint').innerHTML = HINT[m];
   renderLib(); renderOver(); updateButtons(); renderProps();
 }
@@ -3260,7 +3304,20 @@ function instDrag(el) {
 }
 for (const btn of Object.keys(INSTR)) $(btn).onclick = e => { e.stopPropagation(); instMenu(btn); };
 // Active Plot (Larry, 2026-11-07): its own toolbar button after the instruments, behind a separator; what it does comes later.
-$('bPlot').onclick = () => setMsg('Active Plot: coming soon');
+// Active Plot: click the button, then click the canvas to drop it, or drag from the button and let go over the canvas
+function placePlot(p) {
+  snapshot(); const l = { id: uid(), ...plotAt(p) }; linesOf(sheet).push(l);
+  sel.clear(); sel.add(l.id); setMode('select'); render(); changed();
+  setMsg('Active Plot added. Drag it to move it, drag its corner to resize, Delete removes it.');
+}
+let plotFromBtn = false;
+$('bPlot').addEventListener('pointerdown', e => { if (e.button !== 0) return; plotFromBtn = true; if (mode !== 'plot') { setMode('plot'); setMsg('Click on the sheet to drop the Active Plot, or drag it there. Esc stops.'); } else plotFromBtn = 'toggle'; });
+$('bPlot').addEventListener('click', () => { if (plotFromBtn === 'toggle') setMode('select'); plotFromBtn = false; });
+window.addEventListener('pointerup', e => {
+  if (!plotFromBtn || (e.target.closest && e.target.closest('#bPlot'))) return;   // let go on the button: its click handles it
+  const was = plotFromBtn; plotFromBtn = false;
+  if (was === true && mode === 'plot' && e.target.closest && e.target.closest('#view') && !e.target.closest('.inst')) placePlot([snap(mouse[0]), snap(mouse[1])]);
+});
 new ResizeObserver(() => { for (const el of $('view').querySelectorAll('.inst[data-k]')) { const o = instOf(sheet).find(x => x.k === el.dataset.k); if (o) instPlace(el, o); } }).observe($('view'));
 
 /* =====================================================================

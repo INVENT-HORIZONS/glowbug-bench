@@ -151,7 +151,7 @@ The owner is Larry Higley (GitHub: INVENT-HORIZONS). The app started as the sche
   - Loading is defensive: saved data is cleaned up first, and a failed load falls back to the example sheet.
   - `#fresh` starts on the example sheet without opening saved work.
 - **Live camera (K / Camera button):** a floating webcam window over the sheet, so Larry can show his bench while he records training videos with his own production software. It is display only: nothing is recorded, and it is a DOM overlay, so it never appears in exports.
-  - Drag to move, corner dot to resize, hover bar for camera picker, mirror, round/rectangle and close. Settings (position, size, mirror, shape, camera) persist in `gs.cam`.
+  - Drag to move, corner dot to resize (the cursor over the camera stays the ordinary arrow pointer, never a hand, so Larry can point at things on video; 2026-11-07), hover bar for camera picker, mirror, round/rectangle and close. Settings (position, size, mirror, shape, camera) persist in `gs.cam`.
   - The camera is never opened on page load, only from the button or K. Closing it stops the camera tracks so the camera light goes off.
   - The app always runs locally from a PC (file://). Larry may remove this feature from the production build.
   - Resolution: `camStart` asks for an ideal 1280 × 720, so 1080p and 4K cameras run at 720p. Larry finds 720p not really usable for his videos. Deferred until he has a better camera: ask for 1920 × 1080, or add a resolution choice (720p / 1080p / camera's best) to the camera window's hover bar.

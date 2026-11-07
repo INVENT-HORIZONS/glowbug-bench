@@ -366,9 +366,9 @@ button, input, select, textarea { font: inherit; color: inherit; box-sizing: bor
 .inst-x:hover { background: rgba(23, 18, 14, .12); }
 .inst-x svg { width: 12px; height: 12px; }
 /* ---------- live camera window (floats over the sheet; never part of an export) ---------- */
-.cam { position: absolute; z-index: 30; left: 0; top: 0; touch-action: none; user-select: none; cursor: grab; }
+.cam { position: absolute; z-index: 30; left: 0; top: 0; touch-action: none; user-select: none; cursor: default; }   /* Larry: an arrow pointer over the camera, for pointing things out on video */
 .cam[hidden] { display: none; }
-.cam.drag { cursor: grabbing; }
+.cam.drag { cursor: default; }
 .cam-frame { position: absolute; inset: 0; overflow: hidden; border-radius: 8px; background: #0E0B09;
   border: 2px solid var(--chrome); box-shadow: 0 0 0 1px var(--line), 0 10px 28px rgba(20, 12, 4, .32); }
 .cam.round .cam-frame { border-radius: 50%; }

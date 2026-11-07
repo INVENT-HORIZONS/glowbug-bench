@@ -58,6 +58,7 @@ Open `glowbug-bench.html` in any modern browser. Everything is in the one file; 
 - **Line tool (L):** click a start and an end to draw a straight line at any angle, for arrows, outlines and notes. Lines are drawing only, never wires. Select, move, recolor, copy or delete them like anything else.
 - **Active Plot:** a toolbar button after the instruments. Click it and then click the sheet, or drag it onto the sheet, to drop an empty four-quadrant X–Y plot. Like a part, it can be moved, duplicated, copied and deleted, and it resizes from its corner handle. Waveform data comes later.
 - **Potentiometer:** a dial button after Active Plot, for voltages that can be varied virtually (coming soon).
+- **Slider:** a horizontal slider button next to the Potentiometer, for the same job with a different look (coming soon).
 - **Browser check:** Glowbug Bench is built for Google Chrome and Microsoft Edge. Opening it in any other browser shows a popup saying so; you can still carry on after clicking OK.
 - **Settings:** the gear at the far right of the toolbar opens the Settings dialog (empty for now).
 - **Live camera:** press K or the Camera button to float a live webcam view over the sheet, for showing your bench while you teach. Drag it, resize it from the corner dot, and use its hover bar to pick a camera, mirror the picture, switch between round and rectangle, or close it. It is never recorded and never appears in exports.

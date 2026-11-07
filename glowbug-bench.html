@@ -448,8 +448,10 @@ button, input, select, textarea { font: inherit; color: inherit; box-sizing: bor
   <main class="view" id="view">
     <svg id="svg" xmlns="http://www.w3.org/2000/svg" aria-label="Schematic sheet">
       <defs>
-        <!-- Hover shadow for parts (Larry's trial, 2026-11-07: the instrument cards' drop shadow, down and to the right; resistor only for now) -->
-        <filter id="partShadow" x="-30%" y="-60%" width="160%" height="220%" color-interpolation-filters="sRGB"><feDropShadow dx="2.5" dy="3" stdDeviation="1.6" flood-color="#000000" flood-opacity="0.35"/></filter>
+        <!-- Hover shadow (Larry, 2026-11-07): the instrument cards' drop shadow, down and to the right, on everything drawn on the sheet:
+             parts and their labels, wires, links, lines, circles, rectangles, text and Active Plots. Put on the layer groups, so exports
+             (built from the layers' contents) stay flat. The region is in sheet units and set to the sheet in applyView. -->
+        <filter id="inkShadow" filterUnits="userSpaceOnUse" x="-200" y="-200" width="4000" height="3000" color-interpolation-filters="sRGB"><feDropShadow dx="2.5" dy="3" stdDeviation="1.6" flood-color="#000000" flood-opacity="0.35"/></filter>
         <pattern id="gMinor" width="10" height="10" patternUnits="userSpaceOnUse"><circle cx="0" cy="0" r=".7" fill="#C9BBA6"/></pattern>
         <pattern id="gMajor" width="50" height="50" patternUnits="userSpaceOnUse"><rect width="50" height="50" fill="url(#gMinor)"/><circle cx="0" cy="0" r="1.25" fill="#B4A48D"/></pattern>
       </defs>
@@ -458,10 +460,10 @@ button, input, select, textarea { font: inherit; color: inherit; box-sizing: bor
         <rect id="paper" style="fill:var(--paper)"/>
         <rect id="gridRect" fill="url(#gMajor)"/>
         <g id="layerFrame"></g>
-        <g id="layerParts"></g>
-        <g id="layerWires"></g>
-        <g id="layerText"></g>
-        <g id="layerPlots"></g>
+        <g id="layerParts" filter="url(#inkShadow)"></g>
+        <g id="layerWires" filter="url(#inkShadow)"></g>
+        <g id="layerText" filter="url(#inkShadow)"></g>
+        <g id="layerPlots" filter="url(#inkShadow)"></g>
         <g id="layerSel"></g>
         <g id="layerHooks"></g>
         <g id="layerOver"></g>
@@ -1492,12 +1494,12 @@ function applyView() {
   const W = svg.clientWidth, H = svg.clientHeight;
   const [SW, SH] = sheetDims(sheet);
   for (const id of ['paper', 'gridRect']) { const r = $(id); r.setAttribute('x', 0); r.setAttribute('y', 0); r.setAttribute('width', SW); r.setAttribute('height', SH); }
+  { const f = $('inkShadow'), m = 200; f.setAttribute('x', -m); f.setAttribute('y', -m); f.setAttribute('width', SW + 2 * m); f.setAttribute('height', SH + 2 * m); }   // shadow region covers the sheet
   const sh = $('sheetShadow'); sh.setAttribute('x', 4 / view.z); sh.setAttribute('y', 5 / view.z); sh.setAttribute('width', SW); sh.setAttribute('height', SH);
   $('gridRect').style.display = showGrid ? '' : 'none';
   $('stZoom').textContent = Math.round(view.z * 100) + '%';
   if (plotHandleOf()) renderSel();     // keep the plot's resize handle the same size on screen
 }
-const SHADOW_TYPES = new Set(['resistor']);   // parts drawn with the hover shadow on the canvas (not in exports)
 function partSVG(p, extra = '') {
   return `<g transform="translate(${p.x} ${p.y}) rotate(${(p.rot || 0) * 90}) scale(${p.flip ? -1 : 1} 1)"${extra}>${hasBox(p) ? (b => `<rect class="xbox" x="${b[0]}" y="${b[1]}" width="${b[2] - b[0]}" height="${b[3] - b[1]}" rx="2"/>`)(localBB(p)) : ''}${shapeOf(p).draw(isXfmr(p) ? p.core || 'iron' : LIB[p.type].drawArg ? LIB[p.type].drawArg(p) : undefined)}</g>`;
 }
@@ -1720,7 +1722,7 @@ function colorWires(k) {   // recolor the selected wires
 function render() {
   pruneLinks(); syncLinks();
   $('layerFrame').innerHTML = frameSVG(sheet);
-  $('layerParts').innerHTML = sheet.parts.map(p => (SHADOW_TYPES.has(p.type) ? `<g filter="url(#partShadow)">${partSVG(p)}</g>` : partSVG(p))   /* outer group, so the shadow falls down-right whatever the rotation */ + labelSVG(p) + pinSVG(p)).join('');
+  $('layerParts').innerHTML = sheet.parts.map(p => partSVG(p) + labelSVG(p) + pinSVG(p)).join('');
   const cnt = connectivity();
   let ws = sheet.wires.map(w => `<polyline class="wire"${wstyle(w)} points="${w.pts.map(p => p.join(',')).join(' ')}"/>`).join('');
   const dots = new Set();
@@ -3094,7 +3096,7 @@ function sheetSVG(withBg = true, whole = false) {
   if (whole) { const [SW, SH] = sheetDims(sheet); x0 = 0; y0 = 0; x1 = SW; y1 = SH; }
   else { if (!bbs.length) return null; const pad = 16; x0 = Math.min(...bbs.map(b => b[0])) - pad; y0 = Math.min(...bbs.map(b => b[1])) - pad; x1 = Math.max(...bbs.map(b => b[2])) + pad; y1 = Math.max(...bbs.map(b => b[3])) + pad; }
   const css = `.ink{stroke:#17120E;fill:none;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}.solid{fill:#17120E}.tgt{stroke:#2F8A45;fill:none;stroke-width:1.8;stroke-linecap:round}.env{stroke:#17120E;fill:none;stroke-width:1.8}.htr{stroke:#E8912D;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}.dash{stroke:#17120E;fill:none;stroke-width:1.6;stroke-dasharray:5 3.4}.xbox{fill:none;stroke:#B4B4B4;stroke-width:1.2}.dotl{stroke:#17120E;fill:none;stroke-width:2;stroke-linecap:round;stroke-dasharray:0 4.2}.wire{stroke:#17120E;fill:none;stroke-width:1.4;stroke-linecap:round;stroke-linejoin:round}.jdot{fill:#17120E}.lbl{font-family:'Libre Franklin','Franklin Gothic Book',Arial,sans-serif;font-size:11px;fill:#17120E}.lbl .ref,.lbl.ref{font-weight:600}.pinno{font-family:'Libre Franklin','Franklin Gothic Book',Arial,sans-serif;font-size:8.5px;fill:#17120E}.pinlead{stroke:#5C5248;stroke-width:.8;stroke-dasharray:1.2 2;fill:none}.stxt{font-family:'Libre Franklin','Franklin Gothic Book',Arial,sans-serif;white-space:pre}.fr{stroke:#17120E;fill:none;stroke-width:1.1}.fr-b{stroke:#17120E;fill:none;stroke-width:2}.fr-lab{font-family:'JetBrains Mono',Consolas,monospace;font-size:7.5px;letter-spacing:.08em;fill:#5C5248}.fr-val{font-family:'Libre Franklin','Franklin Gothic Book',Arial,sans-serif;fill:#17120E}.fr-zone{font-family:'JetBrains Mono',Consolas,monospace;font-size:10px;fill:#5C5248}.fr-co{font-family:'Big Shoulders Display','Arial Narrow',sans-serif;font-weight:800;fill:#17120E}`;
-  const body = ((whole ? $('layerFrame').innerHTML : '') + $('layerParts').innerHTML + $('layerWires').innerHTML + $('layerText').innerHTML + $('layerPlots').innerHTML).replace(/ filter="url\(#partShadow\)"/g, '').replace(/var\(--ink\)/g, '#17120E').replace(/var\(--paper\)/g, '#FBF8F3');
+  const body = ((whole ? $('layerFrame').innerHTML : '') + $('layerParts').innerHTML + $('layerWires').innerHTML + $('layerText').innerHTML + $('layerPlots').innerHTML).replace(/var\(--ink\)/g, '#17120E').replace(/var\(--paper\)/g, '#FBF8F3');
   return { w: x1 - x0, h: y1 - y0, svg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${x0} ${y0} ${x1 - x0} ${y1 - y0}" width="${x1 - x0}" height="${y1 - y0}"><style>${css}</style>${withBg ? `<rect x="${x0}" y="${y0}" width="${x1 - x0}" height="${y1 - y0}" fill="#FBF8F3"/>` : ''}${body}</svg>` };
 }
 const fileBase = () => (sheet.file || slugFile(sheet.name)).replace(/\.[a-z0-9]+$/i, '') || 'schematic';

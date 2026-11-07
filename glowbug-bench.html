@@ -343,6 +343,9 @@ button, input, select, textarea { font: inherit; color: inherit; box-sizing: bor
 .inst[hidden] { display: none; }
 .inst.drag { cursor: grabbing; }
 .inst-t { position: absolute; left: 8px; top: 5px; font: 600 11px/1 var(--mono, monospace); letter-spacing: .08em; text-transform: uppercase; color: rgba(23, 18, 14, .7); pointer-events: none; }
+.inst-t.named { text-transform: none; letter-spacing: .02em; }   /* a name the user typed shows as typed */
+.inst-in { position: absolute; left: 4px; top: 2px; width: calc(100% - 36px); height: 18px; padding: 0 4px; border: 1px solid #9A5210; border-radius: 3px;
+  font: 600 11px/1 var(--mono, monospace); color: #17120E; background: #FFFFFF; outline: none; cursor: text; user-select: text; }
 .inst-x { position: absolute; right: 4px; top: 3px; width: 20px; height: 20px; border: 0; border-radius: 4px; background: transparent; color: rgba(23, 18, 14, .7); cursor: pointer; display: grid; place-items: center; padding: 0; }
 .inst-x:hover { background: rgba(23, 18, 14, .12); }
 .inst-x svg { width: 12px; height: 12px; }
@@ -1562,11 +1565,15 @@ const SHAPE_TOOLS = ['line', 'circle', 'rect'], SHAPE_NAME = { line: 'Line', cir
 // deleted like any item. It is the same drawing-only item as a rectangle with l.shape = 'plot' (a = top-left, b = bottom-right),
 // drawn as an empty four-quadrant Cartesian plot: white card, light grid every PLOT_DIV, X and Y axes through the middle.
 // Sizes are multiples of PLOT_STEP so the axes always land on a grid line. No waveform data yet.
-const PLOT_DIV = 20, PLOT_STEP = 40, PLOT_MIN = [160, 120], PLOT_DEF = [320, 240];
+const PLOT_DIV = 20, PLOT_STEP = 40, PLOT_MIN = [160, 120], PLOT_DEF = [320, 240], PLOT_TB = 20;   // MIN / DEF are the plot area; PLOT_TB is the title bar on top
+// Only the title bar grabs the plot (select, drag, right-click, cut); the plot area below it is kept free for cursors and probing.
 const isPlot = l => l && l.shape === 'plot';
-const plotFrame = l => { const x0 = Math.min(l.a[0], l.b[0]), y0 = Math.min(l.a[1], l.b[1]); return [x0, y0, x0 + Math.max(PLOT_MIN[0], Math.abs(l.b[0] - l.a[0])), y0 + Math.max(PLOT_MIN[1], Math.abs(l.b[1] - l.a[1]))]; };
+const plotFrame = l => { const x0 = Math.min(l.a[0], l.b[0]), y0 = Math.min(l.a[1], l.b[1]); return [x0, y0, x0 + Math.max(PLOT_MIN[0], Math.abs(l.b[0] - l.a[0])), y0 + Math.max(PLOT_MIN[1] + PLOT_TB, Math.abs(l.b[1] - l.a[1]))]; };
+const plotArea = l => { const f = plotFrame(l); return [f[0], f[1] + PLOT_TB, f[2], f[3]]; };
+// the plot area under raw, topmost first (it belongs to the plot, so a click there never reaches what the card covers)
+const plotAreaAt = raw => { const ls = linesOf(sheet); for (let i = ls.length - 1; i >= 0; i--) { if (!isPlot(ls[i])) continue; const a = plotArea(ls[i]); if (raw[0] >= a[0] && raw[0] <= a[2] && raw[1] > a[1] && raw[1] <= a[3]) return ls[i]; } return null; };
 function plotSVG(l) {
-  const [x0, y0, x1, y1] = plotFrame(l), cx = (x0 + x1) / 2, cy = (y0 + y1) / 2, m = 8, t = 3, hd = 5;
+  const [fx0, fy0, fx1, fy1] = plotFrame(l), [x0, y0, x1, y1] = plotArea(l), cx = (x0 + x1) / 2, cy = (y0 + y1) / 2, m = 8, t = 3, hd = 5;
   let g = '', tk = '';
   for (let x = cx - PLOT_DIV; x > x0 + 1; x -= PLOT_DIV) g += `M${x} ${y0}V${y1}`;
   for (let x = cx + PLOT_DIV; x < x1 - 1; x += PLOT_DIV) g += `M${x} ${y0}V${y1}`;
@@ -1577,15 +1584,18 @@ function plotSVG(l) {
   for (let y = cy - PLOT_DIV; y > y0 + m + hd; y -= PLOT_DIV) tk += `M${cx - t} ${y}H${cx + t}`;
   for (let y = cy + PLOT_DIV; y < y1 - m - hd; y += PLOT_DIV) tk += `M${cx - t} ${y}H${cx + t}`;
   const ink = '#17120E', ah = (x, y, dx, dy) => `<path d="M${x} ${y}l${-dx * hd - dy * 2.6} ${-dy * hd - dx * 2.6}l${dy * 5.2} ${dx * 5.2}z" style="fill:${ink};stroke:none"/>`;
-  return `<g class="aplot"><rect x="${x0}" y="${y0}" width="${x1 - x0}" height="${y1 - y0}" style="fill:#FFFFFF;stroke:#8C8C8C;stroke-width:1.4"/>`
+  return `<g class="aplot"><rect x="${fx0}" y="${fy0}" width="${fx1 - fx0}" height="${fy1 - fy0}" style="fill:#FFFFFF;stroke:none"/>`
+    + `<rect x="${fx0}" y="${fy0}" width="${fx1 - fx0}" height="${PLOT_TB}" style="fill:#E6E0D6;stroke:none"/>`
+    + `<text x="${fx0 + 7}" y="${fy0 + 14}" style="font:600 11px system-ui,'Segoe UI',sans-serif;fill:${ink}">${esc(l.title || 'Active Plot')}</text>`
     + `<path d="${g}" style="fill:none;stroke:#DDD7CE;stroke-width:0.7"/>`
     + `<path d="M${x0 + m} ${cy}H${x1 - m}M${cx} ${y0 + m}V${y1 - m}${tk}" style="fill:none;stroke:${ink};stroke-width:1.1"/>`
     + ah(x1 - m, cy, 1, 0) + ah(x0 + m, cy, -1, 0) + ah(cx, y0 + m, 0, -1) + ah(cx, y1 - m, 0, 1)
     + `<text x="${x1 - m - 2}" y="${cy - 7}" style="font:italic 11px Georgia,serif;fill:${ink};text-anchor:end">x</text>`
-    + `<text x="${cx + 7}" y="${y0 + m + 9}" style="font:italic 11px Georgia,serif;fill:${ink}">y</text></g>`;
+    + `<text x="${cx + 7}" y="${y0 + m + 9}" style="font:italic 11px Georgia,serif;fill:${ink}">y</text>`
+    + `<path d="M${fx0} ${y0}H${fx1}" style="stroke:#8C8C8C;stroke-width:1"/><rect x="${fx0}" y="${fy0}" width="${fx1 - fx0}" height="${fy1 - fy0}" style="fill:none;stroke:#8C8C8C;stroke-width:1.4"/></g>`;
 }
-const plotSize = (a, raw) => [a[0] + Math.max(PLOT_MIN[0], Math.round((raw[0] - a[0]) / PLOT_STEP) * PLOT_STEP), a[1] + Math.max(PLOT_MIN[1], Math.round((raw[1] - a[1]) / PLOT_STEP) * PLOT_STEP)];
-const plotAt = c => { const a = [snap(c[0] - PLOT_DEF[0] / 2), snap(c[1] - PLOT_DEF[1] / 2)]; return { a, b: [a[0] + PLOT_DEF[0], a[1] + PLOT_DEF[1]], shape: 'plot' }; };
+const plotSize = (a, raw) => [a[0] + Math.max(PLOT_MIN[0], Math.round((raw[0] - a[0]) / PLOT_STEP) * PLOT_STEP), a[1] + PLOT_TB + Math.max(PLOT_MIN[1], Math.round((raw[1] - a[1] - PLOT_TB) / PLOT_STEP) * PLOT_STEP)];
+const plotAt = c => { const a = [snap(c[0] - PLOT_DEF[0] / 2), snap(c[1] - PLOT_TB / 2)]; return { a, b: [a[0] + PLOT_DEF[0], a[1] + PLOT_TB + PLOT_DEF[1]], shape: 'plot' }; };   // the cursor holds the title bar
 // the resize handle sits on the bottom-right corner of a plot when it is the only thing selected
 const plotHandleOf = () => { if (sel.size !== 1) return null; const l = linesOf(sheet).find(x => sel.has(x.id)); return isPlot(l) ? l : null; };
 function plotHandleAt(raw) { const l = plotHandleOf(); if (!l) return null; const f = plotFrame(l), tol = 7 / view.z; return Math.abs(raw[0] - f[2]) <= tol && Math.abs(raw[1] - f[3]) <= tol ? l : null; }
@@ -1617,7 +1627,7 @@ const lineBB = l => { if (isPlot(l)) return plotFrame(l); if (shapeOfL(l) === 'c
 function lineDist(p, l) {
   const sh = shapeOfL(l);
   if (sh === 'circle') return Math.abs(Math.hypot(p[0] - l.a[0], p[1] - l.a[1]) - radOf(l));
-  if (sh === 'plot') { const [x0, y0, x1, y1] = plotFrame(l); if (p[0] >= x0 && p[0] <= x1 && p[1] >= y0 && p[1] <= y1) return 0; }
+  if (sh === 'plot') { const [x0, y0, x1] = plotFrame(l); return p[0] >= x0 && p[0] <= x1 && p[1] >= y0 && p[1] <= y0 + PLOT_TB ? 0 : Infinity; }
   if (sh === 'rect' || sh === 'plot') { const [x0, y0, x1, y1] = lineBB(l), c = [[x0, y0], [x1, y0], [x1, y1], [x0, y1]]; return Math.min(...c.map((q, i) => distSeg(p, q, c[(i + 1) % 4]))); }
   return distSeg(p, l.a, l.b);
 }
@@ -2067,9 +2077,9 @@ function renderProps() {
       <div class="empty">The dashed line joins the two arrow tips and follows the parts when they move. Add more with the Link tool (J).</div>
       <div class="row-btns"><button class="del" data-act="del">Delete</button></div>`;
   } else if (it.k === 'line' && isPlot(it.o)) {
-    const f = plotFrame(it.o);
+    const f = plotArea(it.o);
     b.innerHTML = `<div class="what">Active Plot<small>${(f[2] - f[0]) / G} × ${(f[3] - f[1]) / G} grid units · empty four-quadrant plot</small></div>
-      <div class="empty">Drag it to move it; drag the corner handle (bottom right) to resize it. No waveform data yet.</div>
+      <div class="empty">Drag it by its title bar to move it; drag the corner handle (bottom right) to resize it. The plot area is kept free for cursors and probing. No waveform data yet.</div>
       <div class="row-btns"><button data-act="dup">Duplicate</button><button class="del" data-act="del">Delete</button></div>`;
   } else if (it.k === 'line') {
     const l = it.o, sh = shapeOfL(l), bb = lineBB(l), len = Math.hypot(l.b[0] - l.a[0], l.b[1] - l.a[1]);
@@ -2305,6 +2315,12 @@ function distSeg(p, a, b) {
 function hit(p) {
   const tol = 5 / view.z + 1;
   for (let i = sheet.texts.length - 1; i >= 0; i--) { const b = textBB(sheet.texts[i]); if (p[0] >= b[0] && p[0] <= b[2] && p[1] >= b[1] && p[1] <= b[3]) return { k: 'text', o: sheet.texts[i] }; }
+  if (plotAreaAt(p)) {   // over an Active Plot's area only what is drawn on top of the card counts; the card itself is grabbed by its title bar
+    for (const w of sheet.wires) for (let i = 0; i < w.pts.length - 1; i++) if (distSeg(p, w.pts[i], w.pts[i + 1]) < tol) return { k: 'wire', o: w, seg: i };
+    for (const l of linesOf(sheet)) if (!isPlot(l) && lineDist(p, l) < tol) return { k: 'line', o: l };
+    for (const k of linksOf(sheet)) { const e = linkEnds(k); if (e) for (let i = 0; i < e.length - 1; i++) if (distSeg(p, e[i], e[i + 1]) < tol) return { k: 'link', o: k, seg: i }; }
+    return null;
+  }
   for (let i = sheet.parts.length - 1; i >= 0; i--) {   // pin numbers
     const q = sheet.parts[i];
     for (const g of pinGeom(q)) if (p[0] >= g.x0 - 1 && p[0] <= g.x1 + 1 && p[1] >= g.top - 1 && p[1] <= g.bottom + 1) return { k: 'pin', o: q, pin: g.name };
@@ -2339,6 +2355,7 @@ svg.addEventListener('pointerdown', e => {
   if (mode === 'wire') { wireClick(p, raw); return; }
   // select mode
   { const pl = plotHandleAt(raw); if (pl) { snapshot(); drag = { kind: 'plotsize', o: pl, a: plotFrame(pl).slice(0, 2), start: p, moved: false }; return; } }
+  if (plotAreaAt(raw) && !hit(raw)) return;   // the plot area is reserved for cursors and probing: no marquee, no wiring from parts it covers
   const h = hookAt(raw);
   const target = hit(raw);
   if (h && !(target && target.k === 'label')) { setMode('wire'); wireClick(h.pos, raw); return; }
@@ -2409,11 +2426,11 @@ svg.addEventListener('pointermove', e => {
     return;
   }
   if (band) { band.b = raw; renderOver(); return; }
-  const h = (mode === 'select' || mode === 'wire') ? hookAt(raw) : null;
+  const h = (mode === 'select' && !plotAreaAt(raw)) || mode === 'wire' ? hookAt(raw) : null;
   if ((h && key(h.pos)) !== (hoverHook && key(hoverHook.pos))) { hoverHook = h; renderHooks(); }
   if (mode === 'select') {
     const t = h ? null : hit(raw);
-    svg.style.cursor = !h && plotHandleAt(raw) ? 'nwse-resize' : h ? 'crosshair' : (!t && blockAt(raw)) ? 'grab' : t ? (t.k === 'wire' || t.k === 'link' ? (t.o.pts[t.seg][1] === t.o.pts[t.seg + 1][1] ? 'ns-resize' : 'ew-resize') : 'move') : 'default';
+    svg.style.cursor = !h && plotHandleAt(raw) ? 'nwse-resize' : !t && plotAreaAt(raw) ? 'crosshair' : h ? 'crosshair' : (!t && blockAt(raw)) ? 'grab' : t ? (t.k === 'wire' || t.k === 'link' ? (t.o.pts[t.seg][1] === t.o.pts[t.seg + 1][1] ? 'ns-resize' : 'ew-resize') : 'move') : 'default';
   } else svg.style.cursor = mode === 'link' ? (linkTarget(raw) || linkAt(raw) ? 'crosshair' : linkDraft ? 'cell' : 'default') : '';
   if (mode === 'cut' || mode === 'snip') { const t = hit(raw); cutHover = t; $('stMsg').textContent = t ? (t.k === 'label' ? `Click to hide this ${FIELD_NAME[t.field]}` : `Click to cut ${t.k === 'part' ? (t.o.ref || LIB[t.o.type].name) : t.k === 'wire' && mode === 'snip' ? 'this segment' : t.k}`) : ''; }
   renderOver();
@@ -2977,7 +2994,7 @@ function loadProject(p, msg) {
     s.parts = (Array.isArray(s.parts) ? s.parts : []).filter(q => q && LIB[q.type] && isFinite(q.x) && isFinite(q.y));
     s.wires = (Array.isArray(s.wires) ? s.wires : []).filter(w => w && Array.isArray(w.pts)).map(w => ({ id: w.id || uid(), pts: simplify(w.pts.filter(okPt).map(q => [snap(+q[0]), snap(+q[1])])), ...(WIRE_COLORS.some(c => c.k === w.color && c.k !== 'ink') ? { color: w.color } : {}) })).filter(w => w.pts.length >= 2);
     s.texts = (Array.isArray(s.texts) ? s.texts : []).filter(t => t && isFinite(t.x) && isFinite(t.y)).map(t => Object.assign({ text: '', size: 12, tone: 'ink' }, t));
-    { const seen = instSeen; s.inst = (Array.isArray(s.inst) ? s.inst : []).filter(x => x && INSTR_ALL.includes(x.k) && Number.isFinite(+x.x) && Number.isFinite(+x.y) && !seen.has(x.k) && seen.add(x.k)).map(x => ({ k: x.k, x: +x.x, y: +x.y })); }
+    { const seen = instSeen; s.inst = (Array.isArray(s.inst) ? s.inst : []).filter(x => x && INSTR_ALL.includes(x.k) && Number.isFinite(+x.x) && Number.isFinite(+x.y) && !seen.has(x.k) && seen.add(x.k)).map(x => Object.assign({ k: x.k, x: +x.x, y: +x.y }, typeof x.name === 'string' && x.name.trim() ? { name: x.name.trim().slice(0, 40) } : {})); }
     s.lines = (Array.isArray(s.lines) ? s.lines : []).filter(l => l && okPt(l.a) && okPt(l.b)).map(l => Object.assign({ id: uid() }, l));
     const sid = x => typeof x === 'string' && x ? x : null;
     s.links = (Array.isArray(s.links) ? s.links : []).filter(k => k && (sid(k.a) || sid(k.ta)) && (sid(k.b) || sid(k.tb))).map(k => ({ id: k.id || uid(), a: sid(k.a), b: sid(k.b), ...(sid(k.ta) && !sid(k.a) ? { ta: k.ta } : {}), ...(sid(k.tb) && !sid(k.b) ? { tb: k.tb } : {}), ...(k.v === 2 ? { v: 2 } : {}), pts: (Array.isArray(k.pts) ? k.pts : []).filter(okPt).map(q => [+q[0], +q[1]]) }));
@@ -3279,12 +3296,33 @@ function renderInst() {
     let el = have.get(k);
     if (!el) {
       el = document.createElement('div'); el.className = 'inst'; el.dataset.k = k; el.setAttribute('role', 'region'); el.setAttribute('aria-label', `${k} ${INSTR_KIND(k)}`);
-      el.innerHTML = `<span class="inst-t">${k} · ${INSTR_KIND(k)}</span><button class="inst-x" title="Delete ${k}" aria-label="Delete ${k}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></button>`;
+      el.innerHTML = `<span class="inst-t"></span><button class="inst-x" title="Delete ${k}" aria-label="Delete ${k}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></button>`;
       instDrag(el); view.appendChild(el);
     }
     instPlace(el, it);
+    const t = el.querySelector('.inst-t'); t.textContent = instTitle(it); t.classList.toggle('named', !!it.name);
   }
   for (const btn of Object.keys(INSTR)) $(btn).setAttribute('aria-pressed', instOf(sheet).some(x => INSTR_BTN(x.k) === btn));
+}
+// Instrument names (Larry, 2026-11-07): double-click the title bar to rename an instrument; Enter or clicking away keeps it,
+// Esc cancels, an empty name goes back to the default ("V1 · Voltmeter"). Saved as it.name; undo covers it.
+const instTitle = it => it.name || `${it.k} · ${INSTR_KIND(it.k)}`;
+function instRename(el) {
+  const o = instOf(sheet).find(x => x.k === el.dataset.k); if (!o || el.querySelector('.inst-in')) return;
+  const t = el.querySelector('.inst-t'), inp = document.createElement('input');
+  inp.className = 'inst-in'; inp.maxLength = 40; inp.value = instTitle(o); inp.setAttribute('aria-label', `Name for ${o.k}`);
+  t.style.visibility = 'hidden'; el.appendChild(inp); inp.focus(); inp.select();
+  let done = false;
+  const finish = keep => {
+    if (done) return; done = true;
+    const v = inp.value.trim(), def = `${o.k} · ${INSTR_KIND(o.k)}`, nv = !v || v === def ? undefined : v;
+    inp.remove(); t.style.visibility = '';
+    if (keep && nv !== o.name) { snapshot(); if (nv) o.name = nv; else delete o.name; render(); changed(); setMsg(nv ? `${o.k} renamed to “${nv}”` : `${o.k} name reset`); }
+    else renderInst();
+  };
+  inp.addEventListener('keydown', e => { e.stopPropagation(); if (e.key === 'Enter') finish(true); if (e.key === 'Escape') finish(false); });
+  inp.addEventListener('blur', () => finish(true));
+  ['pointerdown', 'dblclick', 'click'].forEach(ty => inp.addEventListener(ty, e => e.stopPropagation()));
 }
 function instPlace(el, it) {
   const vr = $('view').getBoundingClientRect(), w = el.offsetWidth || 284, h = el.offsetHeight || 164, pad = 8;
@@ -3307,6 +3345,7 @@ function instDrag(el) {
   const end = () => { if (!st) return; const m = st.moved; st = null; el.classList.remove('drag'); if (m) changed(); };
   el.addEventListener('pointerup', end); el.addEventListener('pointercancel', end);
   ['dblclick', 'contextmenu', 'wheel'].forEach(t => el.addEventListener(t, e => { e.stopPropagation(); if (t === 'contextmenu') e.preventDefault(); }));
+  el.addEventListener('dblclick', e => { if (e.clientY - el.getBoundingClientRect().top <= 24 && !e.target.closest('.inst-x')) instRename(el); });   // the title bar strip
 }
 for (const btn of Object.keys(INSTR)) $(btn).onclick = e => { e.stopPropagation(); instMenu(btn); };
 // Active Plot (Larry, 2026-11-07): its own toolbar button after the instruments, behind a separator; what it does comes later.

@@ -3069,18 +3069,29 @@ $('bOpen').onclick = openProjects;
 /* import / export */
 $('bImport').onclick = () => $('fileIn').click();
 // Settings: an empty dialog for now (Larry will add settings later). Cancel, Escape or a click outside closes it; OK closes it too.
+// Drop shadows (Settings, 2026-11-07): on by default, remembered in gs.shadow; the inkShadow filter goes on or off the four content layers
+let showShadow = true;
+const SHADOW_LAYERS = ['layerParts', 'layerWires', 'layerText', 'layerPlots'];
+function setShadow(on) {
+  showShadow = !!on; lsSet('gs.shadow', showShadow);
+  for (const id of SHADOW_LAYERS) { if (showShadow) $(id).setAttribute('filter', 'url(#inkShadow)'); else $(id).removeAttribute('filter'); }
+}
 function settingsDialog() {
   closeMenu(); finishEdit(false);
   const back = document.createElement('div'); back.className = 'dlg-back';
   back.innerHTML = `<form class="dlg" role="dialog" aria-modal="true" aria-labelledby="stT" style="width:min(420px,100%)">
-    <h2 id="stT">Settings</h2><div style="min-height:140px"></div>
+    <h2 id="stT">Settings</h2><div style="min-height:140px;padding:6px 16px 0">
+      <div style="font:600 10.5px var(--font-mono);letter-spacing:.1em;text-transform:uppercase;color:var(--muted);padding-bottom:8px">Appearance</div>
+      <label style="display:flex;gap:8px;align-items:flex-start;cursor:pointer"><input type="checkbox" id="stShadow"${showShadow ? ' checked' : ''} style="margin-top:2px">
+        <span>Drop shadows on the sheet<br><small style="color:var(--muted)">Parts, wires, links, shapes, text and plots cast a soft shadow. Exports are always flat.</small></span></label>
+    </div>
     <div class="foot"><button type="button" id="stCancel">Cancel</button><button type="submit" class="pri" id="stOk">OK</button></div></form>`;
   document.body.appendChild(back);
   const close = () => back.remove();
   back.addEventListener('pointerdown', e => { if (e.target === back) close(); });
   back.addEventListener('keydown', e => { if (e.key === 'Escape') close(); e.stopPropagation(); });
   $('stCancel').onclick = close;
-  back.querySelector('form').addEventListener('submit', e => { e.preventDefault(); close(); });
+  back.querySelector('form').addEventListener('submit', e => { e.preventDefault(); setShadow($('stShadow').checked); close(); });   // OK applies, Cancel leaves things as they were
   $('stOk').focus();
 }
 $('bSettings').onclick = settingsDialog;
@@ -3380,7 +3391,7 @@ new ResizeObserver(() => { for (const el of $('view').querySelectorAll('.inst[da
 /* =====================================================================
    START
    ===================================================================== */
-showGrid = lsGet('gs.grid', true); showHooks = lsGet('gs.hooks', true);
+showGrid = lsGet('gs.grid', true); showHooks = lsGet('gs.hooks', true); setShadow(lsGet('gs.shadow', true) !== false);
 $('docSec').open = lsGet('gs.docOpen', true);
 $('bGrid').setAttribute('aria-pressed', showGrid); $('bHooks').setAttribute('aria-pressed', showHooks);
 const fresh = location.hash === '#fresh';     // safe start: open the example and skip saved work

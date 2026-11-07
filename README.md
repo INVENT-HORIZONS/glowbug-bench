@@ -61,6 +61,7 @@ Open `glowbug-bench.html` in any modern browser. Everything is in the one file; 
 - **Potentiometer:** a dial button after Active Plot, for voltages that can be varied virtually (coming soon).
 - **Slider:** a horizontal slider button next to the Potentiometer, for the same job with a different look (coming soon).
 - **LED** and **Incandescent bulb:** two buttons after the Slider (coming soon).
+- **Datasheet viewer:** the PDF button opens a floating window for data sheets. Open one or more PDFs (or drop them on it), switch between them, and scroll, zoom, search and print with the browser's own PDF viewer. Drag it by its title bar and resize it from the corner.
 - **Browser check:** Glowbug Bench is built for Google Chrome and Microsoft Edge. Opening it in any other browser shows a popup saying so; you can still carry on after clicking OK.
 - **Settings:** the gear at the far right of the toolbar opens the Settings dialog (empty for now).
 - **Live camera:** press K or the Camera button to float a live webcam view over the sheet, for showing your bench while you teach. Drag it, resize it from the corner dot, and use its hover bar to pick a camera, mirror the picture, switch between round and rectangle, or close it. It is never recorded and never appears in exports.

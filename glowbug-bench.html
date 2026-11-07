@@ -453,9 +453,6 @@ button, input, select, textarea { font: inherit; color: inherit; box-sizing: bor
       </g>
     </svg>
     <div class="hint" id="hint"></div>
-    <div class="meter" id="meter" hidden role="region" aria-label="Multimeter"><span class="meter-t">Multimeter</span><button class="meter-x" id="meterClose" title="Close the multimeter" aria-label="Close multimeter"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
-    <div class="meter" id="scope" hidden role="region" aria-label="Oscilloscope"><span class="meter-t">Oscilloscope</span><button class="meter-x" id="scopeClose" title="Close the oscilloscope" aria-label="Close oscilloscope"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
-    <div class="meter" id="siggen" hidden role="region" aria-label="Signal generator"><span class="meter-t">Signal generator</span><button class="meter-x" id="siggenClose" title="Close the signal generator" aria-label="Close signal generator"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
     <div class="cam" id="cam" hidden role="region" aria-label="Live camera view">
       <div class="cam-frame"><video id="camVid" autoplay muted playsinline></video><div class="cam-wait" id="camWait">Starting camera…</div></div>
       <div class="cam-bar">
@@ -1677,7 +1674,7 @@ function render() {
   $('layerText').innerHTML = sheet.texts.map(textSVG).join('');
   renderSel(); renderHooks(cnt); renderDoc(); applyView();
   $('stCount').textContent = `${sheet.parts.length} part${sheet.parts.length === 1 ? '' : 's'} · ${sheet.wires.length} wire${sheet.wires.length === 1 ? '' : 's'}`;
-  renderSheets();
+  renderSheets(); renderInst();
 }
 function renderHooks(cnt = connectivity()) {
   if (!showHooks) { $('layerHooks').innerHTML = ''; return; }
@@ -2921,11 +2918,13 @@ function loadProject(p, msg) {
   if (!Array.isArray(project.sheets) || !project.sheets.length) project.sheets = [newSheet('Sheet 1')];
   if (!project.id) project.id = uid(); if (typeof project.name !== 'string' || !project.name) project.name = 'Untitled project';
   project.doc = Object.assign(docDefaults(), project.doc || {}); if (!Array.isArray(project.doc.revisions)) project.doc.revisions = [];
+  const instSeen = new Set();            // each instrument (V1, S2, AWG1…) lives on one sheet only
   for (const s of project.sheets) {
     const okPt = q => Array.isArray(q) && q.length === 2 && isFinite(q[0]) && isFinite(q[1]);
     s.parts = (Array.isArray(s.parts) ? s.parts : []).filter(q => q && LIB[q.type] && isFinite(q.x) && isFinite(q.y));
     s.wires = (Array.isArray(s.wires) ? s.wires : []).filter(w => w && Array.isArray(w.pts)).map(w => ({ id: w.id || uid(), pts: simplify(w.pts.filter(okPt).map(q => [snap(+q[0]), snap(+q[1])])), ...(WIRE_COLORS.some(c => c.k === w.color && c.k !== 'ink') ? { color: w.color } : {}) })).filter(w => w.pts.length >= 2);
     s.texts = (Array.isArray(s.texts) ? s.texts : []).filter(t => t && isFinite(t.x) && isFinite(t.y)).map(t => Object.assign({ text: '', size: 12, tone: 'ink' }, t));
+    { const seen = instSeen; s.inst = (Array.isArray(s.inst) ? s.inst : []).filter(x => x && INSTR_ALL.includes(x.k) && Number.isFinite(+x.x) && Number.isFinite(+x.y) && !seen.has(x.k) && seen.add(x.k)).map(x => ({ k: x.k, x: +x.x, y: +x.y })); }
     s.lines = (Array.isArray(s.lines) ? s.lines : []).filter(l => l && okPt(l.a) && okPt(l.b)).map(l => Object.assign({ id: uid() }, l));
     const sid = x => typeof x === 'string' && x ? x : null;
     s.links = (Array.isArray(s.links) ? s.links : []).filter(k => k && (sid(k.a) || sid(k.ta)) && (sid(k.b) || sid(k.tb))).map(k => ({ id: k.id || uid(), a: sid(k.a), b: sid(k.b), ...(sid(k.ta) && !sid(k.a) ? { ta: k.ta } : {}), ...(sid(k.tb) && !sid(k.b) ? { tb: k.tb } : {}), ...(k.v === 2 ? { v: 2 } : {}), pts: (Array.isArray(k.pts) ? k.pts : []).filter(okPt).map(q => [+q[0], +q[1]]) }));
@@ -3177,38 +3176,86 @@ $('camPick').onclick = async e => {
   window.addEventListener('pagehide', camStopTracks);
 })();
 
-// Bench instrument panels (Larry, 2026-11-06): the Multimeter, Oscilloscope and Signal generator buttons each show or hide
-// their own white card hovering over the sheet (drop shadow), dragged anywhere inside the canvas area; each one's spot
-// and shown/hidden state are remembered (gs.meter, gs.scope, gs.siggen). DOM overlays like the camera, so they are never
-// exported or saved with the drawing. What goes inside them comes later.
-function instPanel(id, btn, name, slot) {
-  const el = $(id), key = 'gs.' + id, cfg = Object.assign({ x: null, y: null, on: false }, lsGet(key, {}) || {}), save = () => lsSet(key, cfg);
-  const place = () => {
-    const vr = $('view').getBoundingClientRect(), w = el.offsetWidth, h = el.offsetHeight, pad = 8;
-    if (cfg.x == null || cfg.y == null) { cfg.x = Math.round(vr.width / 2 - w / 2 + (slot - 1) * 40); cfg.y = 24 + slot * 40; }   // first time: near the top, staggered
-    cfg.x = Math.max(pad, Math.min(cfg.x, vr.width - w - pad)); cfg.y = Math.max(pad, Math.min(cfg.y, vr.height - h - pad));
-    el.style.left = cfg.x + 'px'; el.style.top = cfg.y + 'px';
-  };
+// Bench instruments (Larry, 2026-11-07). Each toolbar button opens a menu of its instruments: the Multimeter button
+// has voltmeters V1-V7 and ammeters I1-I3, the Oscilloscope button scope channels S1-S3, the Signal generator button
+// AWG1 and AWG2. Each instrument exists once per project: picking one puts its white, hovering card on the current
+// sheet, and it is greyed out in the menu (naming the sheet it is on) until its card is closed (deleted), after which it
+// can be picked again. An instrument only shows on the sheet it was activated on (moving one to another sheet comes
+// later). Stored with the sheet as sheet.inst = [{ k, x, y }], x / y in screen px from the canvas corner, so they are
+// saved with the project and undo covers adding and deleting them. The cards are DOM overlays: never exported.
+const INSTR = {
+  bMeter: { title: 'Multimeter', groups: [['Voltmeters', [1, 2, 3, 4, 5, 6, 7].map(n => 'V' + n)], ['Ammeters', [1, 2, 3].map(n => 'I' + n)]] },
+  bScope: { title: 'Oscilloscope', groups: [['Scope channels', [1, 2, 3].map(n => 'S' + n)]] },
+  bSigGen: { title: 'Signal generator', groups: [['Generator channels', ['AWG1', 'AWG2']]] },
+};
+const INSTR_KIND = k => k[0] === 'V' ? 'Voltmeter' : k[0] === 'I' ? 'Ammeter' : k[0] === 'S' ? 'Scope channel' : 'Generator';
+const INSTR_BTN = k => k[0] === 'V' || k[0] === 'I' ? 'bMeter' : k[0] === 'S' ? 'bScope' : 'bSigGen';
+const INSTR_ALL = Object.values(INSTR).flatMap(d => d.groups.flatMap(g => g[1]));
+const instOf = sh => sh.inst || (sh.inst = []);
+const instWhere = k => project.sheets.find(sh => (sh.inst || []).some(x => x.k === k));   // the sheet an instrument is on, if any
+function instMenu(btn) {
+  const was = menuEl && menuEl.dataset.inst; closeMenu(); if (was === btn) return;
+  const d = INSTR[btn], r = $(btn).getBoundingClientRect();
+  menuEl = document.createElement('div'); menuEl.className = 'menu'; menuEl.setAttribute('role', 'menu'); menuEl.dataset.inst = btn;
+  menuEl.innerHTML = `<div class="mlabel">${d.title}</div>` + d.groups.map(([g, ks]) => (d.groups.length > 1 ? `<div class="mlabel">${g}</div>` : '') + ks.map(k => {
+    const at = instWhere(k), here = at === sheet;
+    return `<button role="menuitem" data-ik="${k}"${at ? ' disabled aria-disabled="true"' : ''}><span>${k} · ${INSTR_KIND(k)}</span><span>${at ? (here ? 'on this sheet' : 'on ' + esc(at.name)) : ''}</span></button>`;
+  }).join('')).join('');
+  document.body.appendChild(menuEl);
+  const mw = menuEl.getBoundingClientRect().width;
+  menuEl.style.top = (r.bottom + 4) + 'px'; menuEl.style.left = Math.max(8, Math.min(window.innerWidth - mw - 8, r.left)) + 'px';
+  menuEl.onclick = ev => { const b = ev.target.closest('[data-ik]'); if (!b || b.disabled) return; ev.stopPropagation(); closeMenu(); addInst(b.dataset.ik); };
+}
+function addInst(k) {
+  if (instWhere(k)) return;
+  const vr = $('view').getBoundingClientRect(), n = instOf(sheet).length;
+  snapshot(); instOf(sheet).push({ k, x: Math.round(vr.width / 2 - 140 + (n % 6) * 30), y: 24 + (n % 6) * 30 });
+  render(); changed(); setMsg(`${k} ${INSTR_KIND(k).toLowerCase()} added to this sheet: drag it anywhere`);
+}
+function delInst(k) {
+  const L = instOf(sheet); if (!L.some(x => x.k === k)) return;
+  snapshot(); sheet.inst = L.filter(x => x.k !== k);
+  render(); changed(); setMsg(`${k} removed. It can be picked again from the ${INSTR[INSTR_BTN(k)].title.toLowerCase()} menu.`);
+}
+// keep the cards on the canvas in step with the current sheet (called at the end of render)
+function renderInst() {
+  const view = $('view'), want = new Map(instOf(sheet).map(x => [x.k, x])), have = new Map([...view.querySelectorAll('.meter[data-k]')].map(el => [el.dataset.k, el]));
+  for (const [k, el] of have) if (!want.has(k)) el.remove();
+  for (const [k, it] of want) {
+    let el = have.get(k);
+    if (!el) {
+      el = document.createElement('div'); el.className = 'meter'; el.dataset.k = k; el.setAttribute('role', 'region'); el.setAttribute('aria-label', `${k} ${INSTR_KIND(k)}`);
+      el.innerHTML = `<span class="meter-t">${k} · ${INSTR_KIND(k)}</span><button class="meter-x" title="Delete ${k}" aria-label="Delete ${k}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></button>`;
+      instDrag(el); view.appendChild(el);
+    }
+    instPlace(el, it);
+  }
+  for (const btn of Object.keys(INSTR)) $(btn).setAttribute('aria-pressed', instOf(sheet).some(x => INSTR_BTN(x.k) === btn));
+}
+function instPlace(el, it) {
+  const vr = $('view').getBoundingClientRect(), w = el.offsetWidth || 284, h = el.offsetHeight || 164, pad = 8;
+  if (vr.width > 2 * pad + w) it.x = Math.max(pad, Math.min(it.x, vr.width - w - pad));
+  if (vr.height > 2 * pad + h) it.y = Math.max(pad, Math.min(it.y, vr.height - h - pad));
+  el.style.left = it.x + 'px'; el.style.top = it.y + 'px';
+}
+function instDrag(el) {
+  const it = () => instOf(sheet).find(x => x.k === el.dataset.k);
   const front = () => { document.querySelectorAll('.meter').forEach(x => x.style.zIndex = 29); el.style.zIndex = 31; };   // the one you touch comes forward
-  const show = on => { cfg.on = on; el.hidden = !on; $(btn).setAttribute('aria-pressed', on); if (on) { place(); front(); } save(); setMsg(on ? `${name} shown: drag it anywhere on the sheet` : `${name} hidden`); };
-  $(btn).onclick = () => show(el.hidden);
-  $(id + 'Close').onclick = e => { e.stopPropagation(); show(false); };
+  el.querySelector('.meter-x').onclick = e => { e.stopPropagation(); delInst(el.dataset.k); };
   let st = null;
   el.addEventListener('pointerdown', e => {
     if (e.button !== 0 || e.target.closest('.meter-x')) { e.stopPropagation(); return; }
     e.preventDefault(); e.stopPropagation(); front();
-    st = { px: e.clientX, py: e.clientY, x: cfg.x, y: cfg.y }; el.setPointerCapture(e.pointerId); el.classList.add('drag');
+    const o = it(); if (!o) return;
+    st = { px: e.clientX, py: e.clientY, x: o.x, y: o.y, moved: false }; el.setPointerCapture(e.pointerId); el.classList.add('drag');
   });
-  el.addEventListener('pointermove', e => { if (!st) return; cfg.x = st.x + e.clientX - st.px; cfg.y = st.y + e.clientY - st.py; place(); });
-  const end = () => { if (!st) return; st = null; el.classList.remove('drag'); save(); };
+  el.addEventListener('pointermove', e => { if (!st) return; const o = it(); if (!o) return; o.x = st.x + e.clientX - st.px; o.y = st.y + e.clientY - st.py; st.moved = true; instPlace(el, o); });
+  const end = () => { if (!st) return; const m = st.moved; st = null; el.classList.remove('drag'); if (m) changed(); };
   el.addEventListener('pointerup', end); el.addEventListener('pointercancel', end);
   ['dblclick', 'contextmenu', 'wheel'].forEach(t => el.addEventListener(t, e => { e.stopPropagation(); if (t === 'contextmenu') e.preventDefault(); }));
-  new ResizeObserver(() => { if (!el.hidden) place(); }).observe($('view'));
-  if (cfg.on) requestAnimationFrame(() => { cfg.on = true; el.hidden = false; $(btn).setAttribute('aria-pressed', true); place(); });
 }
-instPanel('meter', 'bMeter', 'Multimeter', 0);
-instPanel('scope', 'bScope', 'Oscilloscope', 1);
-instPanel('siggen', 'bSigGen', 'Signal generator', 2);
+for (const btn of Object.keys(INSTR)) $(btn).onclick = e => { e.stopPropagation(); instMenu(btn); };
+new ResizeObserver(() => { for (const el of $('view').querySelectorAll('.meter[data-k]')) { const o = instOf(sheet).find(x => x.k === el.dataset.k); if (o) instPlace(el, o); } }).observe($('view'));
 
 /* =====================================================================
    START

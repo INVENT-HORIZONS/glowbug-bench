@@ -445,7 +445,7 @@ button, input, select, textarea { font: inherit; color: inherit; box-sizing: bor
     <button class="tb" id="bPdf" title="Datasheet viewer (PDF)" aria-pressed="false"><svg viewBox="0 0 24 24" style="width:24px;height:26px" stroke-linejoin="round"><path d="M5 1.8h9.4l4.8 4.8v15.6H5z" fill="#FFFFFF" stroke="#5A5550" stroke-width="1.1"/><path d="M14.4 1.8v4.8h4.8" fill="#E6E0D6" stroke="#5A5550" stroke-width="1.1"/><path d="M7.6 9.6h7.8M7.6 12h9M7.6 19.8h9" fill="none" stroke="#B9B4AC" stroke-width="1"/><rect x="2.6" y="13.6" width="13.4" height="6.2" rx="1" fill="#C42A20"/><text x="9.3" y="18.6" text-anchor="middle" style="font:800 5.2px system-ui,Arial,sans-serif;fill:#FFFFFF;letter-spacing:.2px">PDF</text></svg></button>
     <button class="tb" id="bImg" title="Add a picture (PNG, JPEG, GIF, BMP, WebP, SVG)"><svg viewBox="0 0 24 24" style="width:26px;height:26px" stroke-linejoin="round"><rect x="2.5" y="4" width="19" height="16" rx="1.6" fill="#FFFFFF" stroke="#5A5550" stroke-width="1.2"/><rect x="4.4" y="5.9" width="15.2" height="12.2" fill="#CFE3F2"/><path d="M4.4 18.1l4.6-6.4 3.3 4.2 2.4-2.8 4.9 5z" fill="#2E6B34"/><path d="M4.4 18.1l4.6-6.4 2.2 2.8-3.2 3.6z" fill="#3F8A48"/><circle cx="15.8" cy="9.4" r="1.9" fill="#E8B23A"/></svg></button>
     <span class="sep"></span>
-    <button class="tb" id="bStage" aria-pressed="false" title="Animation Stage: add the project's animation sheet, or go to it. Its snapshots play one after another with a fade or slide."><svg viewBox="0 0 24 24" style="width:26px;height:26px" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><path d="M3.5 10h17v10h-17z"/><path d="M3.5 10L3 6.2l16.4-2.6.6 3.8z"/><path d="M7.4 5.5l2.4 3.6M12.3 4.7l2.4 3.6M17.2 4l1.9 2.8" stroke-width="1.4"/><path d="M10.3 12.8v4.4l3.8-2.2z" fill="currentColor" stroke="none"/></svg></button>
+    <button class="tb" id="bStage" aria-pressed="false" title="Animation Stage: add the project's animation sheet, or go to it. Its snapshots play one after another, each fading in or cutting in as you set it."><svg viewBox="0 0 24 24" style="width:26px;height:26px" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><path d="M3.5 10h17v10h-17z"/><path d="M3.5 10L3 6.2l16.4-2.6.6 3.8z"/><path d="M7.4 5.5l2.4 3.6M12.3 4.7l2.4 3.6M17.2 4l1.9 2.8" stroke-width="1.4"/><path d="M10.3 12.8v4.4l3.8-2.2z" fill="currentColor" stroke="none"/></svg></button>
     <button class="tb" id="bSnap" title="Snapshot: capture this sheet as it is now and add it to the end of the Animation Stage"><svg viewBox="0 0 24 24" style="width:26px;height:26px" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><path d="M6.5 3.5h14v11"/><path d="M3.5 6.5h14v14h-14z"/><path d="M10.5 10.5v6M7.5 13.5h6" stroke-linecap="round"/></svg></button><input type="file" id="imgFile" accept="image/*" multiple hidden>
     <span class="tb-spacer"></span>
     <button class="tb" id="bImport" title="Open a .json project file"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15V3M7 10l5 5 5-5M4 15v5h16v-5"/></svg><span class="lb">Import</span></button>
@@ -1575,8 +1575,8 @@ function exampleProject() {
    title block: parts are dropped and wired on it like any schematic, and what is drawn there stays there. project.stage =
    { fade, trans, cur, snaps } holds its settings and the snapshots: Snapshot copies the stage as it is now (parts, wires, text,
    shapes, links) to the end of the list. Clicking a snapshot only views it (previewSnap, a stand-in sheet); Copy to stage puts
-   it on the stage, undoably. Play shows the snapshots in a stand-in too: the right arrow moves on with a transition (fade or
-   slide) the first time a snapshot is reached and jumps over ground already covered; the left arrow always jumps back. Stop
+   it on the stage, undoably. Each snapshot has its own fade-in (snap.fade seconds; 0 = none). Play shows the snapshots in a
+   stand-in too: the right arrow moves on, fading if that snapshot says so, the first time a snapshot is reached and jumps over ground already covered; the left arrow always jumps back. Stop
    goes back to the stage as it was.
    ===================================================================== */
 const onStage = () => !!(sheet && sheet.stage);
@@ -1598,20 +1598,19 @@ function cleanStage() {
   const st = project.stage, arr = x => (Array.isArray(x) ? x : []), okPt = q => Array.isArray(q) && q.length === 2 && isFinite(q[0]) && isFinite(q[1]);
   let seen = false; for (const q of project.sheets) if (q.stage) { if (seen) delete q.stage; seen = true; }
   if (!st || typeof st !== 'object' || Array.isArray(st)) { delete project.stage; for (const q of project.sheets) if (q.stage) delete q.stage; return; }
-  st.snaps = arr(st.snaps).filter(q => q && q.data && typeof q.data === 'object').map(q => ({ id: q.id || uid(),
+  const legacy = Number.isFinite(+st.fade) && +st.fade >= 0.1 && +st.fade <= 10 ? +st.fade : STAGE_FADE;   // the old project-wide fade length
+  st.snaps = arr(st.snaps).filter(q => q && q.data && typeof q.data === 'object').map(q => ({ id: q.id || uid(), fade: Number.isFinite(+q.fade) && +q.fade >= 0 && +q.fade <= 10 ? +q.fade : legacy, ...(+q.lastFade >= 0.1 && +q.lastFade <= 10 ? { lastFade: +q.lastFade } : {}),
     data: { parts: arr(q.data.parts).filter(p => p && LIB[p.type] && isFinite(p.x) && isFinite(p.y)), wires: arr(q.data.wires).filter(w => w && Array.isArray(w.pts) && w.pts.length > 1 && w.pts.every(okPt)),
       texts: arr(q.data.texts).filter(t => t && isFinite(t.x) && isFinite(t.y)), lines: arr(q.data.lines).filter(l => l && okPt(l.a) && okPt(l.b)), links: arr(q.data.links).filter(k => k && Array.isArray(k.pts)) } }));
-  st.fade = Number.isFinite(+st.fade) && +st.fade >= 0.1 && +st.fade <= 10 ? +st.fade : STAGE_FADE;
-  st.trans = st.trans === 'slide' ? 'slide' : 'fade';
   st.cur = Math.max(0, Math.min(Number.isInteger(st.cur) ? st.cur : 0, st.snaps.length - 1));
   let sh = stageSh();
   if (!sh) { sh = newStageSheet(project.sheets[0]); if (st.snaps.length) putData(sh, st.snaps[st.snaps.length - 1].data); project.sheets.push(sh); }
   Object.assign(sh, { border: false, revs: false, title: false });
-  delete st.sheet; for (const k of Object.keys(st)) if (!['fade', 'trans', 'cur', 'snaps'].includes(k)) delete st[k];
+  delete st.sheet; for (const k of Object.keys(st)) if (!['cur', 'snaps'].includes(k)) delete st[k];
 }
 function goStage() {
   let sh = stageSh();
-  if (!sh) { snapshot(); project.stage = { fade: STAGE_FADE, trans: 'fade', cur: 0, snaps: [] }; sh = newStageSheet(onStage() ? null : sheet); project.sheets.push(sh); treeOpen = true; changed(); setMsg('Animation Stage added. Build on it like any sheet, and press Snapshot at each step.'); }
+  if (!sh) { snapshot(); project.stage = { cur: 0, snaps: [] }; sh = newStageSheet(onStage() ? null : sheet); project.sheets.push(sh); treeOpen = true; changed(); setMsg('Animation Stage added. Build on it like any sheet, and press Snapshot at each step.'); }
   else if (onStage() && previewing) { endPreview(); return; }
   else if (onStage() && playing) { stageStop(); return; }
   else if (onStage()) { setMsg('This is the Animation Stage. Press Snapshot to capture it as it is now.'); return; }
@@ -1623,7 +1622,7 @@ function takeSnap() {
   if (playing) { setMsg('Stop playing first, then take a snapshot.'); return; }
   if (previewing) { setMsg('You are looking at a snapshot. Press Esc or Animation Stage to go back to your stage, then take the snapshot.'); return; }
   snapshot(); const at = st.snaps.length;   // always at the end of the list (Larry)
-  st.snaps.splice(at, 0, { id: uid(), data: snapData(sheet) }); st.cur = at;
+  st.snaps.splice(at, 0, { id: uid(), fade: STAGE_FADE, data: snapData(sheet) }); st.cur = at;
   treeOpen = true; renderSheets(); renderDoc(); changed();
   setMsg(`Snapshot ${at + 1} taken and added to the end of the list.`);
 }
@@ -1665,7 +1664,7 @@ function moveSnapTo(i, j) {
 function insertBlank() {
   const st = project.stage; if (!st || playing) return;
   snapshot(); const at = st.snaps.length ? Math.min(st.cur, st.snaps.length) : 0;
-  st.snaps.splice(at, 0, { id: uid(), data: { parts: [], wires: [], texts: [], lines: [], links: [] } }); st.cur = at;
+  st.snaps.splice(at, 0, { id: uid(), fade: STAGE_FADE, data: { parts: [], wires: [], texts: [], lines: [], links: [] } }); st.cur = at;
   if (previewing) putData(sheet, st.snaps[at].data); render(); changed();
   setMsg(`Blank snapshot ${at + 1} added.${st.snaps.length > at + 1 ? ` The one that was there is now ${at + 2}.` : ''}`);
 }
@@ -1674,7 +1673,7 @@ function showSnap(i) { if (anim) { cancelAnimationFrame(anim.raf); anim = null; 
 function stageGo(dir) {
   const st = project.stage, n = st.cur + dir;
   if (n < 0 || n >= st.snaps.length) { stopAnim(); setMsg(dir > 0 ? `Snapshot ${st.cur + 1} is the last one.` : 'This is the first snapshot.'); return; }
-  if (dir > 0 && n > playing.max) { playing.max = n; animateTo(n); }   // new ground: transition
+  if (dir > 0 && n > playing.max) { playing.max = n; if (st.snaps[n].fade > 0) animateTo(n); else showSnap(n); }   // new ground: fades in if that snapshot is set to
   else showSnap(n);                                                    // back, or over ground already covered: jump
   setMsg(`Snapshot ${n + 1} of ${st.snaps.length} · playing · Esc or Stop ends`);
 }
@@ -1735,7 +1734,7 @@ function between(k, a, b, t) {
 }
 const ease = t => (t < 0.5 ? 2 * t * t : 1 - (-2 * t + 2) ** 2 / 2);
 function animateTo(i) {
-  const st = project.stage, slide = st.trans === 'slide';
+  const st = project.stage, slide = false;   // Larry dropped the Slide option for now (2026-11-08); the gliding code is kept for later
   if (anim) { cancelAnimationFrame(anim.raf); anim = null; }
   const A = Object.assign({}, sheet, snapData(sheet));
   putData(sheet, st.snaps[i].data); st.cur = i; const B = sheet;
@@ -1752,7 +1751,7 @@ function animateTo(i) {
   const d0 = dotMap(SM(0)), d1 = dotMap(SM(1));
   const dO = [...dA].filter(([k]) => !d0.has(k)).map(x => x[1]).join(''), dI = [...dB].filter(([k]) => !d1.has(k)).map(x => x[1]).join('');
   renderSheets(); renderDoc(); propsSig = ''; renderProps();
-  const t0 = performance.now(), dur = Math.max(0.1, st.fade) * 1000;
+  const t0 = performance.now(), dur = Math.max(0.1, st.snaps[i].fade || STAGE_FADE) * 1000;   // the fade belongs to the snapshot coming in
   const frame = now => {
     const t = Math.min(1, (now - t0) / dur), e = ease(t), M = blank();
     for (const m of mv) M[m.k].push(between(m.k, m.a, m.b, e));
@@ -1766,17 +1765,16 @@ function animateTo(i) {
   anim = { raf: requestAnimationFrame(frame) };
 }
 function stagePanel(b) {
-  const st = project.stage || { fade: STAGE_FADE, trans: 'fade', cur: 0, snaps: [] }, n = st.snaps.length;
+  const st = project.stage || { cur: 0, snaps: [] }, n = st.snaps.length, cq = st.snaps[st.cur];
   $('docSize').textContent = `${n} snapshot${n === 1 ? '' : 's'}`;
-  if (b.contains(document.activeElement) && document.activeElement.id === 'stFade') return;   // typing the fade length
+  if (b.contains(document.activeElement) && document.activeElement.id === 'stLen') return;   // typing the fade length
   const z = SIZES[sheet.size] || SIZES.A;
   b.innerHTML = `
     <div class="row-btns"><button id="stPlay" aria-pressed="${!!playing}" ${n ? '' : 'disabled'} title="Start at snapshot 1; → moves on, ← goes back">▶ Play</button><button id="stStop" ${playing ? '' : 'disabled'} title="Stop playing (Esc) and put the stage back as it was">■ Stop</button></div>
-    <div class="dnote">Transition</div>
-    <div class="seg two" role="group" aria-label="Transition"><button data-tr="fade" aria-pressed="${st.trans !== 'slide'}" title="Changes fade from one snapshot to the next"><b>Fade</b></button><button data-tr="slide" aria-pressed="${st.trans === 'slide'}" title="Parts, text, shapes and wires that moved glide to their new places; everything else fades"><b>Slide</b></button></div>
-    <div class="field"><label for="stFade">Fade length</label><input type="number" id="stFade" min="0.1" max="10" step="0.1" value="${st.fade}" title="Seconds the fade or slide takes"></div>
-    <div class="dnote">seconds, for the fade or the slide</div>
     <div class="stg-now">${n ? `Snapshot ${st.cur + 1} of ${n}` : 'No snapshots yet'}</div>
+    ${cq && !playing ? `<label class="chk" style="display:flex;align-items:center;gap:6px"><input type="checkbox" id="stFadeOn" ${cq.fade > 0 ? 'checked' : ''}> Fade in to this snapshot</label>
+    <div class="field"><label for="stLen">Fade length</label><input type="number" id="stLen" min="0.1" max="10" step="0.1" value="${cq.fade > 0 ? cq.fade : (cq.lastFade || STAGE_FADE)}" ${cq.fade > 0 ? '' : 'disabled'} title="Seconds this snapshot takes to fade in"></div>
+    <div class="dnote">${st.cur === 0 ? 'Snapshot 1 is where Play starts, so it shows at once; this setting counts if it moves later in the list.' : cq.fade > 0 ? `seconds. When playing, snapshot ${st.cur + 1} fades in over ${cq.fade} s.` : `Snapshot ${st.cur + 1} appears at once (no fade).`}</div>` : ''}
     <div class="dnote">${playing ? '→ moves on, ← goes back. Stop or Esc ends.' : previewing ? 'Viewing this snapshot; your stage is unchanged. ← → step through the snapshots.' : n ? 'Snapshot adds the stage as it is now to the end of the list. Click a snapshot in the tree to view it.' : 'Build on the stage, then press Snapshot (toolbar) at each step.'}</div>
     ${previewing ? `<div class="row-btns"><button id="stBack" title="Back to the stage as you left it (Esc)">Back to stage</button><button id="stCopy" title="Put this snapshot on the stage to change it (replaces what is on the stage; Ctrl+Z undoes)">Copy to stage</button></div>` : ''}
     ${n && !playing ? `<div class="row-btns">${previewing ? '' : `<button id="stUpd" title="Replace snapshot ${st.cur + 1} with the stage as it is now">Update snapshot</button>`}<button class="del" id="stDel">Delete</button></div>
@@ -1785,12 +1783,13 @@ function stagePanel(b) {
     ${playing || previewing ? '' : `<div class="dnote">Stage size</div>
     <div class="seg" role="group" aria-label="Stage size">${Object.entries(SIZES).map(([k, v]) => `<button data-size="${k}" aria-pressed="${sheet.size === k}" title="${v.name}${v.note ? ' (' + v.note + ')' : ''}"><b>${k}</b><small>${v.note || v.name.replace(' in', '')}</small></button>`).join('')}</div>
     <div class="seg two" role="group" aria-label="Orientation"><button data-or="L" aria-pressed="${sheet.orient !== 'P'}"><b>Landscape</b></button><button data-or="P" aria-pressed="${sheet.orient === 'P'}"><b>Portrait</b></button></div>`}`;
-  b.querySelectorAll('[data-tr]').forEach(x => x.onclick = () => { if (!project.stage || st.trans === x.dataset.tr) return; snapshot(); st.trans = x.dataset.tr; renderDoc(); changed(); setMsg(`Transition: ${x.dataset.tr}`); });
   b.querySelectorAll('[data-size]').forEach(x => x.onclick = () => { if (sheet.size === x.dataset.size) return; snapshot(); sheet.size = x.dataset.size; render(); fit(); changed(); });
   b.querySelectorAll('[data-or]').forEach(x => x.onclick = () => { if ((sheet.orient || 'L') === x.dataset.or) return; snapshot(); sheet.orient = x.dataset.or; render(); fit(); changed(); });
-  const fd = $('stFade'); fd.addEventListener('focus', () => snapshot(), { once: true });
-  fd.addEventListener('change', () => { const v = +fd.value; if (project.stage && Number.isFinite(v) && v >= 0.1 && v <= 10) { st.fade = Math.round(v * 10) / 10; changed(); } fd.value = st.fade; });
-  fd.addEventListener('keydown', ev => { ev.stopPropagation(); if (ev.key === 'Enter') fd.blur(); });
+  const fo = $('stFadeOn'), fl = $('stLen');
+  if (fo) fo.onchange = () => { snapshot(); if (fo.checked) cq.fade = cq.lastFade || STAGE_FADE; else { if (cq.fade > 0) cq.lastFade = cq.fade; cq.fade = 0; } renderSheets(); renderDoc(); changed(); setMsg(`Snapshot ${st.cur + 1}: ${cq.fade > 0 ? `fades in over ${cq.fade} s` : 'no fade'}`); };
+  if (fl) { fl.addEventListener('focus', () => snapshot(), { once: true });
+    fl.addEventListener('change', () => { const v = +fl.value; if (Number.isFinite(v) && v >= 0.1 && v <= 10) { cq.fade = Math.round(v * 10) / 10; cq.lastFade = cq.fade; changed(); renderSheets(); } fl.value = cq.fade; fl.blur(); renderDoc(); });
+    fl.addEventListener('keydown', ev => { ev.stopPropagation(); if (ev.key === 'Enter') fl.blur(); }); }
   const on = (id, fn) => { const x = $(id); if (x) x.onclick = () => { fn(); x.blur(); }; };   // blur, so the arrow keys go to the stage
   on('stPlay', stagePlay); on('stStop', stageStop); on('stBlank', insertBlank); on('stUp', () => moveSnap(-1)); on('stDown', () => moveSnap(1)); on('stDel', () => delSnap(st.cur));
   on('stBack', () => endPreview()); on('stCopy', () => copyToStage(st.cur));
@@ -2258,7 +2257,7 @@ function renderSheets() {
   const st = project.stage, ss = stageSh();
   const stg = !st || !ss ? '' : confirmDel === STAGE_ID ? `<div class="confirm">Delete the Animation Stage and its ${st.snaps.length} snapshot${st.snaps.length === 1 ? '' : 's'}? <button class="yes" data-yes="${STAGE_ID}">Delete</button><button data-no="1">Keep</button></div>`
     : `<div class="tnode stg${sheet.id === ss.id && !viewOnly() ? ' on' : ''}" role="treeitem" data-sheet="${ss.id}" title="Animation Stage: build on it like any sheet; ${st.snaps.length} snapshot${st.snaps.length === 1 ? '' : 's'}">${ICON_STAGE}<span class="nm">Animation Stage</span><span class="ct">${st.snaps.length}</span><button class="x" data-del="${STAGE_ID}" title="Delete the Animation Stage" aria-label="Delete the Animation Stage">×</button></div>`
-      + st.snaps.map((q, i) => `<div class="tnode snap${st.cur === i ? ' cur' : ''}${previewing && st.cur === i ? ' on' : ''}${q.data.parts.length + q.data.wires.length + q.data.texts.length + q.data.lines.length ? '' : ' blank'}" role="treeitem" data-snap="${i}" draggable="${!playing}" title="Snapshot ${i + 1}: click to view it (your stage stays as it is); drag it to move it">${ICON_SNAP}<span class="nm">Snapshot ${i + 1}</span>${q.data.parts.length + q.data.wires.length + q.data.texts.length + q.data.lines.length ? '' : '<span class="ct">blank</span>'}<button class="x" data-delsnap="${i}" title="Delete this snapshot" aria-label="Delete snapshot ${i + 1}">×</button></div>`).join('');
+      + st.snaps.map((q, i) => `<div class="tnode snap${st.cur === i ? ' cur' : ''}${previewing && st.cur === i ? ' on' : ''}${q.data.parts.length + q.data.wires.length + q.data.texts.length + q.data.lines.length ? '' : ' blank'}" role="treeitem" data-snap="${i}" draggable="${!playing}" title="Snapshot ${i + 1}: click to view it (your stage stays as it is); drag it to move it">${ICON_SNAP}<span class="nm">Snapshot ${i + 1}</span><span class="ct" title="${q.fade > 0 ? `Fades in over ${q.fade} s` : 'Appears at once (no fade)'}">${q.data.parts.length + q.data.wires.length + q.data.texts.length + q.data.lines.length ? '' : 'blank · '}${q.fade > 0 ? `fade ${q.fade}s` : 'no fade'}</span><button class="x" data-delsnap="${i}" title="Delete this snapshot" aria-label="Delete snapshot ${i + 1}">×</button></div>`).join('');
   el.innerHTML = `<div class="tnode root" role="treeitem" aria-expanded="${treeOpen}" data-root="1" title="Double-click to rename the project"><button class="car${treeOpen ? ' open' : ''}" data-tog="1" aria-label="${treeOpen ? 'Collapse' : 'Expand'}">▶</button>${ICON_PROJ}${rootName}</div>`
     + (treeOpen ? `<div class="tkids" role="group">${kids}${stg}</div>` : '');
   el.tabIndex = 0;

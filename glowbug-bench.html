@@ -513,7 +513,7 @@ button, input, select, textarea { font: inherit; color: inherit; box-sizing: bor
     <hr>
     <button class="tool" id="mText" title="Add text (T)" aria-label="Text" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M5 6V4h14v2M12 4v16M9 20h6"/></svg><span class="k">T</span></button>
     <button class="tool" id="mRect" title="Draw a rectangle (B): click one corner, then click the opposite corner. Drawing only, not a wire." aria-label="Rectangle" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><rect x="6" y="7.5" width="12" height="9"/></svg><span class="k">B</span></button>
-    <button class="tool" id="mCircle" title="Draw a circle (O): click the center, then click a point on the edge. Drawing only, not a wire." aria-label="Circle" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="6"/></svg><span class="k">O</span></button>
+    <button class="tool" id="mEllipse" title="Draw an ellipse (O): click two opposite corners of its box; hold Alt for a circle. Drawing only, not a wire." aria-label="Ellipse" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><ellipse cx="12" cy="12" rx="8" ry="5.2"/></svg><span class="k">O</span></button>
     <button class="tool" id="mLine" title="Draw a straight line (L): click the start, then click the end. Lines are drawing only, not wires." aria-label="Line" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M8 16L16 8"/></svg><span class="k">L</span></button>
   </nav>
 
@@ -1586,7 +1586,10 @@ const wstyle = w => w.color && w.color !== 'ink' ? ` style="stroke:${wcol(w.colo
 let lineDraft = null;               // { a: [x, y] } while a line is being drawn
 // Circle and Rectangle tools (Larry, under Line) make the same kind of drawing-only item, with l.shape set: a circle is
 // its center a and a point b on the edge (radius |b - a|); a rectangle is two opposite corners a and b. Unset = line.
-const SHAPE_TOOLS = ['line', 'circle', 'rect'], SHAPE_NAME = { line: 'Line', circle: 'Circle', rect: 'Rectangle', plot: 'Active Plot' };
+const SHAPE_TOOLS = ['line', 'ellipse', 'rect'], SHAPE_NAME = { line: 'Line', circle: 'Circle', ellipse: 'Ellipse', rect: 'Rectangle', plot: 'Active Plot' };
+// Ellipse tool (Larry, 2026-11-07; it replaced the Circle tool): l.shape 'ellipse' with a and b opposite corners of its box, like a rectangle;
+// Alt makes the box square, so a circle. Circles drawn earlier (shape 'circle': center a, edge point b) still load and draw as before.
+const isRound = l => shapeOfL(l) === 'ellipse' && Math.abs(l.b[0] - l.a[0]) === Math.abs(l.b[1] - l.a[1]);
 // Active Plot (Larry, 2026-11-07): placed like a part from the toolbar button, then moved, resized from its corner handle and
 // deleted like any item. It is the same drawing-only item as a rectangle with l.shape = 'plot' (a = top-left, b = bottom-right),
 // drawn as an empty four-quadrant Cartesian plot: white card, light grid every PLOT_DIV, X and Y axes through the middle.
@@ -1633,6 +1636,7 @@ const radOf = l => Math.hypot(l.b[0] - l.a[0], l.b[1] - l.a[1]);
 function lineEl(l, attrs) {
   const sh = shapeOfL(l);
   if (sh === 'circle') return `<circle cx="${l.a[0]}" cy="${l.a[1]}" r="${+radOf(l).toFixed(2)}" ${attrs}/>`;
+  if (sh === 'ellipse') { const [x0, y0, x1, y1] = lineBB(l); return `<ellipse cx="${(x0 + x1) / 2}" cy="${(y0 + y1) / 2}" rx="${(x1 - x0) / 2}" ry="${(y1 - y0) / 2}" ${attrs}/>`; }
   if (sh === 'rect' || sh === 'plot') { const [x0, y0, x1, y1] = lineBB(l); return `<rect x="${x0}" y="${y0}" width="${x1 - x0}" height="${y1 - y0}" ${attrs}/>`; }
   return `<line x1="${l.a[0]}" y1="${l.a[1]}" x2="${l.b[0]}" y2="${l.b[1]}" ${attrs}/>`;
 }
@@ -1655,6 +1659,7 @@ const lineBB = l => { if (isPlot(l)) return plotFrame(l); if (shapeOfL(l) === 'c
 function lineDist(p, l) {
   const sh = shapeOfL(l);
   if (sh === 'circle') return Math.abs(Math.hypot(p[0] - l.a[0], p[1] - l.a[1]) - radOf(l));
+  if (sh === 'ellipse') { const [x0, y0, x1, y1] = lineBB(l), rx = Math.max((x1 - x0) / 2, 0.01), ry = Math.max((y1 - y0) / 2, 0.01), u = (p[0] - (x0 + x1) / 2) / rx, v = (p[1] - (y0 + y1) / 2) / ry; return Math.abs(Math.hypot(u, v) - 1) * Math.min(rx, ry); }   // close enough for picking
   if (sh === 'plot') { const [x0, y0, x1] = plotFrame(l); return p[0] >= x0 && p[0] <= x1 && p[1] >= y0 && p[1] <= y0 + PLOT_TB ? 0 : Infinity; }
   if (sh === 'rect' || sh === 'plot') { const [x0, y0, x1, y1] = lineBB(l), c = [[x0, y0], [x1, y0], [x1, y1], [x0, y1]]; return Math.min(...c.map((q, i) => distSeg(p, q, c[(i + 1) % 4]))); }
   return distSeg(p, l.a, l.b);
@@ -2054,9 +2059,9 @@ function armPlace(type) { placeType = type; placeRot = 0; placeFlip = false; set
 function renderProps() {
   const b = $('propBody'), items = selItems();
   if (!items.length && SHAPE_TOOLS.includes(mode)) {
-    b.innerHTML = `<div class="what">${SHAPE_NAME[mode]} tool<small>pen for new lines, circles and rectangles</small></div>
+    b.innerHTML = `<div class="what">${SHAPE_NAME[mode]} tool<small>pen for new lines, ellipses and rectangles</small></div>
       ${penFields(pen.color, pen.w, pen.dash)}
-      <div class="empty">${mode === 'circle' ? 'Click the center, then a point on the edge.' : mode === 'rect' ? 'Click one corner, then the opposite corner.' : 'Click the start, then the end.'}</div>`; return;
+      <div class="empty">${mode === 'ellipse' ? 'Click one corner of its box, then the opposite corner. Hold Alt for a circle.' : mode === 'rect' ? 'Click one corner, then the opposite corner.' : 'Click the start, then the end.'}</div>`; return;
   }
   if (!items.length) { b.innerHTML = `<div class="empty">Select a part, wire or text to edit it. Click a part in the library to place it; click any hook to start a wire.</div>`; return; }
   if (items.length > 1) {
@@ -2113,10 +2118,10 @@ function renderProps() {
       <div class="row-btns"><button data-act="dup">Duplicate</button><button class="del" data-act="del">Delete</button></div>`;
   } else if (it.k === 'line') {
     const l = it.o, sh = shapeOfL(l), bb = lineBB(l), len = Math.hypot(l.b[0] - l.a[0], l.b[1] - l.a[1]);
-    const size = sh === 'circle' ? `radius ${(len / G).toFixed(1)}` : sh === 'rect' ? `${(bb[2] - bb[0]) / G} × ${(bb[3] - bb[1]) / G}` : `${(len / G).toFixed(1)}`;
-    b.innerHTML = `<div class="what">${SHAPE_NAME[sh]}<small>${size} grid units · drawing only, not a wire</small></div>
+    const size = sh === 'circle' ? `radius ${(len / G).toFixed(1)}` : sh === 'rect' || sh === 'ellipse' ? `${(bb[2] - bb[0]) / G} × ${(bb[3] - bb[1]) / G}` : `${(len / G).toFixed(1)}`;
+    b.innerHTML = `<div class="what">${isRound(l) ? 'Circle' : SHAPE_NAME[sh]}<small>${size} grid units · drawing only, not a wire</small></div>
       ${penFields(l.color || 'ink', l.w || 1.4, l.dash || 'solid')}
-      <div class="empty">Drag it to move it. Draw more with the Line (L), Circle (O) and Rectangle (B) tools.</div>
+      <div class="empty">Drag it to move it. Draw more with the Line (L), Ellipse (O) and Rectangle (B) tools.</div>
       <div class="row-btns"><button data-act="dup">Duplicate</button><button class="del" data-act="del">Delete</button></div>`;
   } else if (it.k === 'wire') {
     const w = it.o, len = w.pts.slice(1).reduce((a, p, i) => a + Math.abs(p[0] - w.pts[i][0]) + Math.abs(p[1] - w.pts[i][1]), 0);
@@ -2841,14 +2846,14 @@ function linkClick(raw, p) {
 // directions, so the far corner stays on the grid.
 let altDown = false;
 const squareEnd = (a, p) => { const dx = p[0] - a[0], dy = p[1] - a[1], s = Math.max(Math.abs(dx), Math.abs(dy)); return [a[0] + (dx < 0 ? -s : s), a[1] + (dy < 0 ? -s : s)]; };
-const rectEnd = (a, p) => lineDraft && lineDraft.shape === 'rect' && altDown ? squareEnd(a, p) : p;
+const rectEnd = (a, p) => lineDraft && (lineDraft.shape === 'rect' || lineDraft.shape === 'ellipse') && altDown ? squareEnd(a, p) : p;   // Alt: square / circle
 function lineClick(p) {
-  const sh = mode === 'circle' || mode === 'rect' ? mode : null;
-  if (!lineDraft) { lineDraft = { a: p, shape: sh }; setMsg(sh === 'circle' ? 'Click a point on the edge to set the size. Esc or right-click cancels.' : sh === 'rect' ? 'Click the opposite corner (hold Alt for a square). Esc or right-click cancels.' : 'Click where the line ends. Esc or right-click cancels.'); renderOver(); return; }
+  const sh = mode === 'ellipse' || mode === 'rect' ? mode : null;
+  if (!lineDraft) { lineDraft = { a: p, shape: sh }; setMsg(sh === 'ellipse' ? 'Click the opposite corner (hold Alt for a circle). Esc or right-click cancels.' : sh === 'rect' ? 'Click the opposite corner (hold Alt for a square). Esc or right-click cancels.' : 'Click where the line ends. Esc or right-click cancels.'); renderOver(); return; }
   const a = lineDraft.a; p = rectEnd(a, p); lineDraft = null;
-  if ((a[0] === p[0] && a[1] === p[1]) || (sh === 'rect' && (a[0] === p[0] || a[1] === p[1]))) { renderOver(); return; }      // nothing to draw
+  if ((a[0] === p[0] && a[1] === p[1]) || ((sh === 'rect' || sh === 'ellipse') && (a[0] === p[0] || a[1] === p[1]))) { renderOver(); return; }      // nothing to draw
   snapshot(); const l = { id: uid(), a: [...a], b: [...p] }; if (sh) l.shape = sh; if (pen.color !== 'ink') l.color = pen.color; if (pen.w !== 1.4) l.w = pen.w; if (pen.dash !== 'solid') l.dash = pen.dash; linesOf(sheet).push(l);
-  render(); renderOver(); changed(); setMsg(`${SHAPE_NAME[sh || 'line']} added. Click to start another, or press V to select.`);
+  render(); renderOver(); changed(); setMsg(`${isRound(l) ? 'Circle' : SHAPE_NAME[sh || 'line']} added. Click to start another, or press V to select.`);
 }
 function addText(p) {
   snapshot(); const t = { id: uid(), x: p[0], y: p[1], text: 'Text', size: 12, tone: 'ink' };
@@ -2889,14 +2894,14 @@ function finishDraft() {
 /* =====================================================================
    MODES, KEYS, TOOLBAR
    ===================================================================== */
-const MODE_LABEL = { select: 'Select', wire: 'Wire', text: 'Text', line: 'Line', circle: 'Circle', rect: 'Rectangle', link: 'Link', place: 'Place', plot: 'Active Plot', cut: 'Cut', snip: 'Snip' };
+const MODE_LABEL = { select: 'Select', wire: 'Wire', text: 'Text', line: 'Line', ellipse: 'Ellipse', rect: 'Rectangle', link: 'Link', place: 'Place', plot: 'Active Plot', cut: 'Cut', snip: 'Snip' };
 const HINT = {
   select: '<b>Drag</b> to move · <b>Click a hook</b> to wire · <b>Double-click</b> a part or its label to edit · <b>Right-click</b> to rotate, flip or delete · wheel zooms, Shift+wheel pans up/down, Alt+wheel pans left/right',
   wire: '<b>Click</b> to add corners · end on a <b>hook</b> or wire · <b>Space</b> flips the corner · <b>Backspace</b> removes the last corner · <b>Esc</b> cancels',
   text: '<b>Click</b> on the sheet to add text',
   link: '<b>Click</b> an adjustable control to start · <b>click</b> to add corners · end on another <b>control</b> · <b>Space</b> flips the corner · <b>Backspace</b> removes the last corner · <b>Esc</b> cancels',
-  circle: '<b>Click</b> the center, then <b>click</b> a point on the edge · drawing only, not a wire · <b>Esc</b> or right-click cancels',
-  rect: '<b>Click</b> one corner, then <b>click</b> the opposite corner · drawing only, not a wire · <b>Esc</b> or right-click cancels',
+  ellipse: '<b>Click</b> one corner, then <b>click</b> the opposite corner · hold <b>Alt</b> for a circle · drawing only, not a wire · <b>Esc</b> or right-click cancels',
+  rect: '<b>Click</b> one corner, then <b>click</b> the opposite corner · hold <b>Alt</b> for a square · drawing only, not a wire · <b>Esc</b> or right-click cancels',
   line: '<b>Click</b> the start, then <b>click</b> the end: one straight line at any angle · lines are drawing only, not wires · <b>Esc</b> or right-click cancels',
   snip: '<b>Click</b> a wire segment to cut just that segment · parts and text are deleted · click a ref des or value to hide it · <b>Esc</b> back to Select',
   cut: '<b>Click</b> a part, wire or text to delete it · click a ref des or value to hide it · <b>Ctrl+Z</b> undoes · <b>Esc</b> back to Select',
@@ -2908,7 +2913,7 @@ function setMode(m) {
   if (m !== mode || !SHAPE_TOOLS.includes(m)) lineDraft = null;
   if (m !== 'link') linkDraft = null;
   mode = m; if (m !== 'place') placeType = null;
-  $('mSelect').setAttribute('aria-pressed', m === 'select'); $('mWire').setAttribute('aria-pressed', m === 'wire'); $('mText').setAttribute('aria-pressed', m === 'text'); $('mLine').setAttribute('aria-pressed', m === 'line'); $('mCircle').setAttribute('aria-pressed', m === 'circle'); $('mRect').setAttribute('aria-pressed', m === 'rect'); $('mLink').setAttribute('aria-pressed', m === 'link'); $('mCut').setAttribute('aria-pressed', m === 'cut'); $('mSnip').setAttribute('aria-pressed', m === 'snip'); $('bPlot').setAttribute('aria-pressed', m === 'plot');
+  $('mSelect').setAttribute('aria-pressed', m === 'select'); $('mWire').setAttribute('aria-pressed', m === 'wire'); $('mText').setAttribute('aria-pressed', m === 'text'); $('mLine').setAttribute('aria-pressed', m === 'line'); $('mEllipse').setAttribute('aria-pressed', m === 'ellipse'); $('mRect').setAttribute('aria-pressed', m === 'rect'); $('mLink').setAttribute('aria-pressed', m === 'link'); $('mCut').setAttribute('aria-pressed', m === 'cut'); $('mSnip').setAttribute('aria-pressed', m === 'snip'); $('bPlot').setAttribute('aria-pressed', m === 'plot');
   $('view').className = 'view mode-' + m; $('stMode').textContent = MODE_LABEL[m]; $('hint').innerHTML = HINT[m];
   renderLib(); renderOver(); updateButtons(); renderProps();
 }
@@ -2916,7 +2921,7 @@ $('mSelect').onclick = () => setMode('select');
 $('mWire').onclick = () => setMode('wire');
 $('mText').onclick = () => setMode('text');
 $('mLine').onclick = () => setMode(mode === 'line' ? 'select' : 'line');
-$('mCircle').onclick = () => setMode(mode === 'circle' ? 'select' : 'circle');
+$('mEllipse').onclick = () => setMode(mode === 'ellipse' ? 'select' : 'ellipse');
 $('mRect').onclick = () => setMode(mode === 'rect' ? 'select' : 'rect');
 $('mLink').onclick = () => setMode(mode === 'link' ? 'select' : 'link');
 $('mCut').onclick = () => setMode(mode === 'cut' ? 'select' : 'cut');
@@ -2964,7 +2969,7 @@ document.addEventListener('keydown', e => {
   if (k === '/' && linkDraft) { linkDraft.hv = !linkDraft.hv; renderOver(); return; }
   if (k === '/' && wireDraft) { wireDraft.hv = !wireDraft.hv; renderOver(); return; }
   if (k === 'enter' && wireDraft) { finishDraft(); return; }
-  if (k === 'v') setMode('select'); else if (k === 'w') setMode('wire'); else if (k === 't') setMode('text'); else if (k === 'l') setMode('line'); else if (k === 'o') setMode('circle'); else if (k === 'b') setMode('rect'); else if (k === 'j') setMode('link'); else if (k === 'c') setMode(mode === 'cut' ? 'select' : 'cut'); else if (k === 's') setMode(mode === 'snip' ? 'select' : 'snip');
+  if (k === 'v') setMode('select'); else if (k === 'w') setMode('wire'); else if (k === 't') setMode('text'); else if (k === 'l') setMode('line'); else if (k === 'o') setMode('ellipse'); else if (k === 'b') setMode('rect'); else if (k === 'j') setMode('link'); else if (k === 'c') setMode(mode === 'cut' ? 'select' : 'cut'); else if (k === 's') setMode(mode === 'snip' ? 'select' : 'snip');
   else if (k === 'r') rotateSel(); else if (k === 'x') flipSel('h'); else if (k === 'y') flipSel('v'); else if (k === 'f') (e.shiftKey ? fitDrawing() : fit());
   else if (k === 'g') $('bGrid').click(); else if (k === 'h') $('bHooks').click(); else if (k === 'k') $('bCam').click();
   else if (k === '+' || k === '=') zoomAt(null, 1.25); else if (k === '-') zoomAt(null, 0.8);
@@ -2978,7 +2983,7 @@ document.addEventListener('keyup', e => { if (e.key === ' ') spaceDown = false; 
 // Alt squares the rectangle being drawn: redraw the preview as it goes down or up, and keep the browser from taking focus to its menu
 ['keydown', 'keyup'].forEach(t => document.addEventListener(t, e => {
   if (e.key !== 'Alt') return; altDown = t === 'keydown';
-  if (lineDraft && lineDraft.shape === 'rect') { e.preventDefault(); renderOver(); }
+  if (lineDraft && (lineDraft.shape === 'rect' || lineDraft.shape === 'ellipse')) { e.preventDefault(); renderOver(); }
 }));
 
 /* ---- panel splitter ---- */

@@ -126,7 +126,7 @@ button, input, select, textarea { font: inherit; color: inherit; box-sizing: bor
 .tnode input { flex: 1; min-width: 0; padding: 1px 4px; border: 1px solid var(--accent); border-radius: 3px; background: var(--paper); color: var(--ink); font: inherit; }
 .tnode.stg { margin-top: 3px; }
 .tnode.snap { padding-left: 22px; font-size: 12.5px; }
-.tnode.snap .ct { margin-left: 4px; }
+.tnode.snap.cur { box-shadow: inset 3px 0 0 var(--accent); font-weight: 600; }
 .stg-now { font: 600 13px var(--font-ui); margin: 2px 0; }
 .row-btns button[aria-pressed="true"] { background: var(--accent); color: var(--accent-fg); border-color: transparent; }
 .row-btns button:disabled { opacity: .45; cursor: default; }
@@ -1477,7 +1477,7 @@ function blockXY(s, which, w, h) {
 const tbox = { };
 function frameSVG(s) {
   const [W, H] = sheetDims(s), d = project.doc, out = [];
-  const idx = project.sheets.indexOf(s) + 1, total = project.sheets.length;
+  const idx = schSheets().indexOf(s) + 1, total = schSheets().length;
   let ix0 = 25, iy0 = 25, ix1 = W - 25, iy1 = H - 25;
   if (s.border) {
     out.push(`<rect class="fr" x="25" y="25" width="${W - 50}" height="${H - 50}"/>`);
@@ -1568,88 +1568,112 @@ function exampleProject() {
 
 /* =====================================================================
    ANIMATION STAGE (Larry, 2026-11-08)
-   One per project: project.stage = { fade, trans, cur, snaps: [{ id, src, from, data }] }. The Snapshot button copies the sheet
-   being worked on (parts, wires, text, lines and shapes, links, its size) into data, at the end of the list. Going to the stage
-   shows a view-only sheet (stageSheet) built from one snapshot, with no border, revision chart or title block. Play starts at
-   snapshot 1; the right arrow moves on with a transition (fade or slide, fade seconds long) the first time a snapshot is reached
-   and jumps when going over ground already covered; the left arrow always jumps back. Stop ends playing.
+   The stage is a real, editable sheet (in project.sheets with stage: true; one per project) with no border, revision chart or
+   title block: parts are dropped and wired on it like any schematic. project.stage = { sheet, fade, trans, cur, snaps } holds
+   its settings and the snapshots: Snapshot copies the stage as it is now (parts, wires, text, shapes, links) into the list,
+   right after the current one. Picking a snapshot loads it onto the stage (undoable), so it can be changed and updated. Play
+   keeps the stage's own content aside and shows the snapshots read-only: the right arrow moves on with a transition (fade or
+   slide) the first time a snapshot is reached and jumps over ground already covered; the left arrow always jumps back. Stop
+   puts the stage back as it was.
    ===================================================================== */
-const STAGE_ID = 'stage';
 const onStage = () => !!(sheet && sheet.stage);
-let playing = null;        // { max: furthest snapshot reached } while playing
+const STAGE_ID = 'stage';  // confirm-delete key in the tree
+let playing = null;        // { max: furthest snapshot reached, cur: the snapshot picked before } while playing; sheet is then a stand-in copy of the stage
 let anim = null;           // { raf } while a transition runs
+const viewOnly = () => onStage() && !!playing;
 const STAGE_FADE = 2;      // seconds, Larry's default
-const snapData = s => JSON.parse(JSON.stringify({ size: s.size || 'A', orient: s.orient === 'P' ? 'P' : 'L', parts: s.parts, wires: s.wires, texts: s.texts, lines: linesOf(s), links: linksOf(s) }));
+const SNAP_KINDS = ['parts', 'wires', 'texts', 'lines', 'links'];
+const schSheets = () => project.sheets.filter(q => !q.stage);
+const stageSh = () => project.sheets.find(q => q.stage) || null;
+const snapData = s => JSON.parse(JSON.stringify({ parts: s.parts, wires: s.wires, texts: s.texts, lines: linesOf(s), links: linksOf(s) }));
+function putData(sh, d) { d = JSON.parse(JSON.stringify(d)); for (const k of SNAP_KINDS) sh[k] = Array.isArray(d[k]) ? d[k] : []; }
+function newStageSheet(like) { const s = newSheet('Animation Stage', like); return Object.assign(s, { stage: true, file: 'Animation Stage', border: false, revs: false, title: false }); }
+// on load: one stage sheet at most, settings in range, snapshots cleaned (older projects kept snapshots without a stage sheet)
 function cleanStage() {
-  const st = project.stage; if (!st) return;
-  if (typeof st !== 'object' || Array.isArray(st)) { delete project.stage; return; }
-  const arr = x => (Array.isArray(x) ? x : []), okPt = q => Array.isArray(q) && q.length === 2 && isFinite(q[0]) && isFinite(q[1]);
-  st.snaps = arr(st.snaps).filter(q => q && q.data && typeof q.data === 'object').map(q => ({ id: q.id || uid(), src: typeof q.src === 'string' ? q.src : null, from: typeof q.from === 'string' ? q.from : '',
-    data: { size: SIZES[q.data.size] ? q.data.size : 'A', orient: q.data.orient === 'P' ? 'P' : 'L', parts: arr(q.data.parts).filter(p => p && LIB[p.type] && isFinite(p.x) && isFinite(p.y)),
-      wires: arr(q.data.wires).filter(w => w && Array.isArray(w.pts) && w.pts.length > 1 && w.pts.every(okPt)), texts: arr(q.data.texts).filter(t => t && isFinite(t.x) && isFinite(t.y)),
-      lines: arr(q.data.lines).filter(l => l && okPt(l.a) && okPt(l.b)), links: arr(q.data.links).filter(k => k && Array.isArray(k.pts)) } }));
+  const st = project.stage, arr = x => (Array.isArray(x) ? x : []), okPt = q => Array.isArray(q) && q.length === 2 && isFinite(q[0]) && isFinite(q[1]);
+  let seen = false; for (const q of project.sheets) if (q.stage) { if (seen) delete q.stage; seen = true; }
+  if (!st || typeof st !== 'object' || Array.isArray(st)) { delete project.stage; for (const q of project.sheets) if (q.stage) delete q.stage; return; }
+  st.snaps = arr(st.snaps).filter(q => q && q.data && typeof q.data === 'object').map(q => ({ id: q.id || uid(),
+    data: { parts: arr(q.data.parts).filter(p => p && LIB[p.type] && isFinite(p.x) && isFinite(p.y)), wires: arr(q.data.wires).filter(w => w && Array.isArray(w.pts) && w.pts.length > 1 && w.pts.every(okPt)),
+      texts: arr(q.data.texts).filter(t => t && isFinite(t.x) && isFinite(t.y)), lines: arr(q.data.lines).filter(l => l && okPt(l.a) && okPt(l.b)), links: arr(q.data.links).filter(k => k && Array.isArray(k.pts)) } }));
   st.fade = Number.isFinite(+st.fade) && +st.fade >= 0.1 && +st.fade <= 10 ? +st.fade : STAGE_FADE;
   st.trans = st.trans === 'slide' ? 'slide' : 'fade';
   st.cur = Math.max(0, Math.min(Number.isInteger(st.cur) ? st.cur : 0, st.snaps.length - 1));
+  let sh = stageSh();
+  if (!sh) { sh = newStageSheet(project.sheets[0]); if (st.snaps.length) putData(sh, st.snaps[st.snaps.length - 1].data); project.sheets.push(sh); }
+  Object.assign(sh, { border: false, revs: false, title: false });
+  delete st.sheet; for (const k of Object.keys(st)) if (!['fade', 'trans', 'cur', 'snaps'].includes(k)) delete st[k];
 }
-// the paper is the biggest of the snapshots' sheets, so it doesn't change size between slides
-function stageDims() { let best = { size: 'A', orient: 'L' }, a = 0; for (const q of project.stage.snaps) { const [w, h] = sheetDims(q.data); if (w * h > a) { a = w * h; best = q.data; } } return { size: best.size, orient: best.orient }; }
-function stageSheet(i) {
-  const q = project.stage.snaps[i], d = q ? JSON.parse(JSON.stringify(q.data)) : { parts: [], wires: [], texts: [], lines: [], links: [] };
-  return Object.assign(d, { id: STAGE_ID, stage: true, name: 'Animation Stage', file: 'Animation Stage', border: false, revs: false, title: false, inst: [], tbPos: { c: 'BR' }, rvPos: { c: 'TR' } }, stageDims());
+function goStage() {
+  let sh = stageSh();
+  if (!sh) { snapshot(); project.stage = { fade: STAGE_FADE, trans: 'fade', cur: 0, snaps: [] }; sh = newStageSheet(onStage() ? null : sheet); project.sheets.push(sh); treeOpen = true; changed(); setMsg('Animation Stage added. Build on it like any sheet, and press Snapshot at each step.'); }
+  else if (onStage()) { setMsg('This is the Animation Stage. Press Snapshot to capture it as it is now.'); return; }
+  switchSheet(sh.id);
 }
-// frame the area every snapshot covers, so the view holds still from slide to slide
-function stageFit() {
-  const st = project.stage, all = { parts: [], wires: [], texts: [], lines: [], links: [] };
-  for (const q of st.snaps) for (const k of Object.keys(all)) all[k].push(...(q.data[k] || []));
-  const was = sheet; sheet = all; try { if (all.parts.length + all.wires.length + all.texts.length + all.lines.length) fitDrawing(); else { sheet = was; fit(); } } finally { sheet = was; }
-}
-function stopAnim() { if (anim) { cancelAnimationFrame(anim.raf); anim = null; render(); } }
-function enterStage(i) {
-  if (!project.stage) return;
-  const st = project.stage, wasOn = onStage();
-  if (anim) { cancelAnimationFrame(anim.raf); anim = null; }
-  if (i != null) st.cur = i; st.cur = Math.max(0, Math.min(st.cur || 0, st.snaps.length - 1));
-  if (mode !== 'select') setMode('select');
-  sheet = stageSheet(st.cur); sel.clear(); selLabel = null; wireDraft = null; lineDraft = null; linkDraft = null;
-  $('docSec').open = true; render(); if (!wasOn) stageFit();
-  setMsg(st.snaps.length ? `Snapshot ${st.cur + 1} of ${st.snaps.length}. ${playing ? '→ next, ← back.' : 'Press Play to present; ← and → step through the snapshots.'}` : 'The Animation Stage is empty. Go to a schematic sheet and press Snapshot to capture it.');
-}
-function showSnap(i) { const st = project.stage; st.cur = i; if (anim) { cancelAnimationFrame(anim.raf); anim = null; } sheet = stageSheet(i); render(); }
 function takeSnap() {
-  if (onStage()) { setMsg('Go to a schematic sheet first: a snapshot captures the sheet you are working on.'); return; }
-  snapshot(); const made = !project.stage;
-  if (made) project.stage = { fade: STAGE_FADE, trans: 'fade', cur: 0, snaps: [] };
-  project.stage.snaps.push({ id: uid(), src: sheet.id, from: sheet.file, data: snapData(sheet) });
-  treeOpen = true; renderSheets(); changed();
-  setMsg(`Snapshot ${project.stage.snaps.length} taken of ${sheet.file}.${made ? ' The Animation Stage was added to the project to hold it.' : ''}`);
+  const st = project.stage;
+  if (!onStage() || !st) { setMsg(st ? 'Snapshots capture the Animation Stage. Press the Animation Stage button to go there first.' : 'Press the Animation Stage button first: snapshots capture the Animation Stage.'); return; }
+  if (playing) { setMsg('Stop playing first, then take a snapshot.'); return; }
+  snapshot(); const at = st.snaps.length ? st.cur + 1 : 0;
+  st.snaps.splice(at, 0, { id: uid(), data: snapData(sheet) }); st.cur = at;
+  treeOpen = true; renderSheets(); renderDoc(); changed();
+  setMsg(`Snapshot ${at + 1} of ${st.snaps.length} taken.${at < st.snaps.length - 1 ? ' It went in after the snapshot you were on.' : ''}`);
+}
+// load snapshot i onto the stage, to look at or change it (undoable)
+function loadSnap(i) {
+  const st = project.stage; if (!st || !st.snaps[i]) return;
+  if (playing) stageStop();
+  if (!onStage()) switchSheet(stageSh().id);
+  snapshot(); putData(sheet, st.snaps[i].data); st.cur = i; sel.clear(); selLabel = null; render(); changed();
+  setMsg(`Snapshot ${i + 1} of ${st.snaps.length} is on the stage. Change it and press Update snapshot, or press Snapshot to add a new one after it.`);
 }
 function delSnap(i) {
   const st = project.stage; if (!st || !st.snaps[i]) return;
-  snapshot(); st.snaps.splice(i, 1); if (playing) playing.max = Math.min(playing.max, st.snaps.length - 1);
-  if (st.cur >= i && st.cur > 0) st.cur--;
-  if (onStage()) showSnap(Math.max(0, Math.min(st.cur, st.snaps.length - 1))); else renderSheets();
-  changed(); setMsg(`Snapshot ${i + 1} deleted. Ctrl+Z brings it back.`);
+  if (playing) stageStop();
+  snapshot(); st.snaps.splice(i, 1); if (st.cur >= i && st.cur > 0) st.cur--;
+  render(); changed(); setMsg(`Snapshot ${i + 1} deleted. Ctrl+Z brings it back.`);
 }
+function moveSnap(d) {
+  const st = project.stage, i = st.cur, j = i + d; if (j < 0 || j >= st.snaps.length) return;
+  snapshot(); [st.snaps[i], st.snaps[j]] = [st.snaps[j], st.snaps[i]]; st.cur = j; render(); changed(); setMsg(`Snapshot moved to place ${j + 1}.`);
+}
+// the area every snapshot (and the stage itself) covers, so the view holds still from slide to slide
+function stageFit() {
+  const all = { parts: [...sheet.parts], wires: [...sheet.wires], texts: [...sheet.texts], lines: [...linesOf(sheet)], links: [] };
+  for (const q of project.stage.snaps) for (const k of ['parts', 'wires', 'texts', 'lines']) all[k].push(...(q.data[k] || []));
+  const was = sheet; sheet = all; try { if (all.parts.length + all.wires.length + all.texts.length + all.lines.length) fitDrawing(); else { sheet = was; fit(); } } finally { sheet = was; }
+}
+function stopAnim() { if (anim) { cancelAnimationFrame(anim.raf); anim = null; render(); } }
+function showSnap(i) { if (anim) { cancelAnimationFrame(anim.raf); anim = null; } putData(sheet, project.stage.snaps[i].data); project.stage.cur = i; render(); }
 function stageGo(dir) {
   const st = project.stage, n = st.cur + dir;
-  if (!st.snaps.length) return;
   if (n < 0 || n >= st.snaps.length) { stopAnim(); setMsg(dir > 0 ? `Snapshot ${st.cur + 1} is the last one.` : 'This is the first snapshot.'); return; }
-  if (playing && dir > 0 && n > playing.max) { playing.max = n; animateTo(n); }   // new ground: transition
-  else showSnap(n);                                                              // back, or over ground already covered: jump
-  setMsg(`Snapshot ${n + 1} of ${st.snaps.length}${playing ? ' · playing' : ''}`);
+  if (dir > 0 && n > playing.max) { playing.max = n; animateTo(n); }   // new ground: transition
+  else showSnap(n);                                                    // back, or over ground already covered: jump
+  setMsg(`Snapshot ${n + 1} of ${st.snaps.length} · playing · Esc or Stop ends`);
 }
 function stagePlay() {
-  if (!project.stage || !project.stage.snaps.length) { setMsg('Take some snapshots first: go to a schematic sheet and press Snapshot.'); return; }
-  playing = { max: 0 }; if (!onStage()) enterStage(0); else showSnap(0);
-  setMsg(`Playing from snapshot 1 of ${project.stage.snaps.length}: → moves on, ← goes back. Stop or Esc ends.`);
+  const st = project.stage;
+  if (!st || !st.snaps.length) { setMsg('Take some snapshots first: build on the Animation Stage and press Snapshot at each step.'); return; }
+  if (!onStage()) switchSheet(stageSh().id);
+  if (playing) { showSnap(0); playing.max = 0; return; }
+  if (mode !== 'select') setMode('select');
+  wireDraft = null; lineDraft = null; linkDraft = null; sel.clear(); selLabel = null;
+  playing = { max: 0, cur: st.cur };
+  sheet = Object.assign({}, sheet, { parts: [], wires: [], texts: [], lines: [], links: [], inst: [] });   // a stand-in: the stage itself is never touched while playing, so saving stays safe
+  showSnap(0); stageFit();
+  setMsg(`Playing from snapshot 1 of ${st.snaps.length}: → moves on, ← goes back. Stop or Esc ends.`);
 }
-function stageStop() { if (!playing) return; playing = null; stopAnim(); renderDoc(); setMsg('Stopped.'); }
-function stageKey(e, k, mod) {
-  if (mod) return;
+function stageStop() {
+  if (!playing) return;
+  const p = playing; playing = null; if (anim) { cancelAnimationFrame(anim.raf); anim = null; }
+  const sh = stageSh(); if (project.stage) project.stage.cur = Math.max(0, Math.min(p.cur, project.stage.snaps.length - 1));
+  if (onStage()) { sheet = sh || schSheets()[0]; render(); } setMsg('Stopped. The stage is back as you left it.');
+}
+function stageKey(e, k) {
   if (k === 'arrowright' || k === 'pagedown') { e.preventDefault(); stageGo(1); }
   else if (k === 'arrowleft' || k === 'pageup') { e.preventDefault(); stageGo(-1); }
-  else if (k === 'escape') { if (playing) stageStop(); else if (anim) stopAnim(); }
+  else if (k === 'escape') stageStop();
   else if (k === 'f') stageFit();
   else if (k === '+' || k === '=') zoomAt(null, 1.25); else if (k === '-') zoomAt(null, 0.8);
   else if (k === 'g') $('bGrid').click(); else if (k === 'k') $('bCam').click();
@@ -1657,7 +1681,6 @@ function stageKey(e, k, mod) {
 // ---- transitions: compare the two snapshots item by item (by id). Unchanged items stay put; new ones come in, removed ones go out,
 // and changed ones fade from the old to the new. With Slide, a changed item that only moved (a part or text moved, a line or shape
 // moved or resized, a wire or link whose corners moved) glides there instead.
-const SNAP_KINDS = ['parts', 'wires', 'texts', 'lines', 'links'];
 const idOf = o => o.id || JSON.stringify(o);
 const without = (o, ks) => JSON.stringify(Object.assign({}, o, Object.fromEntries(ks.map(k => [k, 0]))));
 function canSlide(k, a, b) {
@@ -1675,8 +1698,10 @@ function between(k, a, b, t) {
 }
 const ease = t => (t < 0.5 ? 2 * t * t : 1 - (-2 * t + 2) ** 2 / 2);
 function animateTo(i) {
-  const st = project.stage, A = sheet, B = stageSheet(i), slide = st.trans === 'slide';
+  const st = project.stage, slide = st.trans === 'slide';
   if (anim) { cancelAnimationFrame(anim.raf); anim = null; }
+  const A = Object.assign({}, sheet, snapData(sheet));
+  putData(sheet, st.snaps[i].data); st.cur = i; const B = sheet;
   const blank = () => Object.assign({}, B, { parts: [], wires: [], texts: [], lines: [], links: [] });
   const S = blank(), O = blank(), I = blank(), mv = [];
   for (const k of SNAP_KINDS) {
@@ -1689,8 +1714,7 @@ function animateTo(i) {
   const SM = t => { const x = blank(); for (const k of SNAP_KINDS) x[k] = [...S[k]]; for (const m of mv) x[m.k].push(between(m.k, m.a, m.b, t)); return x; };
   const d0 = dotMap(SM(0)), d1 = dotMap(SM(1));
   const dO = [...dA].filter(([k]) => !d0.has(k)).map(x => x[1]).join(''), dI = [...dB].filter(([k]) => !d1.has(k)).map(x => x[1]).join('');
-  st.cur = i; sheet = B;
-  renderSheets(); renderDoc(); renderProps();
+  renderSheets(); renderDoc();
   const t0 = performance.now(), dur = Math.max(0.1, st.fade) * 1000;
   const frame = now => {
     const t = Math.min(1, (now - t0) / dur), e = ease(t), M = blank();
@@ -1705,38 +1729,34 @@ function animateTo(i) {
   anim = { raf: requestAnimationFrame(frame) };
 }
 function stagePanel(b) {
-  const st = project.stage, n = st.snaps.length, q = st.snaps[st.cur];
+  const st = project.stage || { fade: STAGE_FADE, trans: 'fade', cur: 0, snaps: [] }, n = st.snaps.length;
   $('docSize').textContent = `${n} snapshot${n === 1 ? '' : 's'}`;
   if (b.contains(document.activeElement) && document.activeElement.id === 'stFade') return;   // typing the fade length
-  const src = q && project.sheets.find(s => s.id === q.src);
+  const z = SIZES[sheet.size] || SIZES.A;
   b.innerHTML = `
+    <div class="row-btns"><button id="stPlay" aria-pressed="${!!playing}" ${n ? '' : 'disabled'} title="Start at snapshot 1; → moves on, ← goes back">▶ Play</button><button id="stStop" ${playing ? '' : 'disabled'} title="Stop playing (Esc) and put the stage back as it was">■ Stop</button></div>
     <div class="dnote">Transition</div>
     <div class="seg two" role="group" aria-label="Transition"><button data-tr="fade" aria-pressed="${st.trans !== 'slide'}" title="Changes fade from one snapshot to the next"><b>Fade</b></button><button data-tr="slide" aria-pressed="${st.trans === 'slide'}" title="Parts, text, shapes and wires that moved glide to their new places; everything else fades"><b>Slide</b></button></div>
     <div class="field"><label for="stFade">Fade length</label><input type="number" id="stFade" min="0.1" max="10" step="0.1" value="${st.fade}" title="Seconds the fade or slide takes"></div>
     <div class="dnote">seconds, for the fade or the slide</div>
-    <div class="row-btns"><button id="stPlay" aria-pressed="${!!playing}" ${n ? '' : 'disabled'} title="Start at snapshot 1; → moves on, ← goes back">▶ Play</button><button id="stStop" ${playing ? '' : 'disabled'} title="Stop playing (Esc)">■ Stop</button></div>
     <div class="stg-now">${n ? `Snapshot ${st.cur + 1} of ${n}` : 'No snapshots yet'}</div>
-    <div class="dnote">${q ? `Taken of ${esc(q.from || 'a sheet')}${src ? '' : ' (that sheet is gone)'}` : 'Go to a schematic sheet and press Snapshot to capture it.'}</div>
-    ${n ? `<div class="row-btns"><button id="stPrev" ${st.cur > 0 ? '' : 'disabled'} title="Previous snapshot (←)">◀</button><button id="stNext" ${st.cur < n - 1 ? '' : 'disabled'} title="Next snapshot (→)">▶</button><button id="stUp" ${st.cur > 0 ? '' : 'disabled'} title="Move this snapshot one place earlier">Move earlier</button><button id="stDown" ${st.cur < n - 1 ? '' : 'disabled'} title="Move this snapshot one place later">Move later</button></div>
-    <div class="row-btns"><button id="stRetake" ${src ? '' : 'disabled'} title="Replace this snapshot with ${esc(q.from || 'its sheet')} as it is now">Retake</button><button class="del" id="stDel">Delete snapshot</button></div>` : ''}`;
-  b.querySelectorAll('[data-tr]').forEach(x => x.onclick = () => { if (st.trans === x.dataset.tr) return; snapshot(); st.trans = x.dataset.tr; renderDoc(); changed(); setMsg(`Transition: ${x.dataset.tr}`); });
+    <div class="dnote">${playing ? '→ moves on, ← goes back. Stop or Esc ends.' : n ? 'Snapshot adds the stage as it is now, after this one. Pick a snapshot in the tree to load it onto the stage.' : 'Build on the stage, then press Snapshot (toolbar) at each step.'}</div>
+    ${n && !playing ? `<div class="row-btns"><button id="stUpd" title="Replace snapshot ${st.cur + 1} with the stage as it is now">Update snapshot</button><button class="del" id="stDel">Delete</button></div>
+    <div class="row-btns"><button id="stUp" ${st.cur > 0 ? '' : 'disabled'} title="Move this snapshot one place earlier">Move earlier</button><button id="stDown" ${st.cur < n - 1 ? '' : 'disabled'} title="Move this snapshot one place later">Move later</button></div>` : ''}
+    ${playing ? '' : `<div class="dnote">Stage size</div>
+    <div class="seg" role="group" aria-label="Stage size">${Object.entries(SIZES).map(([k, v]) => `<button data-size="${k}" aria-pressed="${sheet.size === k}" title="${v.name}${v.note ? ' (' + v.note + ')' : ''}"><b>${k}</b><small>${v.note || v.name.replace(' in', '')}</small></button>`).join('')}</div>
+    <div class="seg two" role="group" aria-label="Orientation"><button data-or="L" aria-pressed="${sheet.orient !== 'P'}"><b>Landscape</b></button><button data-or="P" aria-pressed="${sheet.orient === 'P'}"><b>Portrait</b></button></div>`}`;
+  b.querySelectorAll('[data-tr]').forEach(x => x.onclick = () => { if (!project.stage || st.trans === x.dataset.tr) return; snapshot(); st.trans = x.dataset.tr; renderDoc(); changed(); setMsg(`Transition: ${x.dataset.tr}`); });
+  b.querySelectorAll('[data-size]').forEach(x => x.onclick = () => { if (sheet.size === x.dataset.size) return; snapshot(); sheet.size = x.dataset.size; render(); fit(); changed(); });
+  b.querySelectorAll('[data-or]').forEach(x => x.onclick = () => { if ((sheet.orient || 'L') === x.dataset.or) return; snapshot(); sheet.orient = x.dataset.or; render(); fit(); changed(); });
   const fd = $('stFade'); fd.addEventListener('focus', () => snapshot(), { once: true });
-  fd.addEventListener('change', () => { const v = +fd.value; if (Number.isFinite(v) && v >= 0.1 && v <= 10) { st.fade = Math.round(v * 10) / 10; changed(); } fd.value = st.fade; });
+  fd.addEventListener('change', () => { const v = +fd.value; if (project.stage && Number.isFinite(v) && v >= 0.1 && v <= 10) { st.fade = Math.round(v * 10) / 10; changed(); } fd.value = st.fade; });
   fd.addEventListener('keydown', ev => { ev.stopPropagation(); if (ev.key === 'Enter') fd.blur(); });
   const on = (id, fn) => { const x = $(id); if (x) x.onclick = () => { fn(); x.blur(); }; };   // blur, so the arrow keys go to the stage
-  on('stPlay', stagePlay); on('stStop', stageStop); on('stPrev', () => stageGo(-1)); on('stNext', () => stageGo(1));
-  on('stUp', () => moveSnap(-1)); on('stDown', () => moveSnap(1)); on('stDel', () => delSnap(st.cur));
-  on('stRetake', () => { snapshot(); q.data = snapData(src); q.from = src.file; showSnap(st.cur); changed(); setMsg(`Snapshot ${st.cur + 1} retaken from ${src.file}.`); });
+  on('stPlay', stagePlay); on('stStop', stageStop); on('stUp', () => moveSnap(-1)); on('stDown', () => moveSnap(1)); on('stDel', () => delSnap(st.cur));
+  on('stUpd', () => { snapshot(); st.snaps[st.cur].data = snapData(sheet); renderSheets(); changed(); setMsg(`Snapshot ${st.cur + 1} updated to the stage as it is now.`); });
 }
-function moveSnap(d) {
-  const st = project.stage, i = st.cur, j = i + d; if (j < 0 || j >= st.snaps.length) return;
-  snapshot(); [st.snaps[i], st.snaps[j]] = [st.snaps[j], st.snaps[i]]; showSnap(j); changed(); setMsg(`Snapshot moved to place ${j + 1}.`);
-}
-$('bStage').onclick = () => {
-  if (onStage()) { setMsg('This is the Animation Stage.'); return; }
-  if (!project.stage) { snapshot(); project.stage = { fade: STAGE_FADE, trans: 'fade', cur: 0, snaps: [] }; treeOpen = true; changed(); }
-  enterStage();
-};
+$('bStage').onclick = goStage;
 $('bSnap').onclick = takeSnap;
 
 /* =====================================================================
@@ -2091,11 +2111,11 @@ function render() {
   renderSel(); renderHooks(); renderDoc(); applyView();
   $('stCount').textContent = `${sheet.parts.length} part${sheet.parts.length === 1 ? '' : 's'} · ${sheet.wires.length} wire${sheet.wires.length === 1 ? '' : 's'}`;
   $('bStage').setAttribute('aria-pressed', !!sheet.stage);
-  $('hint').innerHTML = sheet.stage ? '<b>Play</b> starts at snapshot 1 · <b>→</b> moves on, <b>←</b> goes back · <b>Esc</b> or <b>Stop</b> ends · wheel zooms · the stage is view-only' : HINT[mode];
+  $('hint').innerHTML = viewOnly() ? '<b>Play</b> starts at snapshot 1 · <b>→</b> moves on, <b>←</b> goes back · <b>Esc</b> or <b>Stop</b> ends · wheel zooms · the stage is view-only' : HINT[mode];
   renderSheets(); renderInst();
 }
 function renderHooks(cnt = connectivity()) {
-  if (!showHooks || onStage()) { $('layerHooks').innerHTML = ''; return; }
+  if (!showHooks || viewOnly()) { $('layerHooks').innerHTML = ''; return; }
   const hot = hoverHook ? key(hoverHook.pos) : '';
   $('layerHooks').innerHTML = allHooks().map(h => {
     if (plotCardAt(h.pos)) return '';   // covered by an Active Plot
@@ -2187,18 +2207,18 @@ const ICON_SNAP = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" st
 const ICON_SCH = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"><path d="M3 1.5h7l3 3v10H3z"/><path d="M5.5 10.5h1.5l1-2 1 3 .8-1.5h1.2"/></svg>';
 function renderSheets() {
   const el = $('sheets');
-  const rootName = renaming === 'root' ? `<input id="renameIn" value="${esc(project.name)}" aria-label="Project name">` : `<span class="nm">${esc(project.name)}</span><span class="ct">${project.sheets.length}</span>`;
-  const kids = project.sheets.map(s => {
+  const rootName = renaming === 'root' ? `<input id="renameIn" value="${esc(project.name)}" aria-label="Project name">` : `<span class="nm">${esc(project.name)}</span><span class="ct">${schSheets().length}</span>`;
+  const kids = schSheets().map(s => {
     if (confirmDel === s.id) return `<div class="confirm">Delete ${esc(s.file)}? <button class="yes" data-yes="${s.id}">Delete</button><button data-no="1">Keep</button></div>`;
-    const on = s.id === sheet.id && !sheet.stage ? ' on' : '';
+    const on = s.id === sheet.id ? ' on' : '';
     const name = renaming === s.id ? `<input id="renameIn" value="${esc(s.file)}" aria-label="File name">`
       : `<span class="nm">${esc(s.file)}</span><span class="ct" title="${SIZES[s.size || 'A'].name}, ${s.orient === 'P' ? 'portrait' : 'landscape'}">${s.size || 'A'}${s.orient === 'P' ? '·P' : '·L'}</span>`;
-    return `<div class="tnode${on}" role="treeitem" aria-selected="${!!on}" data-sheet="${s.id}" title="${esc(s.name)} · double-click to rename the file">${ICON_SCH}${name}${project.sheets.length > 1 && renaming !== s.id ? `<button class="x" data-del="${s.id}" title="Delete this schematic" aria-label="Delete ${esc(s.file)}">×</button>` : ''}</div>`;
+    return `<div class="tnode${on}" role="treeitem" aria-selected="${!!on}" data-sheet="${s.id}" title="${esc(s.name)} · double-click to rename the file">${ICON_SCH}${name}${schSheets().length > 1 && renaming !== s.id ? `<button class="x" data-del="${s.id}" title="Delete this schematic" aria-label="Delete ${esc(s.file)}">×</button>` : ''}</div>`;
   }).join('');
-  const st = project.stage;
-  const stg = !st ? '' : confirmDel === STAGE_ID ? `<div class="confirm">Delete the Animation Stage and its ${st.snaps.length} snapshot${st.snaps.length === 1 ? '' : 's'}? <button class="yes" data-yes="${STAGE_ID}">Delete</button><button data-no="1">Keep</button></div>`
-    : `<div class="tnode stg${sheet.stage ? ' on' : ''}" role="treeitem" data-stage="1" title="Animation Stage: ${st.snaps.length} snapshot${st.snaps.length === 1 ? '' : 's'}">${ICON_STAGE}<span class="nm">Animation Stage</span><span class="ct">${st.snaps.length}</span><button class="x" data-del="${STAGE_ID}" title="Delete the Animation Stage" aria-label="Delete the Animation Stage">×</button></div>`
-      + st.snaps.map((q, i) => `<div class="tnode snap${sheet.stage && st.cur === i ? ' on' : ''}" role="treeitem" data-snap="${i}" title="Snapshot ${i + 1}, taken of ${esc(q.from || 'a sheet')}">${ICON_SNAP}<span class="nm">Snapshot ${i + 1}</span><button class="x" data-delsnap="${i}" title="Delete this snapshot" aria-label="Delete snapshot ${i + 1}">×</button></div>`).join('');
+  const st = project.stage, ss = stageSh();
+  const stg = !st || !ss ? '' : confirmDel === STAGE_ID ? `<div class="confirm">Delete the Animation Stage and its ${st.snaps.length} snapshot${st.snaps.length === 1 ? '' : 's'}? <button class="yes" data-yes="${STAGE_ID}">Delete</button><button data-no="1">Keep</button></div>`
+    : `<div class="tnode stg${sheet.id === ss.id ? ' on' : ''}" role="treeitem" data-sheet="${ss.id}" title="Animation Stage: build on it like any sheet; ${st.snaps.length} snapshot${st.snaps.length === 1 ? '' : 's'}">${ICON_STAGE}<span class="nm">Animation Stage</span><span class="ct">${st.snaps.length}</span><button class="x" data-del="${STAGE_ID}" title="Delete the Animation Stage" aria-label="Delete the Animation Stage">×</button></div>`
+      + st.snaps.map((q, i) => `<div class="tnode snap${st.cur === i ? ' cur' : ''}" role="treeitem" data-snap="${i}" title="Snapshot ${i + 1}: click to load it onto the stage">${ICON_SNAP}<span class="nm">Snapshot ${i + 1}</span><button class="x" data-delsnap="${i}" title="Delete this snapshot" aria-label="Delete snapshot ${i + 1}">×</button></div>`).join('');
   el.innerHTML = `<div class="tnode root" role="treeitem" aria-expanded="${treeOpen}" data-root="1" title="Double-click to rename the project"><button class="car${treeOpen ? ' open' : ''}" data-tog="1" aria-label="${treeOpen ? 'Collapse' : 'Expand'}">▶</button>${ICON_PROJ}${rootName}</div>`
     + (treeOpen ? `<div class="tkids" role="group">${kids}${stg}</div>` : '');
   el.tabIndex = 0;
@@ -2223,12 +2243,11 @@ function renderSheets() {
 $('sheets').addEventListener('click', e => {
   const t = e.target.closest('[data-del],[data-delsnap],[data-yes],[data-no],[data-sheet],[data-tog],[data-stage],[data-snap]'); if (!t) return;
   if (t.dataset.delsnap) { delSnap(+t.dataset.delsnap); e.stopPropagation(); return; }
-  if (t.dataset.yes === STAGE_ID) { snapshot(); delete project.stage; confirmDel = null; playing = null; if (sheet.stage) switchSheet(project.active); else renderSheets(); changed(); setMsg('Animation Stage deleted. Ctrl+Z brings it back.'); return; }
-  if (t.dataset.stage) { enterStage(); return; }
-  if (t.dataset.snap) { enterStage(+t.dataset.snap); return; }
+  if (t.dataset.yes === STAGE_ID) { if (playing) stageStop(); snapshot(); const was = onStage(); delete project.stage; project.sheets = schSheets(); confirmDel = null; if (was) switchSheet(project.sheets[0].id); else renderSheets(); changed(); setMsg('Animation Stage deleted. Ctrl+Z brings it back.'); return; }
+  if (t.dataset.snap) { loadSnap(+t.dataset.snap); return; }
   if (t.dataset.tog) { treeOpen = !treeOpen; renderSheets(); return; }
   if (t.dataset.del) { confirmDel = t.dataset.del; renderSheets(); e.stopPropagation(); return; }
-  if (t.dataset.yes) { snapshot(); project.sheets = project.sheets.filter(q => q.id !== t.dataset.yes); confirmDel = null; switchSheet(project.sheets[0].id); changed(); return; }
+  if (t.dataset.yes) { snapshot(); project.sheets = project.sheets.filter(q => q.id !== t.dataset.yes); confirmDel = null; switchSheet(schSheets()[0].id); changed(); return; }
   if (t.dataset.no) { confirmDel = null; renderSheets(); return; }
   if (t.dataset.sheet && t.dataset.sheet !== sheet.id) switchSheet(t.dataset.sheet);
 });
@@ -2239,7 +2258,7 @@ $('sheets').addEventListener('dblclick', e => {
 });
 $('sheets').addEventListener('keydown', e => {
   if (e.target.matches('input')) return;
-  if (onStage() && /^Arrow/.test(e.key)) return;   // on the stage the arrow keys step through the snapshots
+  if (viewOnly() && /^Arrow/.test(e.key)) return;   // while playing, the arrow keys step through the snapshots
   const i = project.sheets.indexOf(sheet);
   if (e.key === 'ArrowDown' && i < project.sheets.length - 1) { e.preventDefault(); switchSheet(project.sheets[i + 1].id); }
   else if (e.key === 'ArrowUp' && i > 0) { e.preventDefault(); switchSheet(project.sheets[i - 1].id); }
@@ -2250,12 +2269,12 @@ $('sheets').addEventListener('keydown', e => {
 });
 $('bAddSheet').onclick = () => {
   snapshot(); treeOpen = true;
-  let n = project.sheets.length + 1, f; const used = new Set(project.sheets.map(q => q.file));
+  let n = schSheets().length + 1, f; const used = new Set(project.sheets.map(q => q.file));
   do { f = `sheet-${n++}.sch`; } while (used.has(f));
-  const s = newSheet('Sheet ' + (project.sheets.length + 1), sheet); s.file = f;
-  project.sheets.push(s); switchSheet(s.id); renaming = s.id; renderSheets(); changed();
+  const s = newSheet('Sheet ' + (schSheets().length + 1), onStage() ? schSheets()[0] : sheet); s.file = f;
+  const si = project.sheets.findIndex(q => q.stage); if (si >= 0) project.sheets.splice(si, 0, s); else project.sheets.push(s);   // the stage stays last switchSheet(s.id); renaming = s.id; renderSheets(); changed();
 };
-function switchSheet(id) { if (anim) { cancelAnimationFrame(anim.raf); anim = null; } playing = null; sheet = project.sheets.find(s => s.id === id) || project.sheets[0]; project.active = sheet.id; sel.clear(); wireDraft = null; render(); fit(); }
+function switchSheet(id) { if (playing) stageStop(); sheet = project.sheets.find(s => s.id === id) || project.sheets[0]; project.active = sheet.id; sel.clear(); wireDraft = null; render(); fit(); }
 
 let docFocus = null;
 function cornerPick(which, label) {
@@ -2295,7 +2314,7 @@ function renderDoc() {
     ${f('dDrawn', 'Drawn by', d.drawnBy)}
     ${f('dChk', 'Checked by', d.checkedBy)}
     ${f('dAppr', 'Approved by', d.approvedBy)}
-    <div class="dnote">Sheet ${project.sheets.indexOf(sheet) + 1} of ${project.sheets.length}, numbered in tree order.</div>
+    <div class="dnote">Sheet ${schSheets().indexOf(sheet) + 1} of ${schSheets().length}, numbered in tree order.</div>
     <div class="dsub">Revisions</div>
     <div class="revs" id="dRevList">
       <div class="revrow head"><span>Rev</span><span>Description</span><span>Date</span><span>Appr.</span><span></span></div>
@@ -2409,7 +2428,7 @@ function renderProps() {
   const sig = mode + '|' + items.map(i => i.k + ':' + i.o.id).join(',') + '|' + (selLabel ? selLabel.id + selLabel.field : '');
   if (sig === propsSig && b.contains(document.activeElement) && document.activeElement.matches('input, textarea, select, [contenteditable]')) return;
   propsSig = sig;
-  if (onStage()) { const st = project.stage, q = st && st.snaps[st.cur]; b.innerHTML = `<div class="what">Animation Stage<small>${q ? `snapshot ${st.cur + 1} of ${st.snaps.length} · taken of ${esc(q.from || 'a sheet')}` : 'no snapshots yet'}</small></div><div class="empty">The stage is for viewing and playing. Make changes on a schematic sheet, then take a new snapshot or retake this one.</div>`; return; }
+  if (viewOnly()) { const st = project.stage; b.innerHTML = `<div class="what">Playing<small>snapshot ${st.cur + 1} of ${st.snaps.length}</small></div><div class="empty">→ moves on, ← goes back. Stop or Esc ends and puts the stage back as you left it.</div>`; return; }
   if (!items.length && SHAPE_TOOLS.includes(mode)) {
     b.innerHTML = `<div class="what">${SHAPE_NAME[mode]} tool<small>${mode === 'arrow' ? 'line and fill for new arrows' : 'pen for new lines, ellipses and rectangles'}</small></div>
       ${mode === 'arrow' ? arrowStyleField(pen.astyle, 'pArrStyle') : ''}${penFields(pen.color, pen.w, pen.dash)}${mode === 'rect' || mode === 'ellipse' ? fillFields(pen.fill, pen.fillA) : mode === 'arrow' ? fillFields(pen.afill, pen.afillA) : ''}
@@ -2534,9 +2553,9 @@ function selItems() {
   return r;
 }
 function snapshot() { undoStack.push(projJSON()); if (undoStack.length > 150) undoStack.shift(); redoStack = []; updateButtons(); }
-function restore(json) { const act = sheet && sheet.id; project = JSON.parse(json); project.images = IMG; sheet = project.sheets.find(s => s.id === act) || project.sheets[0]; if (act === STAGE_ID && project.stage) { project.stage.cur = Math.max(0, Math.min(project.stage.cur || 0, project.stage.snaps.length - 1)); sheet = stageSheet(project.stage.cur); } else if (act === STAGE_ID) playing = null; sel.clear(); render(); changed(); }
-function undo() { if (!undoStack.length) return; redoStack.push(projJSON()); restore(undoStack.pop()); setMsg('Undone'); }
-function redo() { if (!redoStack.length) return; undoStack.push(projJSON()); restore(redoStack.pop()); setMsg('Redone'); }
+function restore(json) { const act = sheet && sheet.id; project = JSON.parse(json); project.images = IMG; sheet = project.sheets.find(s => s.id === act) || project.sheets[0]; sel.clear(); render(); changed(); }
+function undo() { if (playing) return; if (!undoStack.length) return; redoStack.push(projJSON()); restore(undoStack.pop()); setMsg('Undone'); }
+function redo() { if (playing) return; if (!redoStack.length) return; undoStack.push(projJSON()); restore(redoStack.pop()); setMsg('Redone'); }
 function updateButtons() {
   $('bUndo').disabled = !undoStack.length; $('bRedo').disabled = !redoStack.length;
   const any = sel.size > 0;
@@ -2739,7 +2758,7 @@ svg.addEventListener('pointerdown', e => {
   if (e.button !== 2) closeMenu();
   if (editing) finishEdit(true);
   if (e.button === 1 || (e.button === 0 && spaceDown)) { panning = { sx: e.clientX, sy: e.clientY, vx: view.x, vy: view.y }; $('view').classList.add('panning'); return; }
-  if (onStage()) return;   // the stage is view-only: pan and zoom only
+  if (viewOnly()) return;   // while playing: pan and zoom only
   if (e.button === 2) { if (mode === 'plot') { setMode('select'); return; } if (mode === 'link') { if (linkDraft) { linkDraft = null; renderOver(); } else setMode('select'); return; } if (SHAPE_TOOLS.includes(mode)) { if (lineDraft) { lineDraft = null; renderOver(); } else setMode('select'); return; } if (mode === 'wire' && wireDraft) finishDraft(); else if (mode === 'place') setMode('select'); else if (mode === 'select') partMenu(e, raw); return; }
   const dbl = e.button === 0 && isDouble(e);
   if (dbl && (mode === 'select' || (mode === 'wire' && wireDraft))) { e.preventDefault(); if (drag) drag = null; onDouble(raw); return; }
@@ -3290,7 +3309,7 @@ const HINT = {
   place: '<b>Click</b> to drop the part · <b>R</b> rotate · <b>X</b> flip H · <b>Y</b> flip V · <b>Esc</b> stop placing',
 };
 function setMode(m) {
-  if (onStage() && m !== 'select') { setMsg('The Animation Stage is for viewing. Go to a schematic sheet to draw or edit.'); return; }
+  if (viewOnly() && m !== 'select') { setMsg('Stop playing first to edit the stage.'); return; }
   if (mode === 'wire' && m !== 'wire' && wireDraft) finishDraft();
   if (m !== mode || !SHAPE_TOOLS.includes(m)) lineDraft = null;
   if (m !== 'link') linkDraft = null;
@@ -3327,7 +3346,7 @@ document.addEventListener('keydown', e => {
   if (k === ' ' && linkDraft) { e.preventDefault(); if (!e.repeat) { linkDraft.hv = !linkDraft.hv; renderOver(); } return; }
   if (k === ' ' && wireDraft) { e.preventDefault(); if (!e.repeat) { wireDraft.hv = !wireDraft.hv; renderOver(); setMsg(wireDraft.hv ? 'Corner: horizontal first, then vertical' : 'Corner: vertical first, then horizontal'); } return; }
   if (k === ' ') { if (!e.target.closest('button')) { spaceDown = true; e.preventDefault(); } return; }
-  if (onStage() && !(mod && (k === 'z' || k === 'y' || k === 's'))) { stageKey(e, k, mod); return; }
+  if (viewOnly() && !(mod && k === 's')) { if (!mod) stageKey(e, k); return; }
   if (mod && k === 'z') { e.preventDefault(); e.shiftKey ? redo() : undo(); return; }
   if (mod && k === 'y') { e.preventDefault(); redo(); return; }
   if (mod && k === 's') { e.preventDefault(); saveNow(); return; }
@@ -3414,6 +3433,7 @@ function loadProject(p, msg) {
   if (!project.id) project.id = uid(); if (typeof project.name !== 'string' || !project.name) project.name = 'Untitled project';
   project.doc = Object.assign(docDefaults(), project.doc || {}); if (!Array.isArray(project.doc.revisions)) project.doc.revisions = [];
   IMG = project.images && typeof project.images === 'object' && !Array.isArray(project.images) ? project.images : {}; project.images = IMG;
+  cleanStage();   // before the sheets are cleaned, so a stage sheet it adds is cleaned too
   const instSeen = new Set();            // each instrument (V1, S2, AWG1…) lives on one sheet only
   for (const s of project.sheets) {
     const okPt = q => Array.isArray(q) && q.length === 2 && isFinite(q[0]) && isFinite(q[1]);
@@ -3422,7 +3442,7 @@ function loadProject(p, msg) {
     s.texts = (Array.isArray(s.texts) ? s.texts : []).filter(t => t && isFinite(t.x) && isFinite(t.y)).map(t => Object.assign({ text: '', size: 12, tone: 'ink' }, t));
     { const seen = instSeen; s.inst = (Array.isArray(s.inst) ? s.inst : []).filter(x => x && INSTR_ALL.includes(x.k) && Number.isFinite(+x.x) && Number.isFinite(+x.y) && !seen.has(x.k) && seen.add(x.k)).map(x => Object.assign({ k: x.k, x: +x.x, y: +x.y }, typeof x.name === 'string' && x.name.trim() ? { name: x.name.trim().slice(0, 40) } : {})); }
     s.lines = (Array.isArray(s.lines) ? s.lines : []).filter(l => l && okPt(l.a) && okPt(l.b)).map(l => Object.assign({ id: uid() }, l));
-    if (s === project.sheets[project.sheets.length - 1]) { cleanStage(); const used = new Set([...project.sheets, ...(project.stage ? project.stage.snaps.map(q => q.data) : [])].flatMap(q => (q.lines || []).filter(isImage).map(l => l.img))); for (const k of Object.keys(IMG)) if (!used.has(k) || typeof IMG[k] !== 'string') delete IMG[k]; }   // forget pictures no sheet uses
+    if (s === project.sheets[project.sheets.length - 1]) { const used = new Set([...project.sheets, ...(project.stage ? project.stage.snaps.map(q => q.data) : [])].flatMap(q => (q.lines || []).filter(isImage).map(l => l.img))); for (const k of Object.keys(IMG)) if (!used.has(k) || typeof IMG[k] !== 'string') delete IMG[k]; }   // forget pictures no sheet uses
     const sid = x => typeof x === 'string' && x ? x : null;
     s.links = (Array.isArray(s.links) ? s.links : []).filter(k => k && (sid(k.a) || sid(k.ta)) && (sid(k.b) || sid(k.tb))).map(k => ({ id: k.id || uid(), a: sid(k.a), b: sid(k.b), ...(sid(k.ta) && !sid(k.a) ? { ta: k.ta } : {}), ...(sid(k.tb) && !sid(k.b) ? { tb: k.tb } : {}), ...(k.v === 2 ? { v: 2 } : {}), pts: (Array.isArray(k.pts) ? k.pts : []).filter(okPt).map(q => [+q[0], +q[1]]) }));
     if (!s.id) s.id = uid(); if (typeof s.name !== 'string') s.name = 'Sheet';
@@ -3442,9 +3462,9 @@ function loadProject(p, msg) {
     }
     sheet = was;
   }
-  if (!project.sheets.length) project.sheets = [newSheet('Sheet 1')];
-  cleanStage(); playing = null; if (anim) { cancelAnimationFrame(anim.raf); anim = null; }
-  sheet = project.sheets.find(s => s.id === project.active) || project.sheets[0];
+  if (!schSheets().length) project.sheets.unshift(newSheet('Sheet 1'));
+  playing = null; if (anim) { cancelAnimationFrame(anim.raf); anim = null; }
+  sheet = project.sheets.find(s => s.id === project.active) || schSheets()[0];
   undoStack = []; redoStack = []; sel.clear(); wireDraft = null;
   render(); fit(); if (msg) setMsg(msg);
 }
@@ -3718,7 +3738,7 @@ function instMenu(btn) {
   menuEl.onclick = ev => { const b = ev.target.closest('[data-ik]'); if (!b || b.disabled) return; ev.stopPropagation(); closeMenu(); addInst(b.dataset.ik); };
 }
 function addInst(k) {
-  if (onStage()) { setMsg('Instruments go on schematic sheets, not on the Animation Stage.'); return; }
+  if (viewOnly()) { setMsg('Stop playing first.'); return; }
   if (instWhere(k)) return;
   const vr = $('view').getBoundingClientRect(), n = instOf(sheet).length;
   snapshot(); instOf(sheet).push({ k, x: Math.round(vr.width / 2 - 140 + (n % 6) * 30), y: 24 + (n % 6) * 30 });
@@ -3890,7 +3910,7 @@ function readImage(file) {
   });
 }
 async function addImages(files, at) {
-  if (onStage()) { setMsg('Go to a schematic sheet to add pictures; the Animation Stage is for viewing.'); return; }
+  if (viewOnly()) { setMsg('Stop playing first.'); return; }
   const pics = files.filter(f => /^image\//.test(f.type) || /\.(png|jpe?g|gif|bmp|webp|svg)$/i.test(f.name));
   if (!pics.length) { if (files.length) setMsg('That is not a picture file.'); return; }
   const vr = $('view').getBoundingClientRect(), c = at || [(vr.width / 2 - view.x) / view.z, (vr.height / 2 - view.y) / view.z];
@@ -3907,7 +3927,7 @@ async function addImages(files, at) {
   setMode('select'); render(); changed();
   setMsg(added.length === 1 ? `${added[0].name} added. Drag it to move it, drag its corner to resize (Alt keeps proportions).` : `${added.length} pictures added.`);
 }
-$('bImg').onclick = () => { if (onStage()) { setMsg('Go to a schematic sheet to add pictures; the Animation Stage is for viewing.'); return; } $('imgFile').click(); };
+$('bImg').onclick = () => { if (viewOnly()) { setMsg('Stop playing first.'); return; } $('imgFile').click(); };
 $('imgFile').onchange = () => { const fs = [...$('imgFile').files]; $('imgFile').value = ''; addImages(fs); };
 $('view').addEventListener('dragover', e => { if (!e.target.closest('.pdfw') && [...(e.dataTransfer?.types || [])].includes('Files')) { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; } });
 $('view').addEventListener('drop', e => {
@@ -3918,7 +3938,7 @@ $('view').addEventListener('drop', e => {
 window.addEventListener('resize', pdfPlace);
 // Active Plot: click the button, then click the canvas to drop it, or drag from the button and let go over the canvas
 function placePlot(p) {
-  if (onStage()) return;
+  if (viewOnly()) return;
   snapshot(); const l = { id: uid(), ...plotAt(p) }; linesOf(sheet).push(l);
   sel.clear(); sel.add(l.id); setMode('select'); render(); changed();
   setMsg('Active Plot added. Drag it to move it, drag its corner to resize, Delete removes it.');

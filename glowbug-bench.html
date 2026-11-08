@@ -537,6 +537,10 @@ button, input, select, textarea { font: inherit; color: inherit; box-sizing: bor
     <button class="tool" id="mArrow" title="Draw an arrow (A): click one end, then the other; the arrow points toward the second click. Rotate (R), flip (X, Y), and set its line and fill colors. Drawing only, for pointing things out." aria-label="Arrow" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"><path d="M3.5 9.5h9.5V5.5l7.5 6.5-7.5 6.5v-4H3.5z" fill="currentColor" fill-opacity=".22"/></svg><span class="k">A</span></button>
     <button class="tool" id="mMesh" title="Mesh current (M): click the loop's center, then a point to set its width, then one to set its height. Dotted and thin to start; set the gap, its position and the direction in Properties." aria-label="Mesh current" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M5.6 17.4A8.4 8.4 0 1 1 18.4 17.8" stroke-dasharray="0.1 2.9" stroke-width="2.3"/><path d="M20.9 14.6l-1.2 5.4-5.2-2.1z" fill="currentColor" stroke="none"/></svg><span class="k">M</span></button>
     <hr>
+    <button class="tool" id="mQ0" data-q="0" title="DC quantity: capital symbol, capital subscript (VA, the DC value). Click the sheet to place it, then type the symbol and subscript in Properties." aria-label="VA quantity label" aria-pressed="false"><svg viewBox="0 0 24 24" fill="currentColor" stroke="none"><text x="3" y="16" style="font-family:'Libre Franklin',Arial,sans-serif;font-size:14px">V</text><text x="12.5" y="20" style="font-family:'Libre Franklin',Arial,sans-serif;font-size:9.5px">A</text></svg></button>
+    <button class="tool" id="mQ1" data-q="1" title="Quantity: capital symbol, lowercase subscript (Va, the AC amplitude or rms value). Click the sheet to place it, then type the symbol and subscript in Properties." aria-label="Va quantity label" aria-pressed="false"><svg viewBox="0 0 24 24" fill="currentColor" stroke="none"><text x="3" y="16" style="font-family:'Libre Franklin',Arial,sans-serif;font-size:14px">V</text><text x="12.5" y="20" style="font-family:Georgia,'Times New Roman',serif;font-style:italic;font-size:9.5px">a</text></svg></button>
+    <button class="tool" id="mQ2" data-q="2" title="Quantity: lowercase symbol, capital subscript (vA, the total instantaneous value). Click the sheet to place it, then type the symbol and subscript in Properties." aria-label="vA quantity label" aria-pressed="false"><svg viewBox="0 0 24 24" fill="currentColor" stroke="none"><text x="3" y="16" style="font-family:Georgia,'Times New Roman',serif;font-style:italic;font-size:15px">v</text><text x="10.8" y="20" style="font-family:'Libre Franklin',Arial,sans-serif;font-size:9.5px">A</text></svg></button>
+    <button class="tool" id="mQ3" data-q="3" title="AC quantity: lowercase symbol, lowercase subscript (va, the AC part). Click the sheet to place it, then type the symbol and subscript in Properties." aria-label="va quantity label" aria-pressed="false"><svg viewBox="0 0 24 24" fill="currentColor" stroke="none"><text x="3" y="16" style="font-family:Georgia,'Times New Roman',serif;font-style:italic;font-size:15px">v</text><text x="10.8" y="20" style="font-family:Georgia,'Times New Roman',serif;font-style:italic;font-size:9.5px">a</text></svg></button>
   </nav>
 
   <footer class="status">
@@ -1878,12 +1882,21 @@ function pinSVG(p) {
 function labelSVG(p) {
   return labelLines(p).map(l => `<text class="lbl${l.field === 'ref' ? ' ref' : ''}" x="${l.x}" y="${l.y}" text-anchor="${l.a}"${editing && editing.p === p && editing.field === l.field ? ' visibility="hidden"' : ''}>${esc(l.field === 'ref' ? refText(p) : p[l.field] || '')}</text>`).join('');
 }
+// Quantity labels (Larry, 2026-11-08): a symbol with a subscript, for DC and AC voltages and currents (V_A, V_a, v_A, v_a). A text item
+// with t.sub set; t.text is the symbol. Lowercase letters are set in italic Georgia, everything else upright in the app's sans, so
+// the four textbook forms come out right whatever is typed. The subscript is 62% size, dropped by 28% of the size.
+const QTY_PRESETS = [['V', 'A'], ['V', 'a'], ['v', 'A'], ['v', 'a']];
+const isQty = t => t && t.sub != null;
+const QSERIF = "font-family:Georgia,'Times New Roman',serif;font-style:italic", QSANS = "font-family:'Libre Franklin',Arial,sans-serif;font-style:normal";
+const qRuns = (str, extra = '') => (String(str).match(/\p{Ll}+|[^\p{Ll}]+/gu) || []).map((r, i) => `<tspan style="${/\p{Ll}/u.test(r) ? QSERIF : QSANS}"${i === 0 ? extra : ''}>${esc(r)}</tspan>`).join('');
 function textSVG(t) {
+  const fill = t.tone === 'glow' ? '#9A5210' : t.tone === 'muted' ? '#5C5248' : t.tone === 'blue' ? '#1F4E8C' : t.tone === 'red' ? '#A3241B' : 'var(--ink)';
+  if (isQty(t)) { const ss = +(t.size * 0.62).toFixed(2); return `<text class="stxt" x="${t.x}" y="${t.y}" font-size="${t.size}" style="fill:${fill}">${qRuns(t.text || ' ')}${t.sub ? `<tspan font-size="${ss}" dy="${+(t.size * 0.28).toFixed(2)}">${qRuns(t.sub, ` dx="${+(t.size * 0.04).toFixed(2)}"`)}</tspan>` : ''}</text>`; }
   const lines = String(t.text).split('\n');
-  const fill = t.tone === 'glow' ? '#9A5210' : t.tone === 'muted' ? '#5C5248' : 'var(--ink)';
   return `<text class="stxt" x="${t.x}" y="${t.y}" font-size="${t.size}" style="fill:${fill}">${lines.map((l, i) => `<tspan x="${t.x}" dy="${i ? t.size * 1.25 : 0}">${esc(l) || ' '}</tspan>`).join('')}</text>`;
 }
 function textBB(t) {
+  if (isQty(t)) { const w = (String(t.text).length * 0.62 + String(t.sub).length * 0.62 * 0.62) * t.size + t.size * 0.08; return [t.x - 2, t.y - t.size * 0.95, t.x + Math.max(w, 8) + 2, t.y + t.size * 0.5]; }
   const lines = String(t.text).split('\n'), w = Math.max(...lines.map(l => l.length)) * t.size * 0.52;
   return [t.x - 2, t.y - t.size, t.x + Math.max(w, 8) + 2, t.y + (lines.length - 1) * t.size * 1.25 + t.size * 0.3];
 }
@@ -2636,10 +2649,24 @@ function renderProps() {
       <div class="row-btns"><button class="del" data-act="del">Delete</button></div>`;
   } else {
     const t = it.o;
+    if (isQty(t)) {
+      const tones = [['ink', 'Ink'], ['blue', 'Blue'], ['red', 'Red'], ['glow', 'Glow (callouts)'], ['muted', 'Muted']];
+      b.innerHTML = `<div class="what">Quantity label<small>symbol with subscript · lowercase letters in italic</small></div>
+        <div class="field"><label for="tQ">Symbol</label><input id="tQ" type="text" value="${esc(t.text)}" autocomplete="off"></div>
+        <div class="field"><label for="tSub">Subscript</label><input id="tSub" type="text" value="${esc(t.sub)}" autocomplete="off"></div>
+        <div class="field"><label for="tSize">Size</label><select id="tSize">${[...new Set([9, 10, 11, 12, 14, 15, 18, 24, 30, 36, 48, 60, 72, 96, 120, +t.size || 18])].sort((a, b) => a - b).map(sz => `<option${sz === t.size ? ' selected' : ''}>${sz}</option>`).join('')}</select></div>
+        <div class="field"><label for="tTone">Color</label><select id="tTone">${tones.map(([v, n]) => `<option value="${v}"${(t.tone || 'ink') === v ? ' selected' : ''}>${n}</option>`).join('')}</select></div>
+        <div class="empty">Uppercase symbol and subscript for DC (V<sub>A</sub>), lowercase for AC (v<sub>a</sub>); mixed for the total (v<sub>A</sub>) or the AC amplitude (V<sub>a</sub>). Lowercase letters are set in italic.</div>
+        <div class="row-btns"><button data-act="dup">Duplicate</button><button class="del" data-act="del">Delete</button></div>`;
+      for (const [id, k] of [['tQ', 'text'], ['tSub', 'sub']]) { const el = $(id); el.addEventListener('focus', () => snapshot(), { once: true }); el.addEventListener('input', () => { t[k] = el.value; render(); changedSoon(); }); el.addEventListener('keydown', e => { e.stopPropagation(); if (e.key === 'Enter') el.blur(); }); }
+      $('tSize').onchange = e => { snapshot(); t.size = +e.target.value; render(); changed(); };
+      $('tTone').onchange = e => { snapshot(); t.tone = e.target.value; render(); changed(); };
+      return;
+    }
     b.innerHTML = `<div class="what">Text</div>
       <div class="field"><label for="tTxt">Text</label><textarea id="tTxt" rows="2">${esc(t.text)}</textarea></div>
       <div class="field"><label for="tSize">Size</label><select id="tSize">${[...new Set([9, 10, 11, 12, 14, 15, 18, 24, 30, 36, 48, 60, 72, 96, 120, +t.size || 12])].sort((a, b) => a - b).map(s => `<option${s === t.size ? ' selected' : ''}>${s}</option>`).join('')}</select></div>
-      <div class="field"><label for="tTone">Color</label><select id="tTone"><option value="ink"${t.tone === 'ink' ? ' selected' : ''}>Ink</option><option value="glow"${t.tone === 'glow' ? ' selected' : ''}>Glow (callouts)</option><option value="muted"${t.tone === 'muted' ? ' selected' : ''}>Muted</option></select></div>
+      <div class="field"><label for="tTone">Color</label><select id="tTone"><option value="ink"${t.tone === 'ink' ? ' selected' : ''}>Ink</option><option value="glow"${t.tone === 'glow' ? ' selected' : ''}>Glow (callouts)</option><option value="muted"${t.tone === 'muted' ? ' selected' : ''}>Muted</option><option value="blue"${t.tone === 'blue' ? ' selected' : ''}>Blue</option><option value="red"${t.tone === 'red' ? ' selected' : ''}>Red</option></select></div>
       <div class="row-btns"><button data-act="dup">Duplicate</button><button class="del" data-act="del">Delete</button></div>`;
     const ta = $('tTxt'); ta.addEventListener('focus', () => snapshot(), { once: true });
     ta.addEventListener('input', () => { t.text = ta.value; render(); changedSoon(); }); ta.addEventListener('keydown', e => e.stopPropagation());
@@ -2899,6 +2926,7 @@ svg.addEventListener('pointerdown', e => {
   if (mode === 'place') { placePart(p); return; }
   if (mode === 'plot') { placePlot(p); return; }
   if (mode === 'text') { addText(p); return; }
+  if (mode === 'qty') { addQty(p); return; }
   if (SHAPE_TOOLS.includes(mode)) { lineClick(p); return; }
   if (mode === 'link') { linkClick(raw, p); return; }
   if (mode === 'cut' || mode === 'snip') { cutAt(raw, mode === 'snip'); return; }
@@ -3037,7 +3065,7 @@ function onDouble(raw) {
   if (t.k === 'pin') { editPin(t.o, t.pin); return; }
   if (t.k === 'label') { editInPlace(t.o, t.field); return; }
   if (t.k === 'part') { partDialog(t.o); return; }
-  if (t.k === 'text') { const f = $('tTxt'); if (f) { f.focus(); f.select(); } }
+  if (t.k === 'text') { const f = $('tTxt') || $('tQ'); if (f) { f.focus(); f.select(); } }
 }
 function blockAt(p) {
   const inBox = b => b && p[0] >= b[0] && p[0] <= b[2] && p[1] >= b[1] && p[1] <= b[3];
@@ -3411,6 +3439,14 @@ function lineClick(p) {
   snapshot(); const l = { id: uid(), a: [...a], b: [...p] }; if (sh) l.shape = sh; if (pen.color !== 'ink') l.color = pen.color; if (pen.w !== 1.4) l.w = pen.w; if (pen.dash !== 'solid') l.dash = pen.dash; if (sh && pen.fill && fcol(pen.fill)) { l.fill = pen.fill; if (pen.fillA !== 1) l.fillA = pen.fillA; } linesOf(sheet).push(l);
   render(); renderOver(); changed(); setMsg(`${isRound(l) ? 'Circle' : SHAPE_NAME[sh || 'line']} added. Click to start another, or press V to select.`);
 }
+let qtyPreset = 0;
+function addQty(p) {
+  const [m, sb] = QTY_PRESETS[qtyPreset] || QTY_PRESETS[0];
+  snapshot(); const t = { id: uid(), x: p[0], y: p[1], text: m, sub: sb, size: 18, tone: 'ink' };
+  sheet.texts.push(t); sel.clear(); sel.add(t.id); setMode('select'); render(); changed();
+  setTimeout(() => { const f = $('tQ'); if (f) { f.focus(); f.select(); } }, 0);
+  setMsg('Quantity label placed. Type the symbol and subscript in Properties (lowercase letters come out italic). Drag it into place.');
+}
 function addText(p) {
   snapshot(); const t = { id: uid(), x: p[0], y: p[1], text: 'Text', size: 12, tone: 'ink' };
   sheet.texts.push(t); sel.clear(); sel.add(t.id); setMode('select'); render(); changed();
@@ -3450,11 +3486,12 @@ function finishDraft() {
 /* =====================================================================
    MODES, KEYS, TOOLBAR
    ===================================================================== */
-const MODE_LABEL = { select: 'Select', wire: 'Wire', text: 'Text', line: 'Line', arrow: 'Arrow', mesh: 'Mesh current', ellipse: 'Ellipse', rect: 'Rectangle', link: 'Link', place: 'Place', plot: 'Active Plot', cut: 'Cut', snip: 'Snip' };
+const MODE_LABEL = { select: 'Select', wire: 'Wire', text: 'Text', qty: 'Quantity label', line: 'Line', arrow: 'Arrow', mesh: 'Mesh current', ellipse: 'Ellipse', rect: 'Rectangle', link: 'Link', place: 'Place', plot: 'Active Plot', cut: 'Cut', snip: 'Snip' };
 const HINT = {
   select: '<b>Drag</b> to move · <b>Click a hook</b> to wire · <b>Double-click</b> a part or its label to edit · <b>Right-click</b> to rotate, flip or delete · wheel zooms, Shift+wheel pans up/down, Alt+wheel pans left/right',
   wire: '<b>Click</b> to add corners · end on a <b>hook</b> or wire · <b>Space</b> flips the corner · <b>Backspace</b> removes the last corner · <b>Esc</b> cancels',
   text: '<b>Click</b> on the sheet to add text',
+  qty: '<b>Click</b> on the sheet to place a quantity label (symbol with subscript) · type its symbol and subscript in Properties · <b>Esc</b> stops',
   link: '<b>Click</b> an adjustable control to start · <b>click</b> to add corners · end on another <b>control</b> · <b>Space</b> flips the corner · <b>Backspace</b> removes the last corner · <b>Esc</b> cancels',
   ellipse: '<b>Click</b> one corner, then <b>click</b> the opposite corner · hold <b>Alt</b> for a circle · drawing only, not a wire · <b>Esc</b> or right-click cancels',
   rect: '<b>Click</b> one corner, then <b>click</b> the opposite corner · hold <b>Alt</b> for a square · drawing only, not a wire · <b>Esc</b> or right-click cancels',
@@ -3472,7 +3509,7 @@ function setMode(m) {
   if (m !== mode || !SHAPE_TOOLS.includes(m)) lineDraft = null;
   if (m !== 'link') linkDraft = null;
   mode = m; if (m !== 'place') placeType = null;
-  $('mSelect').setAttribute('aria-pressed', m === 'select'); $('mWire').setAttribute('aria-pressed', m === 'wire'); $('mText').setAttribute('aria-pressed', m === 'text'); $('mLine').setAttribute('aria-pressed', m === 'line'); $('mArrow').setAttribute('aria-pressed', m === 'arrow'); $('mMesh').setAttribute('aria-pressed', m === 'mesh'); $('mEllipse').setAttribute('aria-pressed', m === 'ellipse'); $('mRect').setAttribute('aria-pressed', m === 'rect'); $('mLink').setAttribute('aria-pressed', m === 'link'); $('mCut').setAttribute('aria-pressed', m === 'cut'); $('mSnip').setAttribute('aria-pressed', m === 'snip'); $('bPlot').setAttribute('aria-pressed', m === 'plot');
+  $('mSelect').setAttribute('aria-pressed', m === 'select'); $('mWire').setAttribute('aria-pressed', m === 'wire'); $('mText').setAttribute('aria-pressed', m === 'text'); for (let n = 0; n < 4; n++) $('mQ' + n).setAttribute('aria-pressed', m === 'qty' && qtyPreset === n); $('mLine').setAttribute('aria-pressed', m === 'line'); $('mArrow').setAttribute('aria-pressed', m === 'arrow'); $('mMesh').setAttribute('aria-pressed', m === 'mesh'); $('mEllipse').setAttribute('aria-pressed', m === 'ellipse'); $('mRect').setAttribute('aria-pressed', m === 'rect'); $('mLink').setAttribute('aria-pressed', m === 'link'); $('mCut').setAttribute('aria-pressed', m === 'cut'); $('mSnip').setAttribute('aria-pressed', m === 'snip'); $('bPlot').setAttribute('aria-pressed', m === 'plot');
   $('view').className = 'view mode-' + m; $('stMode').textContent = MODE_LABEL[m]; $('hint').innerHTML = HINT[m];
   renderLib(); renderOver(); updateButtons(); renderProps();
 }
@@ -3482,6 +3519,7 @@ $('mText').onclick = () => setMode('text');
 $('mLine').onclick = () => setMode(mode === 'line' ? 'select' : 'line');
 $('mArrow').onclick = () => setMode(mode === 'arrow' ? 'select' : 'arrow');
 $('mMesh').onclick = () => setMode(mode === 'mesh' ? 'select' : 'mesh');
+for (let n = 0; n < 4; n++) $('mQ' + n).onclick = () => { if (mode === 'qty' && qtyPreset === n) { setMode('select'); return; } qtyPreset = n; setMode('qty'); };
 $('mEllipse').onclick = () => setMode(mode === 'ellipse' ? 'select' : 'ellipse');
 $('mRect').onclick = () => setMode(mode === 'rect' ? 'select' : 'rect');
 $('mLink').onclick = () => setMode(mode === 'link' ? 'select' : 'link');

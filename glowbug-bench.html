@@ -434,6 +434,7 @@ button, input, select, textarea { font: inherit; color: inherit; box-sizing: bor
     <button class="tb" id="bBulb" title="Incandescent bulb"><svg viewBox="0 0 24 24" style="width:24px;height:26px" stroke-linecap="round" stroke-linejoin="round"><path d="M8.6 16.4c0-2.6-3.4-4.2-3.4-7.8a6.8 6.8 0 0 1 13.6 0c0 3.6-3.4 5.2-3.4 7.8z" fill="#FFF1B8" stroke="#6E6A64" stroke-width="1"/><path d="M10.2 16.4V11.4M13.8 16.4V11.4M10.2 11.4l0.9-1.4 0.9 1.4 0.9-1.4 0.9 1.4" fill="none" stroke="#C2571A" stroke-width="0.9"/><path d="M8.6 16.4h6.8v4.6h-6.8z" fill="#B9B4AC" stroke="#5A5550" stroke-width="0.9"/><path d="M8.6 17.9h6.8M8.6 19.5h6.8" fill="none" stroke="#5A5550" stroke-width="0.8"/><path d="M10.4 21h3.2l-0.8 1.8h-1.6z" fill="#3E3934"/><path d="M7.6 6.2a4.6 4.6 0 0 1 2.6-2.4" fill="none" stroke="#FFFFFF" stroke-width="1.1"/></svg></button>
     <span class="sep"></span>
     <button class="tb" id="bPdf" title="Datasheet viewer (PDF)" aria-pressed="false"><svg viewBox="0 0 24 24" style="width:24px;height:26px" stroke-linejoin="round"><path d="M5 1.8h9.4l4.8 4.8v15.6H5z" fill="#FFFFFF" stroke="#5A5550" stroke-width="1.1"/><path d="M14.4 1.8v4.8h4.8" fill="#E6E0D6" stroke="#5A5550" stroke-width="1.1"/><path d="M7.6 9.6h7.8M7.6 12h9M7.6 19.8h9" fill="none" stroke="#B9B4AC" stroke-width="1"/><rect x="2.6" y="13.6" width="13.4" height="6.2" rx="1" fill="#C42A20"/><text x="9.3" y="18.6" text-anchor="middle" style="font:800 5.2px system-ui,Arial,sans-serif;fill:#FFFFFF;letter-spacing:.2px">PDF</text></svg></button>
+    <button class="tb" id="bImg" title="Add a picture (PNG, JPEG, GIF, BMP, WebP, SVG)"><svg viewBox="0 0 24 24" style="width:26px;height:26px" stroke-linejoin="round"><rect x="2.5" y="4" width="19" height="16" rx="1.6" fill="#FFFFFF" stroke="#5A5550" stroke-width="1.2"/><rect x="4.4" y="5.9" width="15.2" height="12.2" fill="#CFE3F2"/><path d="M4.4 18.1l4.6-6.4 3.3 4.2 2.4-2.8 4.9 5z" fill="#2E6B34"/><path d="M4.4 18.1l4.6-6.4 2.2 2.8-3.2 3.6z" fill="#3F8A48"/><circle cx="15.8" cy="9.4" r="1.9" fill="#E8B23A"/></svg></button><input type="file" id="imgFile" accept="image/*" multiple hidden>
     <span class="tb-spacer"></span>
     <button class="tb" id="bImport" title="Open a .json project file"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15V3M7 10l5 5 5-5M4 15v5h16v-5"/></svg><span class="lb">Import</span></button>
     <button class="tb" id="bExport" title="Export the sheet" aria-haspopup="menu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12M7 8l5-5 5 5M4 15v5h16v-5"/></svg><span class="lb">Export</span></button>
@@ -481,6 +482,7 @@ button, input, select, textarea { font: inherit; color: inherit; box-sizing: bor
         <rect id="paper" style="fill:var(--paper)"/>
         <rect id="gridRect" fill="url(#gMajor)"/>
         <g id="layerFrame"></g>
+        <g id="layerImages" filter="url(#inkShadow)"></g>
         <g id="layerFills"></g>
         <g id="layerParts" filter="url(#inkShadow)"></g>
         <g id="layerWires" filter="url(#inkShadow)"></g>
@@ -1588,7 +1590,7 @@ const wstyle = w => w.color && w.color !== 'ink' ? ` style="stroke:${wcol(w.colo
 let lineDraft = null;               // { a: [x, y] } while a line is being drawn
 // Circle and Rectangle tools (Larry, under Line) make the same kind of drawing-only item, with l.shape set: a circle is
 // its center a and a point b on the edge (radius |b - a|); a rectangle is two opposite corners a and b. Unset = line.
-const SHAPE_TOOLS = ['line', 'ellipse', 'rect'], SHAPE_NAME = { line: 'Line', circle: 'Circle', ellipse: 'Ellipse', rect: 'Rectangle', plot: 'Active Plot' };
+const SHAPE_TOOLS = ['line', 'ellipse', 'rect'], SHAPE_NAME = { line: 'Line', circle: 'Circle', ellipse: 'Ellipse', rect: 'Rectangle', plot: 'Active Plot', image: 'Picture' };
 // Ellipse tool (Larry, 2026-11-07; it replaced the Circle tool): l.shape 'ellipse' with a and b opposite corners of its box, like a rectangle;
 // Alt makes the box square, so a circle. Circles drawn earlier (shape 'circle': center a, edge point b) still load and draw as before.
 const isRound = l => shapeOfL(l) === 'ellipse' && Math.abs(l.b[0] - l.a[0]) === Math.abs(l.b[1] - l.a[1]);
@@ -1599,6 +1601,18 @@ const isRound = l => shapeOfL(l) === 'ellipse' && Math.abs(l.b[0] - l.a[0]) === 
 const PLOT_DIV = 20, PLOT_STEP = 40, PLOT_MIN = [160, 120], PLOT_DEF = [320, 240], PLOT_TB = 20;   // MIN / DEF are the plot area; PLOT_TB is the title bar on top
 // Only the title bar grabs the plot (select, drag, right-click, cut); the plot area below it is kept free for cursors and probing.
 const isPlot = l => l && l.shape === 'plot';
+// Pictures (Larry, 2026-11-07): l.shape 'image', a = top-left, b = bottom-right, l.img an id in IMG, l.ar the picture's own
+// width / height, l.name its file name. The picture data lives once per project in project.images (= IMG), kept out of the undo
+// snapshots so 150 undo steps don't hold 150 copies of every photo. Drawn under the parts in layerImages.
+const isImage = l => l && l.shape === 'image';
+const noPen = l => isPlot(l) || isImage(l);      // cards and pictures: no pen, no wire colors
+let IMG = {};
+const projJSON = () => JSON.stringify(project, (k, v) => (k === 'images' && v === IMG ? undefined : v));
+function imageSVG(l) {
+  const [x0, y0, x1, y1] = lineBB(l), src = IMG[l.img];
+  if (!src) return `<g><rect x="${x0}" y="${y0}" width="${x1 - x0}" height="${y1 - y0}" style="fill:#F2EEE8;stroke:#B4B4B4;stroke-dasharray:4 3"/><text x="${(x0 + x1) / 2}" y="${(y0 + y1) / 2 + 4}" style="font:12px system-ui,sans-serif;fill:#6E6A64;text-anchor:middle">picture missing</text></g>`;
+  return `<image href="${src}" x="${x0}" y="${y0}" width="${x1 - x0}" height="${y1 - y0}" preserveAspectRatio="none"/>`;
+}
 const plotFrame = l => { const x0 = Math.min(l.a[0], l.b[0]), y0 = Math.min(l.a[1], l.b[1]); return [x0, y0, x0 + Math.max(PLOT_MIN[0], Math.abs(l.b[0] - l.a[0])), y0 + Math.max(PLOT_MIN[1] + PLOT_TB, Math.abs(l.b[1] - l.a[1]))]; };
 const plotArea = l => { const f = plotFrame(l); return [f[0], f[1] + PLOT_TB, f[2], f[3]]; };
 // the topmost Active Plot card under raw (title bar or area)
@@ -1630,8 +1644,8 @@ function plotSVG(l) {
 const plotSize = (a, raw) => [a[0] + Math.max(PLOT_MIN[0], Math.round((raw[0] - a[0]) / PLOT_STEP) * PLOT_STEP), a[1] + PLOT_TB + Math.max(PLOT_MIN[1], Math.round((raw[1] - a[1] - PLOT_TB) / PLOT_STEP) * PLOT_STEP)];
 const plotAt = c => { const a = [snap(c[0] - PLOT_DEF[0] / 2), snap(c[1] - PLOT_TB / 2)]; return { a, b: [a[0] + PLOT_DEF[0], a[1] + PLOT_TB + PLOT_DEF[1]], shape: 'plot' }; };   // the cursor holds the title bar
 // the resize handle sits on the bottom-right corner of a plot when it is the only thing selected
-const plotHandleOf = () => { if (sel.size !== 1) return null; const l = linesOf(sheet).find(x => sel.has(x.id)); return isPlot(l) ? l : null; };
-function plotHandleAt(raw) { const l = plotHandleOf(); if (!l) return null; const f = plotFrame(l), tol = 7 / view.z; return Math.abs(raw[0] - f[2]) <= tol && Math.abs(raw[1] - f[3]) <= tol ? l : null; }
+const plotHandleOf = () => { if (sel.size !== 1) return null; const l = linesOf(sheet).find(x => sel.has(x.id)); return isPlot(l) || isImage(l) ? l : null; };   // plots and pictures resize from the corner
+function plotHandleAt(raw) { const l = plotHandleOf(); if (!l) return null; const f = isPlot(l) ? plotFrame(l) : lineBB(l), tol = 7 / view.z; return Math.abs(raw[0] - f[2]) <= tol && Math.abs(raw[1] - f[3]) <= tol ? l : null; }
 const shapeOfL = l => l.shape || 'line';
 const radOf = l => Math.hypot(l.b[0] - l.a[0], l.b[1] - l.a[1]);
 // the outline as one SVG element: attrs is a class or an inline style
@@ -1639,7 +1653,7 @@ function lineEl(l, attrs) {
   const sh = shapeOfL(l);
   if (sh === 'circle') return `<circle cx="${l.a[0]}" cy="${l.a[1]}" r="${+radOf(l).toFixed(2)}" ${attrs}/>`;
   if (sh === 'ellipse') { const [x0, y0, x1, y1] = lineBB(l); return `<ellipse cx="${(x0 + x1) / 2}" cy="${(y0 + y1) / 2}" rx="${(x1 - x0) / 2}" ry="${(y1 - y0) / 2}" ${attrs}/>`; }
-  if (sh === 'rect' || sh === 'plot') { const [x0, y0, x1, y1] = lineBB(l); return `<rect x="${x0}" y="${y0}" width="${x1 - x0}" height="${y1 - y0}" ${attrs}/>`; }
+  if (sh === 'rect' || sh === 'plot' || sh === 'image') { const [x0, y0, x1, y1] = lineBB(l); return `<rect x="${x0}" y="${y0}" width="${x1 - x0}" height="${y1 - y0}" ${attrs}/>`; }
   return `<line x1="${l.a[0]}" y1="${l.a[1]}" x2="${l.b[0]}" y2="${l.b[1]}" ${attrs}/>`;
 }
 // Pen for lines, circles and rectangles (Larry): color, width (l.w) and line style (l.dash). The Properties panel shows the
@@ -1670,7 +1684,7 @@ let pen = (q => ({ color: typeof q.color === 'string' ? q.color : 'ink',   // wc
   w: PEN_W.some(x => x[0] === q.w) ? q.w : 1.4, dash: PEN_DASH.some(x => x[0] === q.dash) ? q.dash : 'solid',
   fill: typeof q.fill === 'string' ? q.fill : '', fillA: FILL_ALPHA.some(x => x[0] === q.fillA) ? q.fillA : 1 }))(lsGet('gs.pen', {}) || {});
 const savePen = () => lsSet('gs.pen', pen);
-const lineSVG = l => { if (isPlot(l)) return plotSVG(l); const w = l.w || 1.4, d = penDash(l.dash, w); return lineEl(l, `style="stroke:${wcol(l.color || 'ink')};stroke-width:${w};stroke-linecap:round;stroke-linejoin:round;fill:none${d ? `;stroke-dasharray:${d}` : ''}"`); };
+const lineSVG = l => { if (isPlot(l)) return plotSVG(l); if (isImage(l)) return imageSVG(l); const w = l.w || 1.4, d = penDash(l.dash, w); return lineEl(l, `style="stroke:${wcol(l.color || 'ink')};stroke-width:${w};stroke-linecap:round;stroke-linejoin:round;fill:none${d ? `;stroke-dasharray:${d}` : ''}"`); };
 // the pen fields for the Properties panel: color swatches, pen size and line style
 const penFields = (color, w, dash) => `<div class="field"><label>Color</label>${swatchRow(color)}</div>
       <div class="field"><label for="pPenW">Pen size</label><select id="pPenW">${PEN_W.map(([v, n]) => `<option value="${v}"${v === w ? ' selected' : ''}>${n} (${v} px)</option>`).join('')}</select></div>
@@ -1679,11 +1693,12 @@ const lineBB = l => { if (isPlot(l)) return plotFrame(l); if (shapeOfL(l) === 'c
 // distance from p to the drawn outline (hit testing)
 function lineDist(p, l) {
   const sh = shapeOfL(l);
+  if (sh === 'image') { const [x0, y0, x1, y1] = lineBB(l); if (p[0] >= x0 && p[0] <= x1 && p[1] >= y0 && p[1] <= y1) return 0; }   // a picture is picked anywhere on it
   if (canFill(l) && fcol(l.fill)) { const inside = sh === 'circle' ? Math.hypot(p[0] - l.a[0], p[1] - l.a[1]) <= radOf(l) : sh === 'ellipse' ? (() => { const [x0, y0, x1, y1] = lineBB(l), rx = (x1 - x0) / 2, ry = (y1 - y0) / 2; return rx > 0 && ry > 0 && ((p[0] - x0 - rx) / rx) ** 2 + ((p[1] - y0 - ry) / ry) ** 2 <= 1; })() : (([x0, y0, x1, y1]) => p[0] >= x0 && p[0] <= x1 && p[1] >= y0 && p[1] <= y1)(lineBB(l)); if (inside) return 0; }   // filled: pick anywhere inside
   if (sh === 'circle') return Math.abs(Math.hypot(p[0] - l.a[0], p[1] - l.a[1]) - radOf(l));
   if (sh === 'ellipse') { const [x0, y0, x1, y1] = lineBB(l), rx = Math.max((x1 - x0) / 2, 0.01), ry = Math.max((y1 - y0) / 2, 0.01), u = (p[0] - (x0 + x1) / 2) / rx, v = (p[1] - (y0 + y1) / 2) / ry; return Math.abs(Math.hypot(u, v) - 1) * Math.min(rx, ry); }   // close enough for picking
   if (sh === 'plot') { const [x0, y0, x1] = plotFrame(l); return p[0] >= x0 && p[0] <= x1 && p[1] >= y0 && p[1] <= y0 + PLOT_TB ? 0 : Infinity; }
-  if (sh === 'rect' || sh === 'plot') { const [x0, y0, x1, y1] = lineBB(l), c = [[x0, y0], [x1, y0], [x1, y1], [x0, y1]]; return Math.min(...c.map((q, i) => distSeg(p, q, c[(i + 1) % 4]))); }
+  if (sh === 'rect' || sh === 'plot' || sh === 'image') { const [x0, y0, x1, y1] = lineBB(l), c = [[x0, y0], [x1, y0], [x1, y1], [x0, y1]]; return Math.min(...c.map((q, i) => distSeg(p, q, c[(i + 1) % 4]))); }
   return distSeg(p, l.a, l.b);
 }
 const linesOf = sh => sh.lines || (sh.lines = []);
@@ -1761,7 +1776,7 @@ function pruneLinks() {
 let drawColor = 'ink';
 const swatchRow = cur => `<div class="swatches" role="group" aria-label="Wire color">${WIRE_COLORS.map(c => `<button class="sw" data-wc="${c.k}" title="${c.name}" aria-label="${c.name}" aria-pressed="${c.k === cur}" style="background:${c.c}"></button>`).join('')}</div>`;
 function colorWires(k) {   // recolor the selected wires
-  const ws = selItems().filter(i => i.k === 'wire' || (i.k === 'line' && !isPlot(i.o))).map(i => i.o); if (!ws.length) return false;
+  const ws = selItems().filter(i => i.k === 'wire' || (i.k === 'line' && !noPen(i.o))).map(i => i.o); if (!ws.length) return false;
   snapshot(); for (const w of ws) { if (k === 'ink') delete w.color; else w.color = k; }
   render(); changed(); setMsg(`${ws.length === 1 ? (selItems().some(i => i.k === 'line') ? 'Line' : 'Wire') : ws.length + ' items'} set to ${WIRE_COLORS.find(c => c.k === k).name.split(' ')[0].toLowerCase()}`); return true;
 }
@@ -1769,7 +1784,8 @@ function colorWires(k) {   // recolor the selected wires
 function render() {
   pruneLinks(); syncLinks();
   $('layerFrame').innerHTML = frameSVG(sheet);
-  $('layerFills').innerHTML = linesOf(sheet).filter(l => !isPlot(l)).map(fillSVG).join('');
+  $('layerImages').innerHTML = linesOf(sheet).filter(isImage).map(imageSVG).join('');   // pictures sit under everything else drawn on the sheet
+  $('layerFills').innerHTML = linesOf(sheet).filter(l => !noPen(l)).map(fillSVG).join('');
   $('layerParts').innerHTML = sheet.parts.map(p => partSVG(p) + labelSVG(p) + pinSVG(p)).join('');
   const cnt = connectivity();
   let ws = sheet.wires.map(w => `<polyline class="wire"${wstyle(w)} points="${w.pts.map(p => p.join(',')).join(' ')}"/>`).join('');
@@ -1779,7 +1795,7 @@ function render() {
   const dotColor = k => { const w = sheet.wires.find(w => w.color && w.pts.some(q => key(q) === k)); return w ? ` style="fill:${wcol(w.color)}"` : ''; };
   ws += [...dots].map(k => { const [x, y] = k.split(','); return `<circle class="jdot"${dotColor(k)} cx="${x}" cy="${y}" r="3"/>`; }).join('');
   $('layerPlots').innerHTML = linesOf(sheet).filter(isPlot).map(lineSVG).join('');   // Active Plots sit above all schematic content (Larry: nothing bleeds through)
-  $('layerWires').innerHTML = linesOf(sheet).filter(l => !isPlot(l)).map(lineSVG).join('') + ws + linksOf(sheet).map(k => { const e = linkEnds(k); return e ? linkSVG(e) + [[k.ta, e[0]], [k.tb, e[e.length - 1]]].filter(x => x[0]).map(x => `<circle cx="${x[1][0]}" cy="${x[1][1]}" r="2.4" style="fill:${LINK_COL}"/>`).join('') : ''; }).join('');
+  $('layerWires').innerHTML = linesOf(sheet).filter(l => !noPen(l)).map(lineSVG).join('') + ws + linksOf(sheet).map(k => { const e = linkEnds(k); return e ? linkSVG(e) + [[k.ta, e[0]], [k.tb, e[e.length - 1]]].filter(x => x[0]).map(x => `<circle cx="${x[1][0]}" cy="${x[1][1]}" r="2.4" style="fill:${LINK_COL}"/>`).join('') : ''; }).join('');
   $('layerText').innerHTML = sheet.texts.map(textSVG).join('');
   renderSel(); renderHooks(cnt); renderDoc(); applyView();
   $('stCount').textContent = `${sheet.parts.length} part${sheet.parts.length === 1 ? '' : 's'} · ${sheet.wires.length} wire${sheet.wires.length === 1 ? '' : 's'}`;
@@ -1801,7 +1817,7 @@ function renderSel() {
   for (const w of sheet.wires) if (sel.has(w.id)) s += `<polyline class="selwire" points="${w.pts.map(p => p.join(',')).join(' ')}"/>`;
   for (const t of sheet.texts) if (sel.has(t.id)) { const b = textBB(t); s += `<rect class="selbox" x="${b[0] - 2}" y="${b[1] - 2}" width="${b[2] - b[0] + 4}" height="${b[3] - b[1] + 4}" rx="2"/>`; }
   for (const l of linesOf(sheet)) if (sel.has(l.id)) s += lineEl(l, 'class="selwire" style="fill:none"');
-  { const l = plotHandleOf(); if (l) { const f = plotFrame(l), r = 4.5 / view.z; s += `<rect x="${f[2] - r}" y="${f[3] - r}" width="${2 * r}" height="${2 * r}" style="fill:#FFFFFF;stroke:${LINK_COL};stroke-width:${1.4 / view.z}"/>`; } }
+  { const l = plotHandleOf(); if (l) { const f = isPlot(l) ? plotFrame(l) : lineBB(l), r = 4.5 / view.z; s += `<rect x="${f[2] - r}" y="${f[3] - r}" width="${2 * r}" height="${2 * r}" style="fill:#FFFFFF;stroke:${LINK_COL};stroke-width:${1.4 / view.z}"/>`; } }
   for (const k of linksOf(sheet)) if (sel.has(k.id)) { const e = linkEnds(k); if (e) s += `<polyline class="selwire" points="${ptsAttr(e)}"/>`; }
   if (selLabel) { const q = sheet.parts.find(x => x.id === selLabel.id), l = q && labelLines(q).find(x => x.field === selLabel.field);
     if (l) s += `<rect class="selbox" style="stroke-dasharray:none;stroke-width:1.4" x="${l.x0 - 3}" y="${l.top - 2}" width="${l.x1 - l.x0 + 6}" height="${l.bottom - l.top + 4}" rx="2"/>`; else selLabel = null; }
@@ -1827,7 +1843,7 @@ function cutAt(raw, segOnly) {
     sheet.wires.splice(i, 1, ...keep); what = 'one wire segment';
   }
   else if (t.k === 'wire') { sheet.wires = sheet.wires.filter(w => w !== t.o); what = segOnly ? 'one wire segment' : 'wire'; }
-  else if (t.k === 'line') { sheet.lines = linesOf(sheet).filter(x => x !== t.o); what = isPlot(t.o) ? 'Active Plot' : 'line'; }
+  else if (t.k === 'line') { sheet.lines = linesOf(sheet).filter(x => x !== t.o); what = isPlot(t.o) ? 'Active Plot' : isImage(t.o) ? 'picture' : 'line'; }
   else if (t.k === 'link') { sheet.links = linksOf(sheet).filter(x => x !== t.o); what = 'link'; }
   else { sheet.texts = sheet.texts.filter(x => x !== t.o); what = 'text'; }
   sel.delete(t.o.id); render(); renderOver(); changed();
@@ -2095,7 +2111,7 @@ function renderProps() {
   if (!items.length) { b.innerHTML = `<div class="empty">Select a part, wire or text to edit it. Click a part in the library to place it; click any hook to start a wire.</div>`; return; }
   if (items.length > 1) {
     b.innerHTML = `<div class="what">${items.length} items selected<small>${items.filter(i => i.k === 'part').length} parts · ${items.filter(i => i.k === 'wire').length} wires · ${items.filter(i => i.k === 'text').length} texts${items.some(i => i.k === 'line') ? ` · ${items.filter(i => i.k === 'line').length} lines` : ''}${items.some(i => i.k === 'link') ? ` · ${items.filter(i => i.k === 'link').length} links` : ''}</small></div>
-      ${items.some(i => i.k === 'wire' || (i.k === 'line' && !isPlot(i.o))) ? `<div class="field"><label>Color</label>${swatchRow((() => { const cs = new Set(items.filter(i => i.k === 'wire' || i.k === 'line').map(i => i.o.color || 'ink')); return cs.size === 1 ? [...cs][0] : ''; })())}</div>` : ''}
+      ${items.some(i => i.k === 'wire' || (i.k === 'line' && !noPen(i.o))) ? `<div class="field"><label>Color</label>${swatchRow((() => { const cs = new Set(items.filter(i => i.k === 'wire' || i.k === 'line').map(i => i.o.color || 'ink')); return cs.size === 1 ? [...cs][0] : ''; })())}</div>` : ''}
       <div class="row-btns"><button data-act="rot">Rotate</button><button data-act="dup">Duplicate</button><button class="del" data-act="del">Delete</button></div>`; return;
   }
   const it = items[0];
@@ -2140,6 +2156,11 @@ function renderProps() {
     b.innerHTML = `<div class="what">Link<small>${nm(k.a)} ↔ ${nm(k.b)} · ganged controls</small></div>
       <div class="empty">The dashed line joins the two arrow tips and follows the parts when they move. Add more with the Link tool (J).</div>
       <div class="row-btns"><button class="del" data-act="del">Delete</button></div>`;
+  } else if (it.k === 'line' && isImage(it.o)) {
+    const l = it.o, bb = lineBB(l), w = bb[2] - bb[0], h = bb[3] - bb[1], off = l.ar > 0 && Math.abs(w / h - l.ar) > 0.01;
+    b.innerHTML = `<div class="what">Picture<small>${esc(l.name || 'picture')} · ${+(w / G).toFixed(1)} × ${+(h / G).toFixed(1)} grid units${off ? ' · stretched' : ''}</small></div>
+      <div class="empty">Drag it to move it; drag the corner handle (bottom right) to resize it. Hold <b>Alt</b> while resizing to keep its proportions.</div>
+      <div class="row-btns">${off ? '<button data-act="imgar">Original proportions</button>' : ''}<button data-act="dup">Duplicate</button><button class="del" data-act="del">Delete</button></div>`;
   } else if (it.k === 'line' && isPlot(it.o)) {
     const f = plotArea(it.o);
     b.innerHTML = `<div class="what">Active Plot<small>${(f[2] - f[0]) / G} × ${(f[3] - f[1]) / G} grid units · empty four-quadrant plot</small></div>
@@ -2177,7 +2198,7 @@ $('propBody').addEventListener('change', e => {
     if (ls.length) { snapshot(); for (const l of ls) { if (v === 1) delete l.fillA; else l.fillA = v; } render(); changed(); } else if (SHAPE_TOOLS.includes(mode)) { pen.fillA = v; savePen(); } return; }
   if (e.target.id !== 'pPenW' && e.target.id !== 'pPenD') return;
   const key = e.target.id === 'pPenW' ? 'w' : 'dash', v = key === 'w' ? +e.target.value : e.target.value;
-  const ls = selItems().filter(i => i.k === 'line' && !isPlot(i.o)).map(i => i.o);
+  const ls = selItems().filter(i => i.k === 'line' && !noPen(i.o)).map(i => i.o);
   if (ls.length) { snapshot(); for (const l of ls) { if ((key === 'w' && v === 1.4) || (key === 'dash' && v === 'solid')) delete l[key]; else l[key] = v; } render(); changed(); return; }
   if (SHAPE_TOOLS.includes(mode)) { pen[key] = v; savePen(); renderOver(); }
 });
@@ -2186,7 +2207,7 @@ $('propBody').addEventListener('click', e => {
   const wc = e.target.closest('[data-wc]'); if (wc) { if (!selItems().length && SHAPE_TOOLS.includes(mode)) { pen.color = wc.dataset.wc; savePen(); renderProps(); renderOver(); return; } colorWires(wc.dataset.wc); return; }
   const a = e.target.closest('[data-act]'); if (!a) return;
   if (a.dataset.act.startsWith('unit-')) { const it = selItems()[0]; if (it && it.k === 'part') addSection(it.o, a.dataset.act.slice(5)); return; }
-  ({ windings: () => { const it = selItems()[0]; if (it && it.k === 'part') windingDialog(it.o); }, rot: rotateSel, flip: () => flipSel('h'), flipv: () => flipSel('v'), dup: duplicate, del: deleteSel, lreset: () => { snapshot(); for (const it of selItems()) if (it.k === 'part') { Object.assign(it.o, { lx: 0, ly: 0, rdx: 0, rdy: 0, vdx: 0, vdy: 0, pdx: 0, pdy: 0, sdx: 0, sdy: 0 }); } render(); changed(); } })[a.dataset.act]();
+  ({ imgar: () => { const it = selItems()[0]; if (it && isImage(it.o) && it.o.ar > 0) { snapshot(); const [x0, y0, x1] = lineBB(it.o); it.o.a = [x0, y0]; it.o.b = [x1, y0 + Math.max(1, Math.round((x1 - x0) / it.o.ar))]; render(); renderProps(); changed(); setMsg('Picture back to its own proportions'); } }, windings: () => { const it = selItems()[0]; if (it && it.k === 'part') windingDialog(it.o); }, rot: rotateSel, flip: () => flipSel('h'), flipv: () => flipSel('v'), dup: duplicate, del: deleteSel, lreset: () => { snapshot(); for (const it of selItems()) if (it.k === 'part') { Object.assign(it.o, { lx: 0, ly: 0, rdx: 0, rdy: 0, vdx: 0, vdy: 0, pdx: 0, pdy: 0, sdx: 0, sdy: 0 }); } render(); changed(); } })[a.dataset.act]();
 });
 
 /* =====================================================================
@@ -2201,10 +2222,10 @@ function selItems() {
   for (const k of linksOf(sheet)) if (sel.has(k.id)) r.push({ k: 'link', o: k });
   return r;
 }
-function snapshot() { undoStack.push(JSON.stringify(project)); if (undoStack.length > 150) undoStack.shift(); redoStack = []; updateButtons(); }
-function restore(json) { const act = sheet && sheet.id; project = JSON.parse(json); sheet = project.sheets.find(s => s.id === act) || project.sheets[0]; sel.clear(); render(); changed(); }
-function undo() { if (!undoStack.length) return; redoStack.push(JSON.stringify(project)); restore(undoStack.pop()); setMsg('Undone'); }
-function redo() { if (!redoStack.length) return; undoStack.push(JSON.stringify(project)); restore(redoStack.pop()); setMsg('Redone'); }
+function snapshot() { undoStack.push(projJSON()); if (undoStack.length > 150) undoStack.shift(); redoStack = []; updateButtons(); }
+function restore(json) { const act = sheet && sheet.id; project = JSON.parse(json); project.images = IMG; sheet = project.sheets.find(s => s.id === act) || project.sheets[0]; sel.clear(); render(); changed(); }
+function undo() { if (!undoStack.length) return; redoStack.push(projJSON()); restore(undoStack.pop()); setMsg('Undone'); }
+function redo() { if (!redoStack.length) return; undoStack.push(projJSON()); restore(redoStack.pop()); setMsg('Redone'); }
 function updateButtons() {
   $('bUndo').disabled = !undoStack.length; $('bRedo').disabled = !redoStack.length;
   const any = sel.size > 0;
@@ -2417,7 +2438,7 @@ svg.addEventListener('pointerdown', e => {
   if (mode === 'cut' || mode === 'snip') { cutAt(raw, mode === 'snip'); return; }
   if (mode === 'wire') { wireClick(p, raw); return; }
   // select mode
-  { const pl = plotHandleAt(raw); if (pl) { snapshot(); drag = { kind: 'plotsize', o: pl, a: plotFrame(pl).slice(0, 2), start: p, moved: false }; return; } }
+  { const pl = plotHandleAt(raw); if (pl) { snapshot(); drag = isImage(pl) ? { kind: 'imgsize', o: pl, a: lineBB(pl).slice(0, 2), start: p, moved: false } : { kind: 'plotsize', o: pl, a: plotFrame(pl).slice(0, 2), start: p, moved: false }; return; } }
   if (plotAreaAt(raw) && !hit(raw)) return;   // the plot area is reserved for cursors and probing: no marquee, no wiring from parts it covers
   const h = hookAt(raw);
   const target = hit(raw);
@@ -2480,6 +2501,12 @@ svg.addEventListener('pointermove', e => {
     }
     else if (drag.kind === 'pin') { const dx = snapL(raw[0]) - drag.start[0], dy = snapL(raw[1]) - drag.start[1]; if (dx || dy) drag.moved = true; const pn = drag.o.pins[drag.pin]; pn.dx = drag.ox + dx; pn.dy = drag.oy + dy; render(); }
     else if (drag.kind === 'label') { const dx = snapL(raw[0]) - drag.start[0], dy = snapL(raw[1]) - drag.start[1]; if (dx || dy) drag.moved = true; drag.o[drag.k + 'dx'] = drag.ox + dx; drag.o[drag.k + 'dy'] = drag.oy + dy; render(); }
+    else if (drag.kind === 'imgsize') {   // free on the grid; Alt keeps the picture's own proportions
+      const o = drag.o, a = drag.a, w = Math.max(G, snap(raw[0] - a[0])), ar = o.ar > 0 ? o.ar : 1;
+      const h = e.altKey ? Math.max(1, Math.round(w / ar)) : Math.max(G, snap(raw[1] - a[1]));
+      if (w !== o.b[0] - a[0] || h !== o.b[1] - a[1] || o.a[0] !== a[0] || o.a[1] !== a[1]) { o.a = [...a]; o.b = [a[0] + w, a[1] + h]; drag.moved = true; render(); renderProps(); }
+      setMsg(e.altKey ? 'Keeping the picture\'s proportions (Alt)' : 'Hold Alt to keep the picture\'s proportions');
+    }
     else if (drag.kind === 'plotsize') { const nb = plotSize(drag.a, raw), o = drag.o; if (nb[0] !== o.b[0] || nb[1] !== o.b[1]) { o.a = [...drag.a]; o.b = nb; drag.moved = true; render(); renderProps(); } }
     else if (drag.kind === 'seg') {
       const pts = drag.pts.map(q => [...q]);
@@ -2502,7 +2529,7 @@ svg.addEventListener('pointerup', e => {
   if (panning) { panning = null; $('view').classList.remove('panning'); return; }
   if (drag) {
     if (drag.kind === 'block') { const moved = drag.moved; drag = null; if (moved) { render(); changed(); } return; }
-    if ((drag.kind === 'move' || drag.kind === 'label' || drag.kind === 'pin' || drag.kind === 'plotsize') && !drag.moved) undoStack.pop();
+    if ((drag.kind === 'move' || drag.kind === 'label' || drag.kind === 'pin' || drag.kind === 'plotsize' || drag.kind === 'imgsize') && !drag.moved) undoStack.pop();
     if (drag.kind === 'seg') { if (drag.w.pts.length === drag.pts.length && drag.w.pts.every((q, i) => q[0] === drag.pts[i][0] && q[1] === drag.pts[i][1])) { drag.w.pts = simplify(drag.pts); undoStack.pop(); } else drag.w.pts = simplify(drag.w.pts); }
     finishWires(); drag = null; render(); changed(); return;
   }
@@ -2760,7 +2787,7 @@ function partMenu(e, raw) {
     + (items.length === 1 && items[0].k === 'part' && LIB[items[0].o.type].vary ? (() => { const q = items[0].o;
         return varyList(LIB[q.type]).map(v => { const cur = varyVal(q, v);
           return `<div class="mlabel">${v.label}</div><div class="chips">${Array.from({ length: v.max - v.min + 1 }, (_, i) => v.min + i).map(n => `<button class="chip" data-vary="${v.key}:${n}" aria-pressed="${n === cur}">${n}</button>`).join('')}</div>`; }).join(''); })() : '')
-    + (items.some(i => i.k === 'wire' || (i.k === 'line' && !isPlot(i.o))) ? `<div class="mlabel">${items.some(i => i.k === 'wire') ? 'Wire color' : 'Line color'}</div>${swatchRow((() => { const cs = new Set(items.filter(i => i.k === 'wire' || i.k === 'line').map(i => i.o.color || 'ink')); return cs.size === 1 ? [...cs][0] : ''; })())}` : '')
+    + (items.some(i => i.k === 'wire' || (i.k === 'line' && !noPen(i.o))) ? `<div class="mlabel">${items.some(i => i.k === 'wire') ? 'Wire color' : 'Line color'}</div>${swatchRow((() => { const cs = new Set(items.filter(i => i.k === 'wire' || i.k === 'line').map(i => i.o.color || 'ink')); return cs.size === 1 ? [...cs][0] : ''; })())}` : '')
     + (items.some(i => i.k === 'line' && canFill(i.o)) ? `<div class="mlabel">Fill</div>${fillRow((() => { const fs = new Set(items.filter(i => i.k === 'line' && canFill(i.o)).map(i => i.o.fill || '')); return fs.size === 1 ? [...fs][0] : null; })())}` : '')
     + `<button role="menuitem" data-m="dup"><span>Duplicate</span><span>Ctrl+D</span></button>`
     + (selLabel ? `<button role="menuitem" data-m="del"><span>Hide ${FIELD_NAME[selLabel.field]}</span><span>Del</span></button>`
@@ -3063,6 +3090,7 @@ function loadProject(p, msg) {
   if (!Array.isArray(project.sheets) || !project.sheets.length) project.sheets = [newSheet('Sheet 1')];
   if (!project.id) project.id = uid(); if (typeof project.name !== 'string' || !project.name) project.name = 'Untitled project';
   project.doc = Object.assign(docDefaults(), project.doc || {}); if (!Array.isArray(project.doc.revisions)) project.doc.revisions = [];
+  IMG = project.images && typeof project.images === 'object' && !Array.isArray(project.images) ? project.images : {}; project.images = IMG;
   const instSeen = new Set();            // each instrument (V1, S2, AWG1…) lives on one sheet only
   for (const s of project.sheets) {
     const okPt = q => Array.isArray(q) && q.length === 2 && isFinite(q[0]) && isFinite(q[1]);
@@ -3071,6 +3099,7 @@ function loadProject(p, msg) {
     s.texts = (Array.isArray(s.texts) ? s.texts : []).filter(t => t && isFinite(t.x) && isFinite(t.y)).map(t => Object.assign({ text: '', size: 12, tone: 'ink' }, t));
     { const seen = instSeen; s.inst = (Array.isArray(s.inst) ? s.inst : []).filter(x => x && INSTR_ALL.includes(x.k) && Number.isFinite(+x.x) && Number.isFinite(+x.y) && !seen.has(x.k) && seen.add(x.k)).map(x => Object.assign({ k: x.k, x: +x.x, y: +x.y }, typeof x.name === 'string' && x.name.trim() ? { name: x.name.trim().slice(0, 40) } : {})); }
     s.lines = (Array.isArray(s.lines) ? s.lines : []).filter(l => l && okPt(l.a) && okPt(l.b)).map(l => Object.assign({ id: uid() }, l));
+    if (s === project.sheets[project.sheets.length - 1]) { const used = new Set(project.sheets.flatMap(q => (q.lines || []).filter(isImage).map(l => l.img))); for (const k of Object.keys(IMG)) if (!used.has(k) || typeof IMG[k] !== 'string') delete IMG[k]; }   // forget pictures no sheet uses
     const sid = x => typeof x === 'string' && x ? x : null;
     s.links = (Array.isArray(s.links) ? s.links : []).filter(k => k && (sid(k.a) || sid(k.ta)) && (sid(k.b) || sid(k.tb))).map(k => ({ id: k.id || uid(), a: sid(k.a), b: sid(k.b), ...(sid(k.ta) && !sid(k.a) ? { ta: k.ta } : {}), ...(sid(k.tb) && !sid(k.b) ? { tb: k.tb } : {}), ...(k.v === 2 ? { v: 2 } : {}), pts: (Array.isArray(k.pts) ? k.pts : []).filter(okPt).map(q => [+q[0], +q[1]]) }));
     if (!s.id) s.id = uid(); if (typeof s.name !== 'string') s.name = 'Sheet';
@@ -3141,7 +3170,7 @@ $('bImport').onclick = () => $('fileIn').click();
 // Settings: an empty dialog for now (Larry will add settings later). Cancel, Escape or a click outside closes it; OK closes it too.
 // Drop shadows (Settings, 2026-11-07): on by default, remembered in gs.shadow; the inkShadow filter goes on or off the four content layers
 let showShadow = true;
-const SHADOW_LAYERS = ['layerParts', 'layerWires', 'layerText'];   // Active Plots carry their own instrument-style shadow (plotShadow)
+const SHADOW_LAYERS = ['layerImages', 'layerParts', 'layerWires', 'layerText'];   // Active Plots carry their own instrument-style shadow (plotShadow)
 function setShadow(on) {
   showShadow = !!on; lsSet('gs.shadow', showShadow);
   for (const id of SHADOW_LAYERS) { if (showShadow) $(id).setAttribute('filter', 'url(#inkShadow)'); else $(id).removeAttribute('filter'); }
@@ -3177,7 +3206,7 @@ function sheetSVG(withBg = true, whole = false) {
   if (whole) { const [SW, SH] = sheetDims(sheet); x0 = 0; y0 = 0; x1 = SW; y1 = SH; }
   else { if (!bbs.length) return null; const pad = 16; x0 = Math.min(...bbs.map(b => b[0])) - pad; y0 = Math.min(...bbs.map(b => b[1])) - pad; x1 = Math.max(...bbs.map(b => b[2])) + pad; y1 = Math.max(...bbs.map(b => b[3])) + pad; }
   const css = `.ink{stroke:#17120E;fill:none;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}.solid{fill:#17120E}.tgt{stroke:#2F8A45;fill:none;stroke-width:1.8;stroke-linecap:round}.env{stroke:#17120E;fill:none;stroke-width:1.8}.htr{stroke:#E8912D;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}.dash{stroke:#17120E;fill:none;stroke-width:1.6;stroke-dasharray:5 3.4}.xbox{fill:none;stroke:#B4B4B4;stroke-width:1.2}.dotl{stroke:#17120E;fill:none;stroke-width:2;stroke-linecap:round;stroke-dasharray:0 4.2}.wire{stroke:#17120E;fill:none;stroke-width:1.4;stroke-linecap:round;stroke-linejoin:round}.jdot{fill:#17120E}.lbl{font-family:'Libre Franklin','Franklin Gothic Book',Arial,sans-serif;font-size:11px;fill:#17120E}.lbl .ref,.lbl.ref{font-weight:600}.pinno{font-family:'Libre Franklin','Franklin Gothic Book',Arial,sans-serif;font-size:8.5px;fill:#17120E}.pinlead{stroke:#5C5248;stroke-width:.8;stroke-dasharray:1.2 2;fill:none}.stxt{font-family:'Libre Franklin','Franklin Gothic Book',Arial,sans-serif;white-space:pre}.fr{stroke:#17120E;fill:none;stroke-width:1.1}.fr-b{stroke:#17120E;fill:none;stroke-width:2}.fr-lab{font-family:'JetBrains Mono',Consolas,monospace;font-size:7.5px;letter-spacing:.08em;fill:#5C5248}.fr-val{font-family:'Libre Franklin','Franklin Gothic Book',Arial,sans-serif;fill:#17120E}.fr-zone{font-family:'JetBrains Mono',Consolas,monospace;font-size:10px;fill:#5C5248}.fr-co{font-family:'Big Shoulders Display','Arial Narrow',sans-serif;font-weight:800;fill:#17120E}`;
-  const body = ((whole ? $('layerFrame').innerHTML : '') + $('layerFills').innerHTML + $('layerParts').innerHTML + $('layerWires').innerHTML + $('layerText').innerHTML + $('layerPlots').innerHTML.replace(/ filter="url\(#plotShadow\)"/g, '')).replace(/var\(--ink\)/g, '#17120E').replace(/var\(--paper\)/g, '#FBF8F3');
+  const body = ((whole ? $('layerFrame').innerHTML : '') + $('layerImages').innerHTML + $('layerFills').innerHTML + $('layerParts').innerHTML + $('layerWires').innerHTML + $('layerText').innerHTML + $('layerPlots').innerHTML.replace(/ filter="url\(#plotShadow\)"/g, '')).replace(/var\(--ink\)/g, '#17120E').replace(/var\(--paper\)/g, '#FBF8F3');
   return { w: x1 - x0, h: y1 - y0, svg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${x0} ${y0} ${x1 - x0} ${y1 - y0}" width="${x1 - x0}" height="${y1 - y0}"><style>${css}</style>${withBg ? `<rect x="${x0}" y="${y0}" width="${x1 - x0}" height="${y1 - y0}" fill="#FBF8F3"/>` : ''}${body}</svg>` };
 }
 const fileBase = () => (sheet.file || slugFile(sheet.name)).replace(/\.[a-z0-9]+$/i, '') || 'schematic';
@@ -3507,6 +3536,58 @@ function pdfOpen(i) {
   setMsg(`Showing ${d.name}`);
 }
 $('bPdf').onclick = () => pdfShow(!pdfWin || pdfWin.hidden);
+// Pictures (Larry, 2026-11-07): the picture button (or dropping image files on the sheet) adds PNG, JPEG, GIF, BMP, WebP or SVG
+// files to the drawing. Big files are scaled down (longest side 1600 px) and re-encoded so projects stay small enough to save.
+const IMG_MAX = 1600, IMG_KEEP = 600 * 1024;
+function readImage(file) {
+  return new Promise((ok, bad) => {
+    const fr = new FileReader();
+    fr.onerror = () => bad(new Error('read'));
+    fr.onload = () => {
+      const im = new Image();
+      im.onerror = () => bad(new Error('decode'));
+      im.onload = () => {
+        let w = im.naturalWidth || 300, h = im.naturalHeight || 200, data = fr.result;
+        const keep = file.size <= IMG_KEEP && /^image\/(png|jpeg|gif|webp|svg\+xml)$/.test(file.type) && Math.max(w, h) <= 2400;
+        if (!keep) {
+          const k = Math.min(1, IMG_MAX / Math.max(w, h)), cw = Math.max(1, Math.round(w * k)), ch = Math.max(1, Math.round(h * k));
+          const c = document.createElement('canvas'); c.width = cw; c.height = ch; c.getContext('2d').drawImage(im, 0, 0, cw, ch);
+          data = /png|gif|webp|svg/.test(file.type) ? c.toDataURL('image/png') : c.toDataURL('image/jpeg', 0.88);
+          if (data.length > 2.5e6 && !/jpeg/.test(data.slice(0, 20))) data = c.toDataURL('image/jpeg', 0.85);   // a huge PNG photo: JPEG is far smaller
+          w = cw; h = ch;
+        }
+        ok({ data, w, h });
+      };
+      im.src = fr.result;
+    };
+    fr.readAsDataURL(file);
+  });
+}
+async function addImages(files, at) {
+  const pics = files.filter(f => /^image\//.test(f.type) || /\.(png|jpe?g|gif|bmp|webp|svg)$/i.test(f.name));
+  if (!pics.length) { if (files.length) setMsg('That is not a picture file.'); return; }
+  const vr = $('view').getBoundingClientRect(), c = at || [(vr.width / 2 - view.x) / view.z, (vr.height / 2 - view.y) / view.z];
+  const added = [];
+  for (const [n, f] of pics.entries()) {
+    let r; try { r = await readImage(f); } catch { setMsg(`Couldn't open ${f.name} as a picture.`); continue; }
+    const id = 'im' + uid(); IMG[id] = r.data;
+    const k = Math.min(1, 400 / r.w, 300 / r.h), w = Math.max(G, Math.round(r.w * k)), h = Math.max(1, Math.round(r.h * k));   // start at most 4 × 3 inches
+    const a = [snap(c[0] - w / 2 + n * 20), snap(c[1] - h / 2 + n * 20)];
+    added.push({ id: uid(), shape: 'image', a, b: [a[0] + w, a[1] + h], img: id, ar: r.w / r.h, name: f.name });
+  }
+  if (!added.length) return;
+  snapshot(); linesOf(sheet).push(...added); sel.clear(); for (const l of added) sel.add(l.id);
+  setMode('select'); render(); changed();
+  setMsg(added.length === 1 ? `${added[0].name} added. Drag it to move it, drag its corner to resize (Alt keeps proportions).` : `${added.length} pictures added.`);
+}
+$('bImg').onclick = () => $('imgFile').click();
+$('imgFile').onchange = () => { const fs = [...$('imgFile').files]; $('imgFile').value = ''; addImages(fs); };
+$('view').addEventListener('dragover', e => { if (!e.target.closest('.pdfw') && [...(e.dataTransfer?.types || [])].includes('Files')) { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; } });
+$('view').addEventListener('drop', e => {
+  if (e.target.closest('.pdfw') || !e.dataTransfer?.files?.length) return;
+  e.preventDefault(); const r = svg.getBoundingClientRect();
+  addImages([...e.dataTransfer.files], [(e.clientX - r.left - view.x) / view.z, (e.clientY - r.top - view.y) / view.z]);
+});
 window.addEventListener('resize', pdfPlace);
 // Active Plot: click the button, then click the canvas to drop it, or drag from the button and let go over the canvas
 function placePlot(p) {

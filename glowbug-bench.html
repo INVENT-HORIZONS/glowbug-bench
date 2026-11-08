@@ -126,6 +126,9 @@ button, input, select, textarea { font: inherit; color: inherit; box-sizing: bor
 .tnode input { flex: 1; min-width: 0; padding: 1px 4px; border: 1px solid var(--accent); border-radius: 3px; background: var(--paper); color: var(--ink); font: inherit; }
 .tnode.stg { margin-top: 3px; }
 .tnode.snap { padding-left: 22px; font-size: 12.5px; }
+.snapbtn { display: flex; align-items: center; gap: 8px; width: 100%; justify-content: center; padding: 6px 10px; border: 1px solid var(--accent); border-radius: 4px; background: var(--accent); color: var(--accent-fg); font: 600 13px var(--font-ui); cursor: pointer; margin-bottom: 4px; }
+.snapbtn svg { width: 28px; height: 28px; }
+.snapbtn:hover { filter: brightness(1.08); }
 .tnode.snap.dropb { box-shadow: inset 0 2px 0 var(--accent); }
 .tnode.snap.dropa { box-shadow: inset 0 -2px 0 var(--accent); }
 .tnode.snap.blank .nm { font-style: italic; }
@@ -444,8 +447,7 @@ button, input, select, textarea { font: inherit; color: inherit; box-sizing: bor
     <span class="sep"></span>
     <button class="tb" id="bPdf" title="Datasheet viewer (PDF)" aria-pressed="false"><svg viewBox="0 0 24 24" style="width:24px;height:26px" stroke-linejoin="round"><path d="M5 1.8h9.4l4.8 4.8v15.6H5z" fill="#FFFFFF" stroke="#5A5550" stroke-width="1.1"/><path d="M14.4 1.8v4.8h4.8" fill="#E6E0D6" stroke="#5A5550" stroke-width="1.1"/><path d="M7.6 9.6h7.8M7.6 12h9M7.6 19.8h9" fill="none" stroke="#B9B4AC" stroke-width="1"/><rect x="2.6" y="13.6" width="13.4" height="6.2" rx="1" fill="#C42A20"/><text x="9.3" y="18.6" text-anchor="middle" style="font:800 5.2px system-ui,Arial,sans-serif;fill:#FFFFFF;letter-spacing:.2px">PDF</text></svg></button>
     <button class="tb" id="bImg" title="Add a picture (PNG, JPEG, GIF, BMP, WebP, SVG)"><svg viewBox="0 0 24 24" style="width:26px;height:26px" stroke-linejoin="round"><rect x="2.5" y="4" width="19" height="16" rx="1.6" fill="#FFFFFF" stroke="#5A5550" stroke-width="1.2"/><rect x="4.4" y="5.9" width="15.2" height="12.2" fill="#CFE3F2"/><path d="M4.4 18.1l4.6-6.4 3.3 4.2 2.4-2.8 4.9 5z" fill="#2E6B34"/><path d="M4.4 18.1l4.6-6.4 2.2 2.8-3.2 3.6z" fill="#3F8A48"/><circle cx="15.8" cy="9.4" r="1.9" fill="#E8B23A"/></svg></button>
-    <span class="sep"></span>
-    <button class="tb" id="bSnap" title="Snapshot: capture this sheet as it is now and add it to the end of the Animation Stage"><svg viewBox="0 0 24 24" style="width:26px;height:26px" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><path d="M6.5 3.5h14v11"/><path d="M3.5 6.5h14v14h-14z"/><path d="M10.5 10.5v6M7.5 13.5h6" stroke-linecap="round"/></svg></button><input type="file" id="imgFile" accept="image/*" multiple hidden>
+    <input type="file" id="imgFile" accept="image/*" multiple hidden>
     <span class="tb-spacer"></span>
     <button class="tb" id="bImport" title="Open a .json project file"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15V3M7 10l5 5 5-5M4 15v5h16v-5"/></svg><span class="lb">Import</span></button>
     <button class="tb" id="bExport" title="Export the sheet" aria-haspopup="menu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12M7 8l5-5 5 5M4 15v5h16v-5"/></svg><span class="lb">Export</span></button>
@@ -1802,12 +1804,13 @@ function stagePanel(b) {
   if (b.contains(document.activeElement) && document.activeElement.id === 'stLen') return;   // typing the fade length
   const z = SIZES[sheet.size] || SIZES.A;
   b.innerHTML = `
+    ${playing || previewing ? '' : `<button id="stSnap" class="snapbtn" title="Snapshot: capture the stage as it is now and add it to the end of the list"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.8 7.8h4.4l1.6-2.6h4.4l1.6 2.6h4.4a1.8 1.8 0 0 1 1.8 1.8v8.6a1.8 1.8 0 0 1-1.8 1.8H3.8A1.8 1.8 0 0 1 2 18.2V9.6a1.8 1.8 0 0 1 1.8-1.8z"/><path d="M17.2 7.8V5.9h2.6v1.9"/><circle cx="12" cy="13.6" r="4.7"/><circle cx="12" cy="13.6" r="3.4"/><path d="M10 13.4a2.2 2.2 0 0 1 2-2.1"/><path d="M4.6 10.3h1.4" stroke-width="2"/><circle cx="19.3" cy="10.4" r=".35" fill="currentColor"/><path d="M3.4 12.6v2.4M20.6 13v1.6"/></svg><span>Snapshot</span></button>`}
     <div class="row-btns"><button id="stPlay" aria-pressed="${!!playing}" ${n ? '' : 'disabled'} title="Start at snapshot 1; → moves on, ← goes back">▶ Play</button><button id="stStop" ${playing ? '' : 'disabled'} title="Stop playing (Esc) and put the stage back as it was">■ Stop</button></div>
     <div class="stg-now">${n ? `Snapshot ${st.cur + 1} of ${n}` : 'No snapshots yet'}</div>
     ${cq && !playing ? `<label class="chk" style="display:flex;align-items:center;gap:6px"><input type="checkbox" id="stFadeOn" ${cq.fade > 0 ? 'checked' : ''}> Fade in to this snapshot</label>
     <div class="field"><label for="stLen">Fade length</label><input type="number" id="stLen" min="0.1" max="10" step="0.1" value="${cq.fade > 0 ? cq.fade : (cq.lastFade || STAGE_FADE)}" ${cq.fade > 0 ? '' : 'disabled'} title="Seconds this snapshot takes to fade in"></div>
     <div class="dnote">${st.cur === 0 ? 'Snapshot 1 is where Play starts, so it shows at once; this setting counts if it moves later in the list.' : cq.fade > 0 ? `seconds. When playing, snapshot ${st.cur + 1} fades in over ${cq.fade} s.` : `Snapshot ${st.cur + 1} appears at once (no fade).`}</div>` : ''}
-    <div class="dnote">${playing ? '→ moves on, ← goes back. Stop or Esc ends.' : previewing ? 'Viewing this snapshot; your stage is unchanged. ← → step through the snapshots.' : n ? 'Snapshot adds the stage as it is now to the end of the list. Click a snapshot in the tree to view it.' : 'Build on the stage, then press Snapshot (toolbar) at each step.'}</div>
+    <div class="dnote">${playing ? '→ moves on, ← goes back. Stop or Esc ends.' : previewing ? 'Viewing this snapshot; your stage is unchanged. ← → step through the snapshots.' : n ? 'Snapshot adds the stage as it is now to the end of the list. Click a snapshot in the tree to view it.' : 'Build on the stage, then press Snapshot (above) at each step.'}</div>
     ${previewing ? `<div class="row-btns"><button id="stBack" title="Back to the stage as you left it (Esc)">Back to stage</button><button id="stCopy" title="Put this snapshot on the stage to change it (replaces what is on the stage; Ctrl+Z undoes)">Copy to stage</button></div>` : ''}
     ${n && !playing ? `<div class="row-btns">${previewing ? '' : `<button id="stUpd" title="Replace snapshot ${st.cur + 1} with the stage as it is now">Update snapshot</button>`}<button class="del" id="stDel">Delete</button></div>
     <div class="row-btns"><button id="stUp" ${st.cur > 0 ? '' : 'disabled'} title="Move this snapshot one place earlier (or drag it in the tree)">Move earlier</button><button id="stDown" ${st.cur < n - 1 ? '' : 'disabled'} title="Move this snapshot one place later (or drag it in the tree)">Move later</button></div>` : ''}
@@ -1823,11 +1826,10 @@ function stagePanel(b) {
     fl.addEventListener('change', () => { const v = +fl.value; if (Number.isFinite(v) && v >= 0.1 && v <= 10) { cq.fade = Math.round(v * 10) / 10; cq.lastFade = cq.fade; changed(); renderSheets(); } fl.value = cq.fade; fl.blur(); renderDoc(); });
     fl.addEventListener('keydown', ev => { ev.stopPropagation(); if (ev.key === 'Enter') fl.blur(); }); }
   const on = (id, fn) => { const x = $(id); if (x) x.onclick = () => { fn(); x.blur(); }; };   // blur, so the arrow keys go to the stage
-  on('stPlay', stagePlay); on('stStop', stageStop); on('stBlank', insertBlank); on('stUp', () => moveSnap(-1)); on('stDown', () => moveSnap(1)); on('stDel', () => delSnap(st.cur));
+  on('stSnap', takeSnap); on('stPlay', stagePlay); on('stStop', stageStop); on('stBlank', insertBlank); on('stUp', () => moveSnap(-1)); on('stDown', () => moveSnap(1)); on('stDel', () => delSnap(st.cur));
   on('stBack', () => endPreview()); on('stCopy', () => copyToStage(st.cur));
   on('stUpd', () => { snapshot(); st.snaps[st.cur].data = snapData(sheet); renderSheets(); changed(); setMsg(`Snapshot ${st.cur + 1} updated to the stage as it is now.`); });
 }
-$('bSnap').onclick = takeSnap;
 
 /* =====================================================================
    RENDER

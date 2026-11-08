@@ -824,6 +824,12 @@ def('cell', { cat: 'Power', name: 'Cell', pre: 'BT', value: '1.5 V', tags: 'batt
   draw: () => ln(0, 0, 18, 0) + cellPair(18) + ln(22, 0, 40, 0) + plusMark(10) });
 def('battery', { cat: 'Power', name: 'Battery', pre: 'BT', value: '4.5 V', tags: 'battery cells dc source voltage', hooks: { '+': [0, 0], '−': [60, 0] },
   draw: () => ln(0, 0, 18, 0) + cellPair(18) + cellPair(28) + cellPair(38) + ln(42, 0, 60, 0) + plusMark(10) });
+// Variable battery (Larry, 2026-11-08): the battery with a diagonal adjust arrow through it (the rheostat's arrow: filled head, up
+// and to the right). Its tip carries the hidden link point, so it can be ganged with the Link tool like the other adjustable parts.
+const adjArrow = (ax, ay, bx, by) => { const L = Math.hypot(bx - ax, by - ay), ux = (bx - ax) / L, uy = (by - ay) / L, hx = bx - ux * 7, hy = by - uy * 7, f = v => +v.toFixed(2);
+  return ln(ax, ay, f(hx), f(hy)) + pg([[bx, by], [f(hx - uy * 3.2), f(hy + ux * 3.2)], [f(hx + uy * 3.2), f(hy - ux * 3.2)]], 'ink solid'); };
+def('battery_var', { cat: 'Power', name: 'Battery, variable', pre: 'BT', value: '0–9 V', linkPt: [47, -18], tags: 'battery cells dc source voltage variable adjustable', hooks: { '+': [0, 0], '−': [60, 0] },
+  draw: () => ln(0, 0, 18, 0) + cellPair(18) + cellPair(28) + cellPair(38) + ln(42, 0, 60, 0) + plusMark(10) + adjArrow(15, 17, 47, -18) });
 def('fuse', { cat: 'Misc', name: 'Fuse', pre: 'F', value: '2 A', hooks: { 1: [0, 0], 2: [60, 0] },
   draw: () => ln(0, 0, 15, 0) + `<rect class="ink" x="15" y="-6" width="30" height="12"/>` + ln(15, 0, 45, 0) + ln(45, 0, 60, 0) });
 def('switch', { cat: 'Misc', name: 'Switch', pre: 'S', value: 'SPST', hooks: { 1: [0, 0], 2: [40, 0] },

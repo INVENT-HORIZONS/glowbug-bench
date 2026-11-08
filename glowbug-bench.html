@@ -536,6 +536,7 @@ button, input, select, textarea { font: inherit; color: inherit; box-sizing: bor
     <button class="tool" id="mLine" title="Draw a straight line (L): click the start, then click the end. Lines are drawing only, not wires." aria-label="Line" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M8 16L16 8"/></svg><span class="k">L</span></button>
     <button class="tool" id="mArrow" title="Draw an arrow (A): click one end, then the other; the arrow points toward the second click. Rotate (R), flip (X, Y), and set its line and fill colors. Drawing only, for pointing things out." aria-label="Arrow" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"><path d="M3.5 9.5h9.5V5.5l7.5 6.5-7.5 6.5v-4H3.5z" fill="currentColor" fill-opacity=".22"/></svg><span class="k">A</span></button>
     <button class="tool" id="mMesh" title="Mesh current (M): click the loop's center, then a point to set its width, then one to set its height. Dotted and thin to start; set the gap, its position and the direction in Properties." aria-label="Mesh current" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M5.6 17.4A8.4 8.4 0 1 1 18.4 17.8" stroke-dasharray="0.1 2.9" stroke-width="2.3"/><path d="M20.9 14.6l-1.2 5.4-5.2-2.1z" fill="currentColor" stroke="none"/></svg><span class="k">M</span></button>
+    <hr>
   </nav>
 
   <footer class="status">
@@ -3218,7 +3219,7 @@ function partMenu(e, raw) {
   const what = items.length > 1 ? `${items.length} items` : items[0].k === 'part' ? (refText(items[0].o) || LIB[items[0].o.type].name) : items[0].k === 'wire' ? 'Wire' : items[0].k === 'line' ? SHAPE_NAME[shapeOfL(items[0].o)] : 'Text';
   menuEl = document.createElement('div'); menuEl.className = 'menu'; menuEl.setAttribute('role', 'menu');
   menuEl.innerHTML = `<div style="padding:5px 10px 6px;font:500 10.5px var(--font-mono);letter-spacing:.1em;text-transform:uppercase;color:var(--muted)">${esc(what)}</div>`
-    + (hasPart || hasArrow ? `<button role="menuitem" data-m="rot"><span>Rotate ${hasPart ? '90°' : '45°'}</span><span>R</span></button><button role="menuitem" data-m="flip"><span>Flip horizontal</span><span>X</span></button><button role="menuitem" data-m="flipv"><span>Flip vertical</span><span>Y</span></button>` : '')
+    + (hasPart || hasArrow ? `<button role="menuitem" data-m="rot"><span>${hasPart ? 'Rotate 90°' : items.filter(i => isTurnable(i.o)).every(i => isMesh(i.o)) ? 'Move gap 45°' : 'Rotate 45°'}</span><span>R</span></button><button role="menuitem" data-m="flip"><span>Flip horizontal</span><span>X</span></button><button role="menuitem" data-m="flipv"><span>Flip vertical</span><span>Y</span></button>` : '')
     + (selLabel ? `<button role="menuitem" data-m="edit"><span>Edit ${FIELD_NAME[selLabel.field]}</span><span>dbl-click</span></button>` : '')
     + (items.length === 1 && items[0].k === 'part' ? ['ref', 'value'].filter(f => !fieldShown(items[0].o, f)).map(f => `<button role="menuitem" data-m="show-${f}"><span>Show ${FIELD_NAME[f]}</span><span></span></button>`).join('') : '')
     + (items.length === 1 && items[0].k === 'part' && LIB[items[0].o.type].coreDef ? coreMenu(items[0].o) : '')
@@ -3248,6 +3249,8 @@ function partMenu(e, raw) {
           return `<div class="mlabel">${v.label}</div><div class="chips">${Array.from({ length: v.max - v.min + 1 }, (_, i) => v.min + i).map(n => `<button class="chip" data-vary="${v.key}:${n}" aria-pressed="${n === cur}">${n}</button>`).join('')}</div>`; }).join(''); })() : '')
     + (hasPart ? `<div class="mlabel">${items.filter(i => i.k === 'part').length > 1 ? 'Part color' : 'Color'} (highlight)</div>${partSwatchRow((() => { const cs = new Set(items.filter(i => i.k === 'part').map(i => i.o.color || 'ink')); return cs.size === 1 ? [...cs][0] : ''; })())}` : '')
     + (items.some(i => i.k === 'wire' || (i.k === 'line' && !noPen(i.o))) ? `<div class="mlabel">${items.some(i => i.k === 'wire') ? 'Wire color' : 'Line color'}</div>${swatchRow((() => { const cs = new Set(items.filter(i => i.k === 'wire' || i.k === 'line').map(i => i.o.color || 'ink')); return cs.size === 1 ? [...cs][0] : ''; })())}` : '')
+    + (items.some(i => i.k === 'line' && !noPen(i.o)) ? (() => { const ds = new Set(items.filter(i => i.k === 'line' && !noPen(i.o)).map(i => i.o.dash || 'solid')), cur = ds.size === 1 ? [...ds][0] : '';
+        return `<div class="mlabel">Line style</div><div class="chips wide">${[['solid', 'Solid'], ['dash', 'Dashed'], ['dot', 'Dotted']].map(([k, n]) => `<button class="chip" data-ld="${k}" aria-pressed="${k === cur}">${n}</button>`).join('')}</div>`; })() : '')
     + (items.some(i => i.k === 'line' && canFill(i.o)) ? `<div class="mlabel">Fill</div>${fillRow((() => { const fs = new Set(items.filter(i => i.k === 'line' && canFill(i.o)).map(i => i.o.fill || '')); return fs.size === 1 ? [...fs][0] : null; })())}` : '')
     + (!onStage() && !selLabel ? `<button role="menuitem" data-m="tostage"><span>Send ${items.length > 1 ? `${items.length} items` : 'to'} to Animation Stage</span><span></span></button>`.replace('Send to to', 'Send to') : '')
     + `<button role="menuitem" data-m="dup"><span>Duplicate</span><span>Ctrl+D</span></button>`
@@ -3258,6 +3261,7 @@ function partMenu(e, raw) {
   menuEl.style.left = Math.min(e.clientX, window.innerWidth - mw - 8) + 'px';
   menuEl.style.top = Math.max(8, Math.min(e.clientY, window.innerHeight - mh - 8)) + 'px';
   menuEl.onclick = ev => { const pc = ev.target.closest('[data-pc]'); if (pc) { closeMenu(); colorParts(pc.dataset.pc); return; } const wc = ev.target.closest('[data-wc]'); if (wc) { closeMenu(); colorWires(wc.dataset.wc); return; }
+    const ld = ev.target.closest('[data-ld]'); if (ld) { closeMenu(); const ls = items.filter(i => i.k === 'line' && !noPen(i.o)).map(i => i.o), v = ld.dataset.ld; snapshot(); for (const l of ls) { if (v === 'solid') delete l.dash; else l.dash = v; } render(); renderProps(); changed(); setMsg(`Line style: ${ld.textContent.toLowerCase()}`); return; }
     const fc = ev.target.closest('[data-fc]'); if (fc) { closeMenu(); fillShapes(fc.dataset.fc); return; }
     const tb = ev.target.closest('[data-tube]'); if (tb) { closeMenu(); setTubeType(items[0].o, tb.dataset.tube); return; }
     const lc = ev.target.closest('[data-led]'); if (lc) { closeMenu(); setLedColor(items[0].o, lc.dataset.led); return; }

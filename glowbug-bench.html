@@ -1832,7 +1832,7 @@ function renderOver() {
   }
   if (SHAPE_TOOLS.includes(mode)) {
     s += `<line class="cursor-x" x1="${mouse[0] - 6}" y1="${mouse[1]}" x2="${mouse[0] + 6}" y2="${mouse[1]}"/><line class="cursor-x" x1="${mouse[0]}" y1="${mouse[1] - 6}" x2="${mouse[0]}" y2="${mouse[1] + 6}"/>`;
-    if (lineDraft) s += lineSVG({ a: lineDraft.a, b: mouse, shape: lineDraft.shape, color: pen.color, w: pen.w, dash: pen.dash });
+    if (lineDraft) s += lineSVG({ a: lineDraft.a, b: rectEnd(lineDraft.a, mouse), shape: lineDraft.shape, color: pen.color, w: pen.w, dash: pen.dash });
   }
   if (band) s += `<rect class="band" x="${Math.min(band.a[0], band.b[0])}" y="${Math.min(band.a[1], band.b[1])}" width="${Math.abs(band.b[0] - band.a[0])}" height="${Math.abs(band.b[1] - band.a[1])}"/>`;
   $('layerOver').innerHTML = s;
@@ -2365,6 +2365,7 @@ svg.addEventListener('pointerdown', e => {
   if (!sheet) return;
   svg.setPointerCapture(e.pointerId);
   const raw = toWorld(e), p = [snap(raw[0]), snap(raw[1])];
+  altDown = e.altKey;   // Alt held on the click squares a rectangle
   if (e.button !== 2) closeMenu();
   if (editing) finishEdit(true);
   if (e.button === 1 || (e.button === 0 && spaceDown)) { panning = { sx: e.clientX, sy: e.clientY, vx: view.x, vy: view.y }; $('view').classList.add('panning'); return; }
@@ -2420,7 +2421,7 @@ svg.addEventListener('pointerdown', e => {
 svg.addEventListener('pointermove', e => {
   if (!sheet) return;
   const raw = toWorld(e), p = [snap(raw[0]), snap(raw[1])];
-  mouseRaw = raw; mouse = p;
+  mouseRaw = raw; mouse = p; altDown = e.altKey;
   $('stXY').textContent = `x ${p[0] / G} y ${p[1] / G}`;
   if (panning) { view.x = panning.vx + e.clientX - panning.sx; view.y = panning.vy + e.clientY - panning.sy; applyView(); return; }
   if (drag) {
@@ -2836,10 +2837,15 @@ function linkClick(raw, p) {
   render(); renderOver(); changed();
   setMsg(k.b && k.a ? `Linked ${nm(d.p)} and ${nm(q)}. Press J to draw another link.` : 'Link joined onto the gang. Press J to draw another link.');
 }
+// Rectangle tool: holding Alt makes it a square (Larry, 2026-11-07). The side is the larger of the two drags, keeping their
+// directions, so the far corner stays on the grid.
+let altDown = false;
+const squareEnd = (a, p) => { const dx = p[0] - a[0], dy = p[1] - a[1], s = Math.max(Math.abs(dx), Math.abs(dy)); return [a[0] + (dx < 0 ? -s : s), a[1] + (dy < 0 ? -s : s)]; };
+const rectEnd = (a, p) => lineDraft && lineDraft.shape === 'rect' && altDown ? squareEnd(a, p) : p;
 function lineClick(p) {
   const sh = mode === 'circle' || mode === 'rect' ? mode : null;
-  if (!lineDraft) { lineDraft = { a: p, shape: sh }; setMsg(sh === 'circle' ? 'Click a point on the edge to set the size. Esc or right-click cancels.' : sh === 'rect' ? 'Click the opposite corner. Esc or right-click cancels.' : 'Click where the line ends. Esc or right-click cancels.'); renderOver(); return; }
-  const a = lineDraft.a; lineDraft = null;
+  if (!lineDraft) { lineDraft = { a: p, shape: sh }; setMsg(sh === 'circle' ? 'Click a point on the edge to set the size. Esc or right-click cancels.' : sh === 'rect' ? 'Click the opposite corner (hold Alt for a square). Esc or right-click cancels.' : 'Click where the line ends. Esc or right-click cancels.'); renderOver(); return; }
+  const a = lineDraft.a; p = rectEnd(a, p); lineDraft = null;
   if ((a[0] === p[0] && a[1] === p[1]) || (sh === 'rect' && (a[0] === p[0] || a[1] === p[1]))) { renderOver(); return; }      // nothing to draw
   snapshot(); const l = { id: uid(), a: [...a], b: [...p] }; if (sh) l.shape = sh; if (pen.color !== 'ink') l.color = pen.color; if (pen.w !== 1.4) l.w = pen.w; if (pen.dash !== 'solid') l.dash = pen.dash; linesOf(sheet).push(l);
   render(); renderOver(); changed(); setMsg(`${SHAPE_NAME[sh || 'line']} added. Click to start another, or press V to select.`);
@@ -2969,6 +2975,11 @@ document.addEventListener('keydown', e => {
   }
 });
 document.addEventListener('keyup', e => { if (e.key === ' ') spaceDown = false; });
+// Alt squares the rectangle being drawn: redraw the preview as it goes down or up, and keep the browser from taking focus to its menu
+['keydown', 'keyup'].forEach(t => document.addEventListener(t, e => {
+  if (e.key !== 'Alt') return; altDown = t === 'keydown';
+  if (lineDraft && lineDraft.shape === 'rect') { e.preventDefault(); renderOver(); }
+}));
 
 /* ---- panel splitter ---- */
 (() => {

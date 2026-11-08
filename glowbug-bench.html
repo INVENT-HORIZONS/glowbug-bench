@@ -849,6 +849,19 @@ def('generator', { cat: 'Power', name: 'Generator', pre: 'G', value: 'Gen', tags
 def('generator_gen', { cat: 'Power', name: 'Generator, labeled', pre: 'G', value: '', tags: 'generator dynamo alternator gen motor', hooks: { 1: [0, 0], 2: [0, 60] },
   draw: () => ln(0, 0, 0, 6) + `<rect class="ink" x="-4.5" y="6" width="9" height="7.5"/>` + ci(0, 30, 16.5) + `<rect class="ink" x="-4.5" y="46.5" width="9" height="7.5"/>` + ln(0, 54, 0, 60)
     + tx(0, 34.5, 'Gen', 11.5) });
+// Dependent (controlled) sources (Larry, 2026-11-08): the source drawn as a diamond (a square turned 45°), upright like the
+// independent sources: hooks [0, 0] and [0, 60], diamond centered at (0, 30). Voltage sources show + and −, current sources an
+// up arrow. The value is the controlling relation (μ·Vx, r·Ix, g·Vx, β·Ix).
+const diamondBody = () => ln(0, 0, 0, 15) + pg([[0, 15], [15, 30], [0, 45], [-15, 30]]) + ln(0, 45, 0, 60);
+const diaPlusMinus = () => ln(0, 20.5, 0, 27.5) + ln(-3.5, 24, 3.5, 24) + ln(-3.5, 36.5, 3.5, 36.5);
+def('src_vcvs', { cat: 'Power', name: 'Voltage source, voltage-controlled', pre: 'E', value: 'μ·Vx', tags: 'vcvs dependent controlled voltage source diamond', hooks: { '+': [0, 0], '−': [0, 60] },
+  draw: () => diamondBody() + diaPlusMinus() });
+def('src_ccvs', { cat: 'Power', name: 'Voltage source, current-controlled', pre: 'H', value: 'r·Ix', tags: 'ccvs dependent controlled voltage source diamond transresistance', hooks: { '+': [0, 0], '−': [0, 60] },
+  draw: () => diamondBody() + diaPlusMinus() });
+def('src_vccs', { cat: 'Power', name: 'Current source, voltage-controlled', pre: 'G', value: 'g·Vx', tags: 'vccs dependent controlled current source diamond transconductance', hooks: { 1: [0, 0], 2: [0, 60] },
+  draw: () => diamondBody() + inkArrow(0, 40, 0, 23.5) });
+def('src_cccs', { cat: 'Power', name: 'Current source, current-controlled', pre: 'F', value: 'β·Ix', tags: 'cccs dependent controlled current source diamond', hooks: { 1: [0, 0], 2: [0, 60] },
+  draw: () => diamondBody() + inkArrow(0, 40, 0, 23.5) });
 def('fuse', { cat: 'Misc', name: 'Fuse', pre: 'F', value: '2 A', hooks: { 1: [0, 0], 2: [60, 0] },
   draw: () => ln(0, 0, 15, 0) + `<rect class="ink" x="15" y="-6" width="30" height="12"/>` + ln(15, 0, 45, 0) + ln(45, 0, 60, 0) });
 def('switch', { cat: 'Misc', name: 'Switch', pre: 'S', value: 'SPST', hooks: { 1: [0, 0], 2: [40, 0] },

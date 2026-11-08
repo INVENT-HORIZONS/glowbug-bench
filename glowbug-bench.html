@@ -816,6 +816,14 @@ def('supply_circle', { cat: 'Power', name: 'Supply (B+), circle', pre: 'PS', val
   draw: () => ln(0, 0, 0, -12) + ci(0, -16, 4) });
 def('terminal', { cat: 'Power', name: 'Terminal', pre: 'J', value: 'Input', tags: 'jack input output', hooks: { T: [0, 0] },
   draw: () => ci(0, 0, 4) });
+// Cell and Battery (Larry, 2026-11-08): the long plate is positive, the short heavy plate negative. Only the + terminal is marked
+// (Larry's choice), with the electrolytic's + sign. The battery is three cells in series.
+const cellPair = x => ln(x, -12, x, 12) + `<line class="ink" x1="${x + 4}" y1="-6" x2="${x + 4}" y2="6" style="stroke-width:3.2;stroke-linecap:butt"/>`;
+const plusMark = x => ln(x, -13, x, -7) + ln(x - 3, -10, x + 3, -10);
+def('cell', { cat: 'Power', name: 'Cell', pre: 'BT', value: '1.5 V', tags: 'battery cell dc source voltage', hooks: { '+': [0, 0], '−': [40, 0] },
+  draw: () => ln(0, 0, 18, 0) + cellPair(18) + ln(22, 0, 40, 0) + plusMark(10) });
+def('battery', { cat: 'Power', name: 'Battery', pre: 'BT', value: '4.5 V', tags: 'battery cells dc source voltage', hooks: { '+': [0, 0], '−': [60, 0] },
+  draw: () => ln(0, 0, 18, 0) + cellPair(18) + cellPair(28) + cellPair(38) + ln(42, 0, 60, 0) + plusMark(10) });
 def('fuse', { cat: 'Misc', name: 'Fuse', pre: 'F', value: '2 A', hooks: { 1: [0, 0], 2: [60, 0] },
   draw: () => ln(0, 0, 15, 0) + `<rect class="ink" x="15" y="-6" width="30" height="12"/>` + ln(15, 0, 45, 0) + ln(45, 0, 60, 0) });
 def('switch', { cat: 'Misc', name: 'Switch', pre: 'S', value: 'SPST', hooks: { 1: [0, 0], 2: [40, 0] },

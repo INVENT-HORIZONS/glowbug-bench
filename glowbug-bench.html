@@ -830,6 +830,25 @@ const adjArrow = (ax, ay, bx, by) => { const L = Math.hypot(bx - ax, by - ay), u
   return ln(ax, ay, f(hx), f(hy)) + pg([[bx, by], [f(hx - uy * 3.2), f(hy + ux * 3.2)], [f(hx + uy * 3.2), f(hy - ux * 3.2)]], 'ink solid'); };
 def('battery_var', { cat: 'Power', name: 'Battery, variable', pre: 'BT', value: '0–9 V', linkPt: [47, -18], tags: 'battery cells dc source voltage variable adjustable', hooks: { '+': [0, 0], '−': [60, 0] },
   draw: () => ln(0, 0, 18, 0) + cellPair(18) + cellPair(28) + cellPair(38) + ln(42, 0, 60, 0) + plusMark(10) + adjArrow(15, 17, 47, -18) });
+// Sources and generators (Larry, 2026-11-08, from his reference sheet): all stand upright, top hook [0, 0], bottom hook [0, 60],
+// a 13-radius circle centered at (0, 30) between 17 px leads. DC sources have + at the top.
+const srcBody = () => ln(0, 0, 0, 17) + ci(0, 30, 13) + ln(0, 43, 0, 60);
+const sineAt = (y, w = 7, h = 7) => pa(`M${-w} ${y} C${-w * 0.55} ${y - h} ${-w * 0.15} ${y - h} 0 ${y} S${w * 0.55} ${y + h} ${w} ${y}`);
+def('src_vdc', { cat: 'Power', name: 'Voltage source, DC', pre: 'VS', value: '12 V', tags: 'dc voltage source supply battery independent', hooks: { '+': [0, 0], '−': [0, 60] },
+  draw: () => srcBody() + ln(0, 20, 0, 27) + ln(-3.5, 23.5, 3.5, 23.5) + ln(-3.5, 37, 3.5, 37) });
+def('src_vac', { cat: 'Power', name: 'Voltage source, AC', pre: 'VS', value: '120 V ac', tags: 'ac voltage source sine mains independent', hooks: { 1: [0, 0], 2: [0, 60] },
+  draw: () => srcBody() + sineAt(30) });
+def('src_idc', { cat: 'Power', name: 'Current source, DC', pre: 'IS', value: '10 mA', tags: 'dc current source independent', hooks: { '+': [0, 0], '−': [0, 60] },
+  draw: () => srcBody() + inkArrow(0, 40, 0, 20) + ln(-12, 4, -12, 10) + ln(-15, 7, -9, 7) + ln(-15, 55, -9, 55) });
+def('src_iac', { cat: 'Power', name: 'Current source, AC', pre: 'IS', value: '1 A ac', tags: 'ac current source sine independent', hooks: { 1: [0, 0], 2: [0, 60] },
+  draw: () => srcBody() + sineAt(22.5, 5.5, 4.5) + inkArrow(0, 41, 0, 29) });
+// Generator: the old brush-and-commutator symbol, each lead bending into a slanted brush that grazes the circle
+def('generator', { cat: 'Power', name: 'Generator', pre: 'G', value: 'Gen', tags: 'generator dynamo alternator dc', hooks: { 1: [0, 0], 2: [0, 60] },
+  draw: () => ci(0, 30, 14) + ln(0, 0, 0, 11) + ln(0, 11, -17, 25) + ln(17, 35, 0, 49) + ln(0, 49, 0, 60) });
+// Generator, labeled: a bigger circle reading "Gen" with a square brush at each end
+def('generator_gen', { cat: 'Power', name: 'Generator, labeled', pre: 'G', value: '', tags: 'generator dynamo alternator gen motor', hooks: { 1: [0, 0], 2: [0, 60] },
+  draw: () => ln(0, 0, 0, 6) + `<rect class="ink" x="-4.5" y="6" width="9" height="7.5"/>` + ci(0, 30, 16.5) + `<rect class="ink" x="-4.5" y="46.5" width="9" height="7.5"/>` + ln(0, 54, 0, 60)
+    + tx(0, 34.5, 'Gen', 11.5) });
 def('fuse', { cat: 'Misc', name: 'Fuse', pre: 'F', value: '2 A', hooks: { 1: [0, 0], 2: [60, 0] },
   draw: () => ln(0, 0, 15, 0) + `<rect class="ink" x="15" y="-6" width="30" height="12"/>` + ln(15, 0, 45, 0) + ln(45, 0, 60, 0) });
 def('switch', { cat: 'Misc', name: 'Switch', pre: 'S', value: 'SPST', hooks: { 1: [0, 0], 2: [40, 0] },

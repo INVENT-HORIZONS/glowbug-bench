@@ -1625,16 +1625,32 @@ function cleanStage() {
 // they are all replaced (Ctrl+Z brings them back). Parts keep their ids, refs and values; links go along when both their ends do.
 function stageSendMenu(e) {
   const n = sel.size; menuEl = document.createElement('div'); menuEl.className = 'menu'; menuEl.setAttribute('role', 'menu');
-  menuEl.innerHTML = `<div style="padding:5px 10px 6px;font:500 10.5px var(--font-mono);letter-spacing:.1em;text-transform:uppercase;color:var(--muted)">${n} selected</div><button role="menuitem" data-m="tostage"><span>Send ${n > 1 ? `${n} items` : ''} to Animation Stage</span><span></span></button>`.replace('Send  to', 'Send to');
+  menuEl.innerHTML = `<div style="padding:5px 10px 6px;font:500 10.5px var(--font-mono);letter-spacing:.1em;text-transform:uppercase;color:var(--muted)">${n} selected</div><button role="menuitem" data-m="tostage"><span>Send ${n > 1 ? `${n} items` : ''} to Animation Stage</span><span></span></button><button role="menuitem" data-m="snapsel"><span>Create snapshot</span><span></span></button>`.replace('Send  to', 'Send to');
   document.body.appendChild(menuEl);
   const mw = menuEl.offsetWidth, mh = menuEl.offsetHeight;
   menuEl.style.left = Math.min(e.clientX, window.innerWidth - mw - 8) + 'px'; menuEl.style.top = Math.min(e.clientY, window.innerHeight - mh - 8) + 'px';
-  menuEl.onclick = ev => { if (!ev.target.closest('[data-m]')) return; closeMenu(); sendToStage(); };
+  menuEl.onclick = ev => { const m = ev.target.closest('[data-m]'); if (!m) return; closeMenu(); if (m.dataset.m === 'snapsel') snapFromSel(); else sendToStage(); };
+}
+// Create snapshot (Larry, 2026-11-08): the same right-click menus turn a selection on a schematic sheet straight into a snapshot,
+// without touching the stage drawing. No stage yet: one is made (empty drawing) and this is snapshot 1. Otherwise it goes in just
+// after the current snapshot and becomes the current one, so several in a row come out in order. You stay on the schematic.
+function selData(items) {
+  return JSON.parse(JSON.stringify({ parts: items.filter(i => i.k === 'part').map(i => i.o), wires: items.filter(i => i.k === 'wire').map(i => i.o), texts: items.filter(i => i.k === 'text').map(i => i.o),
+    lines: items.filter(i => i.k === 'line').map(i => i.o), links: copyLinks(new Set(items.filter(i => i.k === 'part').map(i => i.o.id))) }));
+}
+function snapFromSel() {
+  const items = selItems(); if (!items.length || onStage()) return;
+  snapshot();
+  const made = !stageSh(); if (made) project.sheets.push(newStageSheet(sheet));
+  if (!project.stage) project.stage = { cur: 0, snaps: [] };
+  const st = project.stage, at = st.snaps.length ? Math.min(st.cur + 1, st.snaps.length) : 0;
+  st.snaps.splice(at, 0, { id: uid(), fade: STAGE_FADE, data: selData(items) }); st.cur = at;
+  treeOpen = true; render(); renderSheets(); renderDoc(); changed();
+  setMsg(`${made ? 'Animation Stage created. ' : ''}Snapshot ${at + 1} of ${st.snaps.length} made from ${items.length} item${items.length > 1 ? 's' : ''}${st.snaps.length > at + 1 ? `; the ones after it moved down one` : ''}.`);
 }
 function sendToStage() {
   const items = selItems(); if (!items.length || onStage()) return;
-  const data = JSON.parse(JSON.stringify({ parts: items.filter(i => i.k === 'part').map(i => i.o), wires: items.filter(i => i.k === 'wire').map(i => i.o), texts: items.filter(i => i.k === 'text').map(i => i.o),
-    lines: items.filter(i => i.k === 'line').map(i => i.o), links: copyLinks(new Set(items.filter(i => i.k === 'part').map(i => i.o.id))) }));
+  const data = selData(items);
   const sh = stageSh(), st = project.stage, from = sheet;
   const onIt = sh ? sh.parts.length + sh.wires.length + sh.texts.length + linesOf(sh).length + linksOf(sh).length : 0, nSnaps = st ? st.snaps.length : 0;
   const go = () => {
@@ -3378,7 +3394,7 @@ function partMenu(e, raw) {
     + (items.some(i => i.k === 'line' && shapeOfL(i.o) === 'line') ? (() => { const es = new Set(items.filter(i => i.k === 'line' && shapeOfL(i.o) === 'line').map(i => i.o.ends || 'none')), cur = es.size === 1 ? [...es][0] : '';
         return `<div class="mlabel">Arrowheads</div><div class="chips wide">${[['none', 'None'], ['start', 'Start'], ['end', 'End'], ['both', 'Both']].map(([k, n]) => `<button class="chip" data-le="${k}" aria-pressed="${k === cur}">${n}</button>`).join('')}</div>`; })() : '')
     + (items.some(i => i.k === 'line' && canFill(i.o)) ? `<div class="mlabel">Fill</div>${fillRow((() => { const fs = new Set(items.filter(i => i.k === 'line' && canFill(i.o)).map(i => i.o.fill || '')); return fs.size === 1 ? [...fs][0] : null; })())}` : '')
-    + (!onStage() && !selLabel ? `<button role="menuitem" data-m="tostage"><span>Send ${items.length > 1 ? `${items.length} items` : 'to'} to Animation Stage</span><span></span></button>`.replace('Send to to', 'Send to') : '')
+    + (!onStage() && !selLabel ? `<button role="menuitem" data-m="tostage"><span>Send ${items.length > 1 ? `${items.length} items` : 'to'} to Animation Stage</span><span></span></button>`.replace('Send to to', 'Send to') + `<button role="menuitem" data-m="snapsel"><span>Create snapshot</span><span></span></button>` : '')
     + `<button role="menuitem" data-m="dup"><span>Duplicate</span><span>Ctrl+D</span></button>`
     + (selLabel ? `<button role="menuitem" data-m="del"><span>Hide ${FIELD_NAME[selLabel.field]}</span><span>Del</span></button>`
                 : `<button role="menuitem" data-m="del" style="color:var(--danger)"><span>Delete${many}</span><span>Del</span></button>`);
@@ -3396,6 +3412,7 @@ function partMenu(e, raw) {
     const vy = ev.target.closest('[data-vary]'); if (vy) { closeMenu(); const [vk, vn] = vy.dataset.vary.split(':'); setVary(items[0].o, +vn, vk); return; }
     const b = ev.target.closest('[data-m]'); if (!b) return; const m = b.dataset.m; closeMenu();
     if (m === 'tostage') { sendToStage(); return; }
+    if (m === 'snapsel') { snapFromSel(); return; }
     if (m === 'edit') { const L0 = selLabel; if (L0) editInPlace(sheet.parts.find(x => x.id === L0.id), L0.field); return; }
     if (m === 'heater') { setHeater(items[0].o, !!items[0].o.noHeater); return; }
     if (m.startsWith('unit-')) { addSection(items[0].o, m.slice(5)); return; }

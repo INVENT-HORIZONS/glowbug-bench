@@ -2056,8 +2056,14 @@ $('search').addEventListener('keydown', e => e.stopPropagation());
 
 function armPlace(type) { placeType = type; placeRot = 0; placeFlip = false; setMode('place'); renderLib(); setMsg(`Placing ${LIB[type].name}. Click to drop; R rotates, X/Y flip, Esc stops.`); }
 
+let propsSig = '';
 function renderProps() {
   const b = $('propBody'), items = selItems();
+  // Typing in a Properties field re-renders the sheet, which comes back here. Rebuilding the panel then would throw away the field
+  // being typed in (Larry, 2026-11-07: the text box lost focus after every key). Same selection and a field focused: leave it alone.
+  const sig = mode + '|' + items.map(i => i.k + ':' + i.o.id).join(',') + '|' + (selLabel ? selLabel.id + selLabel.field : '');
+  if (sig === propsSig && b.contains(document.activeElement) && document.activeElement.matches('input, textarea, select, [contenteditable]')) return;
+  propsSig = sig;
   if (!items.length && SHAPE_TOOLS.includes(mode)) {
     b.innerHTML = `<div class="what">${SHAPE_NAME[mode]} tool<small>pen for new lines, ellipses and rectangles</small></div>
       ${penFields(pen.color, pen.w, pen.dash)}
@@ -2858,7 +2864,7 @@ function lineClick(p) {
 function addText(p) {
   snapshot(); const t = { id: uid(), x: p[0], y: p[1], text: 'Text', size: 12, tone: 'ink' };
   sheet.texts.push(t); sel.clear(); sel.add(t.id); setMode('select'); render(); changed();
-  const ta = $('tTxt'); if (ta) { ta.focus(); ta.select(); }
+  setTimeout(() => { const ta = $('tTxt'); if (ta) { ta.focus(); ta.select(); } }, 0);   // after the click's own focus change, so typing goes straight into the box
 }
 
 /* ---- wires ---- */

@@ -1655,12 +1655,6 @@ function moveSnap(d) {
   const st = project.stage, i = st.cur, j = i + d; if (j < 0 || j >= st.snaps.length) return;
   snapshot(); [st.snaps[i], st.snaps[j]] = [st.snaps[j], st.snaps[i]]; st.cur = j; if (previewing) putData(sheet, st.snaps[j].data); render(); changed(); setMsg(`Snapshot moved to place ${j + 1}.`);
 }
-// the area every snapshot (and the stage itself) covers, so the view holds still from slide to slide
-function stageFit() {
-  const all = { parts: [...sheet.parts], wires: [...sheet.wires], texts: [...sheet.texts], lines: [...linesOf(sheet)], links: [] };
-  for (const q of project.stage.snaps) for (const k of ['parts', 'wires', 'texts', 'lines']) all[k].push(...(q.data[k] || []));
-  const was = sheet; sheet = all; try { if (all.parts.length + all.wires.length + all.texts.length + all.lines.length) fitDrawing(); else { sheet = was; fit(); } } finally { sheet = was; }
-}
 function stopAnim() { if (anim) { cancelAnimationFrame(anim.raf); anim = null; render(); } }
 function showSnap(i) { if (anim) { cancelAnimationFrame(anim.raf); anim = null; } putData(sheet, project.stage.snaps[i].data); project.stage.cur = i; render(); }
 function stageGo(dir) {
@@ -1680,7 +1674,7 @@ function stagePlay() {
   wireDraft = null; lineDraft = null; linkDraft = null; sel.clear(); selLabel = null;
   playing = { max: 0, cur: st.cur };
   sheet = standIn();   // the stage itself is never touched while playing, so saving stays safe
-  showSnap(0); stageFit();
+  showSnap(0); fit();   // Larry: start from the Fit view (the whole stage page), and it holds still while playing
   setMsg(`Playing from snapshot 1 of ${st.snaps.length}: → moves on, ← goes back. Stop or Esc ends.`);
 }
 function stageStop() {
@@ -1695,7 +1689,7 @@ function stageKey(e, k) {
     if (k === 'arrowright' || k === 'pagedown') { e.preventDefault(); if (st.cur < st.snaps.length - 1) previewSnap(st.cur + 1); else setMsg(`Snapshot ${st.cur + 1} is the last one.`); }
     else if (k === 'arrowleft' || k === 'pageup') { e.preventDefault(); if (st.cur > 0) previewSnap(st.cur - 1); else setMsg('This is the first snapshot.'); }
     else if (k === 'escape') endPreview();
-    else if (k === 'f') stageFit();
+    else if (k === 'f') fit();
     else if (k === '+' || k === '=') zoomAt(null, 1.25); else if (k === '-') zoomAt(null, 0.8);
     else if (k === 'g') $('bGrid').click(); else if (k === 'k') $('bCam').click();
     return;
@@ -1703,7 +1697,7 @@ function stageKey(e, k) {
   if (k === 'arrowright' || k === 'pagedown') { e.preventDefault(); stageGo(1); }
   else if (k === 'arrowleft' || k === 'pageup') { e.preventDefault(); stageGo(-1); }
   else if (k === 'escape') stageStop();
-  else if (k === 'f') stageFit();
+  else if (k === 'f') fit();
   else if (k === '+' || k === '=') zoomAt(null, 1.25); else if (k === '-') zoomAt(null, 0.8);
   else if (k === 'g') $('bGrid').click(); else if (k === 'k') $('bCam').click();
 }
@@ -1743,7 +1737,7 @@ function animateTo(i) {
   const SM = t => { const x = blank(); for (const k of SNAP_KINDS) x[k] = [...S[k]]; for (const m of mv) x[m.k].push(between(m.k, m.a, m.b, t)); return x; };
   const d0 = dotMap(SM(0)), d1 = dotMap(SM(1));
   const dO = [...dA].filter(([k]) => !d0.has(k)).map(x => x[1]).join(''), dI = [...dB].filter(([k]) => !d1.has(k)).map(x => x[1]).join('');
-  renderSheets(); renderDoc();
+  renderSheets(); renderDoc(); propsSig = ''; renderProps();
   const t0 = performance.now(), dur = Math.max(0.1, st.fade) * 1000;
   const frame = now => {
     const t = Math.min(1, (now - t0) / dur), e = ease(t), M = blank();

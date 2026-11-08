@@ -445,7 +445,6 @@ button, input, select, textarea { font: inherit; color: inherit; box-sizing: bor
     <button class="tb" id="bPdf" title="Datasheet viewer (PDF)" aria-pressed="false"><svg viewBox="0 0 24 24" style="width:24px;height:26px" stroke-linejoin="round"><path d="M5 1.8h9.4l4.8 4.8v15.6H5z" fill="#FFFFFF" stroke="#5A5550" stroke-width="1.1"/><path d="M14.4 1.8v4.8h4.8" fill="#E6E0D6" stroke="#5A5550" stroke-width="1.1"/><path d="M7.6 9.6h7.8M7.6 12h9M7.6 19.8h9" fill="none" stroke="#B9B4AC" stroke-width="1"/><rect x="2.6" y="13.6" width="13.4" height="6.2" rx="1" fill="#C42A20"/><text x="9.3" y="18.6" text-anchor="middle" style="font:800 5.2px system-ui,Arial,sans-serif;fill:#FFFFFF;letter-spacing:.2px">PDF</text></svg></button>
     <button class="tb" id="bImg" title="Add a picture (PNG, JPEG, GIF, BMP, WebP, SVG)"><svg viewBox="0 0 24 24" style="width:26px;height:26px" stroke-linejoin="round"><rect x="2.5" y="4" width="19" height="16" rx="1.6" fill="#FFFFFF" stroke="#5A5550" stroke-width="1.2"/><rect x="4.4" y="5.9" width="15.2" height="12.2" fill="#CFE3F2"/><path d="M4.4 18.1l4.6-6.4 3.3 4.2 2.4-2.8 4.9 5z" fill="#2E6B34"/><path d="M4.4 18.1l4.6-6.4 2.2 2.8-3.2 3.6z" fill="#3F8A48"/><circle cx="15.8" cy="9.4" r="1.9" fill="#E8B23A"/></svg></button>
     <span class="sep"></span>
-    <button class="tb" id="bStage" aria-pressed="false" title="Animation Stage: add the project's animation sheet, or go to it. Its snapshots play one after another, each fading in or cutting in as you set it."><svg viewBox="0 0 24 24" style="width:26px;height:26px" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><path d="M3.5 10h17v10h-17z"/><path d="M3.5 10L3 6.2l16.4-2.6.6 3.8z"/><path d="M7.4 5.5l2.4 3.6M12.3 4.7l2.4 3.6M17.2 4l1.9 2.8" stroke-width="1.4"/><path d="M10.3 12.8v4.4l3.8-2.2z" fill="currentColor" stroke="none"/></svg></button>
     <button class="tb" id="bSnap" title="Snapshot: capture this sheet as it is now and add it to the end of the Animation Stage"><svg viewBox="0 0 24 24" style="width:26px;height:26px" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><path d="M6.5 3.5h14v11"/><path d="M3.5 6.5h14v14h-14z"/><path d="M10.5 10.5v6M7.5 13.5h6" stroke-linecap="round"/></svg></button><input type="file" id="imgFile" accept="image/*" multiple hidden>
     <span class="tb-spacer"></span>
     <button class="tb" id="bImport" title="Open a .json project file"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15V3M7 10l5 5 5-5M4 15v5h16v-5"/></svg><span class="lb">Import</span></button>
@@ -1649,26 +1648,18 @@ function sendToStage() {
   back.querySelector('form').addEventListener('submit', e => { e.preventDefault(); close(); go(); });
   $('tsCancel').focus();
 }
-function goStage() {
-  let sh = stageSh();
-  if (!sh) { snapshot(); project.stage = { cur: 0, snaps: [] }; sh = newStageSheet(onStage() ? null : sheet); project.sheets.push(sh); treeOpen = true; changed(); setMsg('Animation Stage added. Build on it like any sheet, and press Snapshot at each step.'); }
-  else if (onStage() && previewing) { endPreview(); return; }
-  else if (onStage() && playing) { stageStop(); return; }
-  else if (onStage()) { setMsg('This is the Animation Stage. Press Snapshot to capture it as it is now.'); return; }
-  switchSheet(sh.id);
-}
 function takeSnap() {
   const st = project.stage;
-  if (!onStage() || !st) { setMsg(st ? 'Snapshots capture the Animation Stage. Press the Animation Stage button to go there first.' : 'Press the Animation Stage button first: snapshots capture the Animation Stage.'); return; }
+  if (!onStage() || !st) { setMsg(st ? 'Snapshots capture the Animation Stage. Click Animation Stage in the project tree to go there first.' : 'There is no Animation Stage yet. Select part of a schematic, right-click it and choose Send to Animation Stage.'); return; }
   if (playing) { setMsg('Stop playing first, then take a snapshot.'); return; }
-  if (previewing) { setMsg('You are looking at a snapshot. Press Esc or Animation Stage to go back to your stage, then take the snapshot.'); return; }
+  if (previewing) { setMsg('You are looking at a snapshot. Press Esc to go back to your stage, then take the snapshot.'); return; }
   snapshot(); const at = st.snaps.length;   // always at the end of the list (Larry)
   st.snaps.splice(at, 0, { id: uid(), fade: STAGE_FADE, data: snapData(sheet) }); st.cur = at;
   treeOpen = true; renderSheets(); renderDoc(); changed();
   setMsg(`Snapshot ${at + 1} taken and added to the end of the list.`);
 }
 // Clicking a snapshot shows it without touching the stage (Larry: what is drawn on the stage stays there). ← / → step through
-// the snapshots; Esc, the Animation Stage button or its tree node go back to the stage as it was. "Copy to stage" puts the
+// the snapshots; Esc or the stage's tree node go back to the stage as it was. "Copy to stage" puts the
 // snapshot on the stage (undoable) to change it.
 function previewSnap(i) {
   const st = project.stage; if (!st || !st.snaps[i]) return;
@@ -1678,7 +1669,7 @@ function previewSnap(i) {
   if (mode !== 'select') setMode('select');
   wireDraft = null; lineDraft = null; linkDraft = null; sel.clear(); selLabel = null;
   previewing = true; sheet = standIn(); putData(sheet, st.snaps[i].data); st.cur = i; render();
-  setMsg(`Viewing snapshot ${i + 1} of ${st.snaps.length} (view only). ← → step through them; Esc or Animation Stage goes back to your stage.`);
+  setMsg(`Viewing snapshot ${i + 1} of ${st.snaps.length} (view only). ← → step through them; Esc or Back to stage goes back to your stage.`);
 }
 function endPreview(quiet) { if (!previewing) return; previewing = false; const sh = stageSh(); if (onStage()) { sheet = sh || schSheets()[0]; render(); } if (!quiet) setMsg('Back on the Animation Stage, as you left it.'); }
 function copyToStage(i) {
@@ -1836,7 +1827,6 @@ function stagePanel(b) {
   on('stBack', () => endPreview()); on('stCopy', () => copyToStage(st.cur));
   on('stUpd', () => { snapshot(); st.snaps[st.cur].data = snapData(sheet); renderSheets(); changed(); setMsg(`Snapshot ${st.cur + 1} updated to the stage as it is now.`); });
 }
-$('bStage').onclick = goStage;
 $('bSnap').onclick = takeSnap;
 
 /* =====================================================================
@@ -2201,8 +2191,7 @@ function render() {
   setLayers(layersOf(sheet), [...dotMap(sheet).values()].join(''));
   renderSel(); renderHooks(); renderDoc(); applyView();
   $('stCount').textContent = `${sheet.parts.length} part${sheet.parts.length === 1 ? '' : 's'} · ${sheet.wires.length} wire${sheet.wires.length === 1 ? '' : 's'}`;
-  $('bStage').setAttribute('aria-pressed', !!sheet.stage);
-  $('hint').innerHTML = playing && sheet.stage ? '<b>→</b> moves on, <b>←</b> goes back · <b>Esc</b> or <b>Stop</b> ends · wheel zooms' : previewing && sheet.stage ? 'Viewing a snapshot · <b>←</b> <b>→</b> step through them · <b>Esc</b> or <b>Animation Stage</b> goes back to your stage · <b>Copy to stage</b> to change it' : HINT[mode];
+  $('hint').innerHTML = playing && sheet.stage ? '<b>→</b> moves on, <b>←</b> goes back · <b>Esc</b> or <b>Stop</b> ends · wheel zooms' : previewing && sheet.stage ? 'Viewing a snapshot · <b>←</b> <b>→</b> step through them · <b>Esc</b> or <b>Back to stage</b> goes back to your stage · <b>Copy to stage</b> to change it' : HINT[mode];
   renderSheets(); renderInst();
 }
 function renderHooks(cnt = connectivity()) {

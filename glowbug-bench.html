@@ -1958,6 +1958,9 @@ function connectivity() {
   const hooks = allHooks(); for (const h of hooks) add(h.pos, 1);
   const pts = new Map(); for (const e of ends) pts.set(key(e), e); for (const h of hooks) pts.set(key(h.pos), h.pos);
   for (const [k, p] of pts) for (const w of sheet.wires) for (let i = 0; i < w.pts.length - 1; i++) if (onSegInterior(p, w.pts[i], w.pts[i + 1])) add(p, 2);
+  // a wire end or hook on another wire's bend joins both legs of that bend (Larry, 2026-11-08: corner-to-corner wires had no dot)
+  const bends = new Map(); for (const w of sheet.wires) for (let i = 1; i < w.pts.length - 1; i++) { const k = key(w.pts[i]); bends.set(k, (bends.get(k) || 0) + 1); }
+  for (const k of pts.keys()) if (bends.has(k)) add(pts.get(k), 2 * bends.get(k));
   return cnt;
 }
 /* ---- wire colors ---- */

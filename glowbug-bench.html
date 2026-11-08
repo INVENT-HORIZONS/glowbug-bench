@@ -1569,18 +1569,20 @@ function exampleProject() {
 /* =====================================================================
    ANIMATION STAGE (Larry, 2026-11-08)
    The stage is a real, editable sheet (in project.sheets with stage: true; one per project) with no border, revision chart or
-   title block: parts are dropped and wired on it like any schematic. project.stage = { sheet, fade, trans, cur, snaps } holds
-   its settings and the snapshots: Snapshot copies the stage as it is now (parts, wires, text, shapes, links) into the list,
-   right after the current one. Picking a snapshot loads it onto the stage (undoable), so it can be changed and updated. Play
-   keeps the stage's own content aside and shows the snapshots read-only: the right arrow moves on with a transition (fade or
+   title block: parts are dropped and wired on it like any schematic, and what is drawn there stays there. project.stage =
+   { fade, trans, cur, snaps } holds its settings and the snapshots: Snapshot copies the stage as it is now (parts, wires, text,
+   shapes, links) to the end of the list. Clicking a snapshot only views it (previewSnap, a stand-in sheet); Copy to stage puts
+   it on the stage, undoably. Play shows the snapshots in a stand-in too: the right arrow moves on with a transition (fade or
    slide) the first time a snapshot is reached and jumps over ground already covered; the left arrow always jumps back. Stop
-   puts the stage back as it was.
+   goes back to the stage as it was.
    ===================================================================== */
 const onStage = () => !!(sheet && sheet.stage);
 const STAGE_ID = 'stage';  // confirm-delete key in the tree
 let playing = null;        // { max: furthest snapshot reached, cur: the snapshot picked before } while playing; sheet is then a stand-in copy of the stage
 let anim = null;           // { raf } while a transition runs
-const viewOnly = () => onStage() && !!playing;
+let previewing = false;    // looking at a snapshot (view-only, st.cur) without touching the stage itself
+const viewOnly = () => onStage() && !!(playing || previewing);
+const standIn = () => Object.assign({}, stageSh(), { parts: [], wires: [], texts: [], lines: [], links: [], inst: [] });   // what play and preview draw into; the real stage is never touched
 const STAGE_FADE = 2;      // seconds, Larry's default
 const SNAP_KINDS = ['parts', 'wires', 'texts', 'lines', 'links'];
 const schSheets = () => project.sheets.filter(q => !q.stage);
@@ -1607,6 +1609,8 @@ function cleanStage() {
 function goStage() {
   let sh = stageSh();
   if (!sh) { snapshot(); project.stage = { fade: STAGE_FADE, trans: 'fade', cur: 0, snaps: [] }; sh = newStageSheet(onStage() ? null : sheet); project.sheets.push(sh); treeOpen = true; changed(); setMsg('Animation Stage added. Build on it like any sheet, and press Snapshot at each step.'); }
+  else if (onStage() && previewing) { endPreview(); return; }
+  else if (onStage() && playing) { stageStop(); return; }
   else if (onStage()) { setMsg('This is the Animation Stage. Press Snapshot to capture it as it is now.'); return; }
   switchSheet(sh.id);
 }
@@ -1614,28 +1618,42 @@ function takeSnap() {
   const st = project.stage;
   if (!onStage() || !st) { setMsg(st ? 'Snapshots capture the Animation Stage. Press the Animation Stage button to go there first.' : 'Press the Animation Stage button first: snapshots capture the Animation Stage.'); return; }
   if (playing) { setMsg('Stop playing first, then take a snapshot.'); return; }
-  snapshot(); const at = st.snaps.length ? st.cur + 1 : 0;
+  if (previewing) { setMsg('You are looking at a snapshot. Press Esc or Animation Stage to go back to your stage, then take the snapshot.'); return; }
+  snapshot(); const at = st.snaps.length;   // always at the end of the list (Larry)
   st.snaps.splice(at, 0, { id: uid(), data: snapData(sheet) }); st.cur = at;
   treeOpen = true; renderSheets(); renderDoc(); changed();
-  setMsg(`Snapshot ${at + 1} of ${st.snaps.length} taken.${at < st.snaps.length - 1 ? ' It went in after the snapshot you were on.' : ''}`);
+  setMsg(`Snapshot ${at + 1} taken and added to the end of the list.`);
 }
-// load snapshot i onto the stage, to look at or change it (undoable)
-function loadSnap(i) {
+// Clicking a snapshot shows it without touching the stage (Larry: what is drawn on the stage stays there). ← / → step through
+// the snapshots; Esc, the Animation Stage button or its tree node go back to the stage as it was. "Copy to stage" puts the
+// snapshot on the stage (undoable) to change it.
+function previewSnap(i) {
   const st = project.stage; if (!st || !st.snaps[i]) return;
   if (playing) stageStop();
   if (!onStage()) switchSheet(stageSh().id);
-  snapshot(); putData(sheet, st.snaps[i].data); st.cur = i; sel.clear(); selLabel = null; render(); changed();
-  setMsg(`Snapshot ${i + 1} of ${st.snaps.length} is on the stage. Change it and press Update snapshot, or press Snapshot to add a new one after it.`);
+  if (anim) { cancelAnimationFrame(anim.raf); anim = null; }
+  if (mode !== 'select') setMode('select');
+  wireDraft = null; lineDraft = null; linkDraft = null; sel.clear(); selLabel = null;
+  previewing = true; sheet = standIn(); putData(sheet, st.snaps[i].data); st.cur = i; render();
+  setMsg(`Viewing snapshot ${i + 1} of ${st.snaps.length} (view only). ← → step through them; Esc or Animation Stage goes back to your stage.`);
+}
+function endPreview(quiet) { if (!previewing) return; previewing = false; const sh = stageSh(); if (onStage()) { sheet = sh || schSheets()[0]; render(); } if (!quiet) setMsg('Back on the Animation Stage, as you left it.'); }
+function copyToStage(i) {
+  const st = project.stage; if (!st || !st.snaps[i]) return;
+  endPreview(true); if (!onStage()) switchSheet(stageSh().id);
+  snapshot(); putData(sheet, st.snaps[i].data); st.cur = i; sel.clear(); render(); changed();
+  setMsg(`Snapshot ${i + 1} copied onto the stage (Ctrl+Z puts the stage back). Change it and press Update snapshot, or Snapshot to add a new one at the end.`);
 }
 function delSnap(i) {
   const st = project.stage; if (!st || !st.snaps[i]) return;
   if (playing) stageStop();
   snapshot(); st.snaps.splice(i, 1); if (st.cur >= i && st.cur > 0) st.cur--;
+  if (previewing) { if (st.snaps.length) putData(sheet, st.snaps[st.cur].data); else endPreview(true); }
   render(); changed(); setMsg(`Snapshot ${i + 1} deleted. Ctrl+Z brings it back.`);
 }
 function moveSnap(d) {
   const st = project.stage, i = st.cur, j = i + d; if (j < 0 || j >= st.snaps.length) return;
-  snapshot(); [st.snaps[i], st.snaps[j]] = [st.snaps[j], st.snaps[i]]; st.cur = j; render(); changed(); setMsg(`Snapshot moved to place ${j + 1}.`);
+  snapshot(); [st.snaps[i], st.snaps[j]] = [st.snaps[j], st.snaps[i]]; st.cur = j; if (previewing) putData(sheet, st.snaps[j].data); render(); changed(); setMsg(`Snapshot moved to place ${j + 1}.`);
 }
 // the area every snapshot (and the stage itself) covers, so the view holds still from slide to slide
 function stageFit() {
@@ -1657,20 +1675,31 @@ function stagePlay() {
   if (!st || !st.snaps.length) { setMsg('Take some snapshots first: build on the Animation Stage and press Snapshot at each step.'); return; }
   if (!onStage()) switchSheet(stageSh().id);
   if (playing) { showSnap(0); playing.max = 0; return; }
+  if (previewing) endPreview(true);
   if (mode !== 'select') setMode('select');
   wireDraft = null; lineDraft = null; linkDraft = null; sel.clear(); selLabel = null;
   playing = { max: 0, cur: st.cur };
-  sheet = Object.assign({}, sheet, { parts: [], wires: [], texts: [], lines: [], links: [], inst: [] });   // a stand-in: the stage itself is never touched while playing, so saving stays safe
+  sheet = standIn();   // the stage itself is never touched while playing, so saving stays safe
   showSnap(0); stageFit();
   setMsg(`Playing from snapshot 1 of ${st.snaps.length}: → moves on, ← goes back. Stop or Esc ends.`);
 }
 function stageStop() {
   if (!playing) return;
-  const p = playing; playing = null; if (anim) { cancelAnimationFrame(anim.raf); anim = null; }
+  const p = playing; playing = null; previewing = false; if (anim) { cancelAnimationFrame(anim.raf); anim = null; }
   const sh = stageSh(); if (project.stage) project.stage.cur = Math.max(0, Math.min(p.cur, project.stage.snaps.length - 1));
   if (onStage()) { sheet = sh || schSheets()[0]; render(); } setMsg('Stopped. The stage is back as you left it.');
 }
 function stageKey(e, k) {
+  if (previewing && !playing) {
+    const st = project.stage;
+    if (k === 'arrowright' || k === 'pagedown') { e.preventDefault(); if (st.cur < st.snaps.length - 1) previewSnap(st.cur + 1); else setMsg(`Snapshot ${st.cur + 1} is the last one.`); }
+    else if (k === 'arrowleft' || k === 'pageup') { e.preventDefault(); if (st.cur > 0) previewSnap(st.cur - 1); else setMsg('This is the first snapshot.'); }
+    else if (k === 'escape') endPreview();
+    else if (k === 'f') stageFit();
+    else if (k === '+' || k === '=') zoomAt(null, 1.25); else if (k === '-') zoomAt(null, 0.8);
+    else if (k === 'g') $('bGrid').click(); else if (k === 'k') $('bCam').click();
+    return;
+  }
   if (k === 'arrowright' || k === 'pagedown') { e.preventDefault(); stageGo(1); }
   else if (k === 'arrowleft' || k === 'pageup') { e.preventDefault(); stageGo(-1); }
   else if (k === 'escape') stageStop();
@@ -1740,10 +1769,11 @@ function stagePanel(b) {
     <div class="field"><label for="stFade">Fade length</label><input type="number" id="stFade" min="0.1" max="10" step="0.1" value="${st.fade}" title="Seconds the fade or slide takes"></div>
     <div class="dnote">seconds, for the fade or the slide</div>
     <div class="stg-now">${n ? `Snapshot ${st.cur + 1} of ${n}` : 'No snapshots yet'}</div>
-    <div class="dnote">${playing ? '→ moves on, ← goes back. Stop or Esc ends.' : n ? 'Snapshot adds the stage as it is now, after this one. Pick a snapshot in the tree to load it onto the stage.' : 'Build on the stage, then press Snapshot (toolbar) at each step.'}</div>
-    ${n && !playing ? `<div class="row-btns"><button id="stUpd" title="Replace snapshot ${st.cur + 1} with the stage as it is now">Update snapshot</button><button class="del" id="stDel">Delete</button></div>
+    <div class="dnote">${playing ? '→ moves on, ← goes back. Stop or Esc ends.' : previewing ? 'Viewing this snapshot; your stage is unchanged. ← → step through the snapshots.' : n ? 'Snapshot adds the stage as it is now to the end of the list. Click a snapshot in the tree to view it.' : 'Build on the stage, then press Snapshot (toolbar) at each step.'}</div>
+    ${previewing ? `<div class="row-btns"><button id="stBack" title="Back to the stage as you left it (Esc)">Back to stage</button><button id="stCopy" title="Put this snapshot on the stage to change it (replaces what is on the stage; Ctrl+Z undoes)">Copy to stage</button></div>` : ''}
+    ${n && !playing ? `<div class="row-btns">${previewing ? '' : `<button id="stUpd" title="Replace snapshot ${st.cur + 1} with the stage as it is now">Update snapshot</button>`}<button class="del" id="stDel">Delete</button></div>
     <div class="row-btns"><button id="stUp" ${st.cur > 0 ? '' : 'disabled'} title="Move this snapshot one place earlier">Move earlier</button><button id="stDown" ${st.cur < n - 1 ? '' : 'disabled'} title="Move this snapshot one place later">Move later</button></div>` : ''}
-    ${playing ? '' : `<div class="dnote">Stage size</div>
+    ${playing || previewing ? '' : `<div class="dnote">Stage size</div>
     <div class="seg" role="group" aria-label="Stage size">${Object.entries(SIZES).map(([k, v]) => `<button data-size="${k}" aria-pressed="${sheet.size === k}" title="${v.name}${v.note ? ' (' + v.note + ')' : ''}"><b>${k}</b><small>${v.note || v.name.replace(' in', '')}</small></button>`).join('')}</div>
     <div class="seg two" role="group" aria-label="Orientation"><button data-or="L" aria-pressed="${sheet.orient !== 'P'}"><b>Landscape</b></button><button data-or="P" aria-pressed="${sheet.orient === 'P'}"><b>Portrait</b></button></div>`}`;
   b.querySelectorAll('[data-tr]').forEach(x => x.onclick = () => { if (!project.stage || st.trans === x.dataset.tr) return; snapshot(); st.trans = x.dataset.tr; renderDoc(); changed(); setMsg(`Transition: ${x.dataset.tr}`); });
@@ -1754,6 +1784,7 @@ function stagePanel(b) {
   fd.addEventListener('keydown', ev => { ev.stopPropagation(); if (ev.key === 'Enter') fd.blur(); });
   const on = (id, fn) => { const x = $(id); if (x) x.onclick = () => { fn(); x.blur(); }; };   // blur, so the arrow keys go to the stage
   on('stPlay', stagePlay); on('stStop', stageStop); on('stUp', () => moveSnap(-1)); on('stDown', () => moveSnap(1)); on('stDel', () => delSnap(st.cur));
+  on('stBack', () => endPreview()); on('stCopy', () => copyToStage(st.cur));
   on('stUpd', () => { snapshot(); st.snaps[st.cur].data = snapData(sheet); renderSheets(); changed(); setMsg(`Snapshot ${st.cur + 1} updated to the stage as it is now.`); });
 }
 $('bStage').onclick = goStage;
@@ -2111,7 +2142,7 @@ function render() {
   renderSel(); renderHooks(); renderDoc(); applyView();
   $('stCount').textContent = `${sheet.parts.length} part${sheet.parts.length === 1 ? '' : 's'} · ${sheet.wires.length} wire${sheet.wires.length === 1 ? '' : 's'}`;
   $('bStage').setAttribute('aria-pressed', !!sheet.stage);
-  $('hint').innerHTML = viewOnly() ? '<b>Play</b> starts at snapshot 1 · <b>→</b> moves on, <b>←</b> goes back · <b>Esc</b> or <b>Stop</b> ends · wheel zooms · the stage is view-only' : HINT[mode];
+  $('hint').innerHTML = playing && sheet.stage ? '<b>→</b> moves on, <b>←</b> goes back · <b>Esc</b> or <b>Stop</b> ends · wheel zooms' : previewing && sheet.stage ? 'Viewing a snapshot · <b>←</b> <b>→</b> step through them · <b>Esc</b> or <b>Animation Stage</b> goes back to your stage · <b>Copy to stage</b> to change it' : HINT[mode];
   renderSheets(); renderInst();
 }
 function renderHooks(cnt = connectivity()) {
@@ -2217,8 +2248,8 @@ function renderSheets() {
   }).join('');
   const st = project.stage, ss = stageSh();
   const stg = !st || !ss ? '' : confirmDel === STAGE_ID ? `<div class="confirm">Delete the Animation Stage and its ${st.snaps.length} snapshot${st.snaps.length === 1 ? '' : 's'}? <button class="yes" data-yes="${STAGE_ID}">Delete</button><button data-no="1">Keep</button></div>`
-    : `<div class="tnode stg${sheet.id === ss.id ? ' on' : ''}" role="treeitem" data-sheet="${ss.id}" title="Animation Stage: build on it like any sheet; ${st.snaps.length} snapshot${st.snaps.length === 1 ? '' : 's'}">${ICON_STAGE}<span class="nm">Animation Stage</span><span class="ct">${st.snaps.length}</span><button class="x" data-del="${STAGE_ID}" title="Delete the Animation Stage" aria-label="Delete the Animation Stage">×</button></div>`
-      + st.snaps.map((q, i) => `<div class="tnode snap${st.cur === i ? ' cur' : ''}" role="treeitem" data-snap="${i}" title="Snapshot ${i + 1}: click to load it onto the stage">${ICON_SNAP}<span class="nm">Snapshot ${i + 1}</span><button class="x" data-delsnap="${i}" title="Delete this snapshot" aria-label="Delete snapshot ${i + 1}">×</button></div>`).join('');
+    : `<div class="tnode stg${sheet.id === ss.id && !viewOnly() ? ' on' : ''}" role="treeitem" data-sheet="${ss.id}" title="Animation Stage: build on it like any sheet; ${st.snaps.length} snapshot${st.snaps.length === 1 ? '' : 's'}">${ICON_STAGE}<span class="nm">Animation Stage</span><span class="ct">${st.snaps.length}</span><button class="x" data-del="${STAGE_ID}" title="Delete the Animation Stage" aria-label="Delete the Animation Stage">×</button></div>`
+      + st.snaps.map((q, i) => `<div class="tnode snap${st.cur === i ? ' cur' : ''}${previewing && st.cur === i ? ' on' : ''}" role="treeitem" data-snap="${i}" title="Snapshot ${i + 1}: click to view it; your stage stays as it is">${ICON_SNAP}<span class="nm">Snapshot ${i + 1}</span><button class="x" data-delsnap="${i}" title="Delete this snapshot" aria-label="Delete snapshot ${i + 1}">×</button></div>`).join('');
   el.innerHTML = `<div class="tnode root" role="treeitem" aria-expanded="${treeOpen}" data-root="1" title="Double-click to rename the project"><button class="car${treeOpen ? ' open' : ''}" data-tog="1" aria-label="${treeOpen ? 'Collapse' : 'Expand'}">▶</button>${ICON_PROJ}${rootName}</div>`
     + (treeOpen ? `<div class="tkids" role="group">${kids}${stg}</div>` : '');
   el.tabIndex = 0;
@@ -2243,12 +2274,13 @@ function renderSheets() {
 $('sheets').addEventListener('click', e => {
   const t = e.target.closest('[data-del],[data-delsnap],[data-yes],[data-no],[data-sheet],[data-tog],[data-stage],[data-snap]'); if (!t) return;
   if (t.dataset.delsnap) { delSnap(+t.dataset.delsnap); e.stopPropagation(); return; }
-  if (t.dataset.yes === STAGE_ID) { if (playing) stageStop(); snapshot(); const was = onStage(); delete project.stage; project.sheets = schSheets(); confirmDel = null; if (was) switchSheet(project.sheets[0].id); else renderSheets(); changed(); setMsg('Animation Stage deleted. Ctrl+Z brings it back.'); return; }
-  if (t.dataset.snap) { loadSnap(+t.dataset.snap); return; }
+  if (t.dataset.yes === STAGE_ID) { if (playing) stageStop(); endPreview(true); snapshot(); const was = onStage(); delete project.stage; project.sheets = schSheets(); confirmDel = null; if (was) switchSheet(project.sheets[0].id); else renderSheets(); changed(); setMsg('Animation Stage deleted. Ctrl+Z brings it back.'); return; }
+  if (t.dataset.snap) { previewSnap(+t.dataset.snap); return; }
   if (t.dataset.tog) { treeOpen = !treeOpen; renderSheets(); return; }
   if (t.dataset.del) { confirmDel = t.dataset.del; renderSheets(); e.stopPropagation(); return; }
   if (t.dataset.yes) { snapshot(); project.sheets = project.sheets.filter(q => q.id !== t.dataset.yes); confirmDel = null; switchSheet(schSheets()[0].id); changed(); return; }
   if (t.dataset.no) { confirmDel = null; renderSheets(); return; }
+  if (t.dataset.sheet && viewOnly() && t.dataset.sheet === sheet.id) { if (playing) stageStop(); else endPreview(); return; }   // the stage node: back to the stage itself
   if (t.dataset.sheet && t.dataset.sheet !== sheet.id) switchSheet(t.dataset.sheet);
 });
 $('sheets').addEventListener('dblclick', e => {
@@ -2258,7 +2290,7 @@ $('sheets').addEventListener('dblclick', e => {
 });
 $('sheets').addEventListener('keydown', e => {
   if (e.target.matches('input')) return;
-  if (viewOnly() && /^Arrow/.test(e.key)) return;   // while playing, the arrow keys step through the snapshots
+  if (viewOnly()) return;   // while playing or viewing a snapshot, the keys (arrows, Esc) belong to the stage
   const i = project.sheets.indexOf(sheet);
   if (e.key === 'ArrowDown' && i < project.sheets.length - 1) { e.preventDefault(); switchSheet(project.sheets[i + 1].id); }
   else if (e.key === 'ArrowUp' && i > 0) { e.preventDefault(); switchSheet(project.sheets[i - 1].id); }
@@ -2274,7 +2306,7 @@ $('bAddSheet').onclick = () => {
   const s = newSheet('Sheet ' + (schSheets().length + 1), onStage() ? schSheets()[0] : sheet); s.file = f;
   const si = project.sheets.findIndex(q => q.stage); if (si >= 0) project.sheets.splice(si, 0, s); else project.sheets.push(s);   // the stage stays last switchSheet(s.id); renaming = s.id; renderSheets(); changed();
 };
-function switchSheet(id) { if (playing) stageStop(); sheet = project.sheets.find(s => s.id === id) || project.sheets[0]; project.active = sheet.id; sel.clear(); wireDraft = null; render(); fit(); }
+function switchSheet(id) { if (playing) stageStop(); previewing = false; sheet = project.sheets.find(s => s.id === id) || project.sheets[0]; project.active = sheet.id; sel.clear(); wireDraft = null; render(); fit(); }
 
 let docFocus = null;
 function cornerPick(which, label) {
@@ -2428,7 +2460,7 @@ function renderProps() {
   const sig = mode + '|' + items.map(i => i.k + ':' + i.o.id).join(',') + '|' + (selLabel ? selLabel.id + selLabel.field : '');
   if (sig === propsSig && b.contains(document.activeElement) && document.activeElement.matches('input, textarea, select, [contenteditable]')) return;
   propsSig = sig;
-  if (viewOnly()) { const st = project.stage; b.innerHTML = `<div class="what">Playing<small>snapshot ${st.cur + 1} of ${st.snaps.length}</small></div><div class="empty">→ moves on, ← goes back. Stop or Esc ends and puts the stage back as you left it.</div>`; return; }
+  if (viewOnly()) { const st = project.stage; b.innerHTML = `<div class="what">${playing ? 'Playing' : 'Viewing a snapshot'}<small>snapshot ${st.cur + 1} of ${st.snaps.length}</small></div><div class="empty">${playing ? '→ moves on, ← goes back. Stop or Esc ends and puts the stage back as you left it.' : 'View only. Esc goes back to your stage, unchanged; Copy to stage (in the stage panel) puts this snapshot on it to change.'}</div>`; return; }
   if (!items.length && SHAPE_TOOLS.includes(mode)) {
     b.innerHTML = `<div class="what">${SHAPE_NAME[mode]} tool<small>${mode === 'arrow' ? 'line and fill for new arrows' : 'pen for new lines, ellipses and rectangles'}</small></div>
       ${mode === 'arrow' ? arrowStyleField(pen.astyle, 'pArrStyle') : ''}${penFields(pen.color, pen.w, pen.dash)}${mode === 'rect' || mode === 'ellipse' ? fillFields(pen.fill, pen.fillA) : mode === 'arrow' ? fillFields(pen.afill, pen.afillA) : ''}
@@ -2554,8 +2586,8 @@ function selItems() {
 }
 function snapshot() { undoStack.push(projJSON()); if (undoStack.length > 150) undoStack.shift(); redoStack = []; updateButtons(); }
 function restore(json) { const act = sheet && sheet.id; project = JSON.parse(json); project.images = IMG; sheet = project.sheets.find(s => s.id === act) || project.sheets[0]; sel.clear(); render(); changed(); }
-function undo() { if (playing) return; if (!undoStack.length) return; redoStack.push(projJSON()); restore(undoStack.pop()); setMsg('Undone'); }
-function redo() { if (playing) return; if (!redoStack.length) return; undoStack.push(projJSON()); restore(redoStack.pop()); setMsg('Redone'); }
+function undo() { if (playing) return; endPreview(true); if (!undoStack.length) return; redoStack.push(projJSON()); restore(undoStack.pop()); setMsg('Undone'); }
+function redo() { if (playing) return; endPreview(true); if (!redoStack.length) return; undoStack.push(projJSON()); restore(redoStack.pop()); setMsg('Redone'); }
 function updateButtons() {
   $('bUndo').disabled = !undoStack.length; $('bRedo').disabled = !redoStack.length;
   const any = sel.size > 0;
@@ -3309,7 +3341,7 @@ const HINT = {
   place: '<b>Click</b> to drop the part · <b>R</b> rotate · <b>X</b> flip H · <b>Y</b> flip V · <b>Esc</b> stop placing',
 };
 function setMode(m) {
-  if (viewOnly() && m !== 'select') { setMsg('Stop playing first to edit the stage.'); return; }
+  if (viewOnly() && m !== 'select') { setMsg(playing ? 'Stop playing first to edit the stage.' : 'You are viewing a snapshot. Press Esc to go back to your stage to edit.'); return; }
   if (mode === 'wire' && m !== 'wire' && wireDraft) finishDraft();
   if (m !== mode || !SHAPE_TOOLS.includes(m)) lineDraft = null;
   if (m !== 'link') linkDraft = null;
@@ -3346,7 +3378,7 @@ document.addEventListener('keydown', e => {
   if (k === ' ' && linkDraft) { e.preventDefault(); if (!e.repeat) { linkDraft.hv = !linkDraft.hv; renderOver(); } return; }
   if (k === ' ' && wireDraft) { e.preventDefault(); if (!e.repeat) { wireDraft.hv = !wireDraft.hv; renderOver(); setMsg(wireDraft.hv ? 'Corner: horizontal first, then vertical' : 'Corner: vertical first, then horizontal'); } return; }
   if (k === ' ') { if (!e.target.closest('button')) { spaceDown = true; e.preventDefault(); } return; }
-  if (viewOnly() && !(mod && k === 's')) { if (!mod) stageKey(e, k); return; }
+  if (viewOnly() && !(mod && k === 's')) { if (previewing && !playing && mod && (k === 'z' || k === 'y')) endPreview(true); else { if (!mod) stageKey(e, k); return; } }
   if (mod && k === 'z') { e.preventDefault(); e.shiftKey ? redo() : undo(); return; }
   if (mod && k === 'y') { e.preventDefault(); redo(); return; }
   if (mod && k === 's') { e.preventDefault(); saveNow(); return; }
@@ -3463,7 +3495,7 @@ function loadProject(p, msg) {
     sheet = was;
   }
   if (!schSheets().length) project.sheets.unshift(newSheet('Sheet 1'));
-  playing = null; if (anim) { cancelAnimationFrame(anim.raf); anim = null; }
+  playing = null; previewing = false; if (anim) { cancelAnimationFrame(anim.raf); anim = null; }
   sheet = project.sheets.find(s => s.id === project.active) || schSheets()[0];
   undoStack = []; redoStack = []; sel.clear(); wireDraft = null;
   render(); fit(); if (msg) setMsg(msg);

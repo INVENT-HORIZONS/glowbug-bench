@@ -1847,7 +1847,7 @@ function applyView() {
   const sh = $('sheetShadow'); sh.setAttribute('x', 4 / view.z); sh.setAttribute('y', 5 / view.z); sh.setAttribute('width', SW); sh.setAttribute('height', SH);
   $('gridRect').style.display = showGrid ? '' : 'none';
   $('stZoom').textContent = Math.round(view.z * 100) + '%';
-  if (plotHandleOf()) renderSel();     // keep the plot's resize handle the same size on screen
+  if (plotHandleOf() || meshHandleOf()) renderSel();     // keep the plot's resize handle the same size on screen
 }
 function partSVG(p, extra = '') {
   return `<g${p.color && p.color !== 'ink' && WIRE_COLORS.some(c => c.k === p.color) ? ` class="pc-${p.color}" style="--ink:${wcol(p.color)}"` : ''} transform="translate(${p.x} ${p.y}) rotate(${(p.rot || 0) * 90}) scale(${p.flip ? -1 : 1} 1)"${extra}>${hasBox(p) ? (b => `<rect class="xbox" x="${b[0]}" y="${b[1]}" width="${b[2] - b[0]}" height="${b[3] - b[1]}" rx="2"/>`)(localBB(p)) : ''}${shapeOf(p).draw(isXfmr(p) ? p.core || 'iron' : LIB[p.type].drawArg ? LIB[p.type].drawArg(p) : undefined)}</g>`;
@@ -2027,6 +2027,11 @@ const plotSize = (a, raw) => [a[0] + Math.max(PLOT_MIN[0], Math.round((raw[0] - 
 const plotAt = c => { const a = [snap(c[0] - PLOT_DEF[0] / 2), snap(c[1] - PLOT_TB / 2)]; return { a, b: [a[0] + PLOT_DEF[0], a[1] + PLOT_TB + PLOT_DEF[1]], shape: 'plot' }; };   // the cursor holds the title bar
 // the resize handle sits on the bottom-right corner of a plot when it is the only thing selected
 const plotHandleOf = () => { if (sel.size !== 1) return null; const l = linesOf(sheet).find(x => sel.has(x.id)); return isPlot(l) || isImage(l) ? l : null; };   // plots and pictures resize from the corner
+// Mesh current loops resize from four handles, left / right for the width and top / bottom for the height, about a fixed center
+// (Larry, 2026-11-08). They show when one loop is the only thing selected.
+const meshHandleOf = () => { if (sel.size !== 1) return null; const l = linesOf(sheet).find(x => sel.has(x.id)); return isMesh(l) ? l : null; };
+const meshHandles = l => { const g = meshGeom(l); return [[g.cx + g.rx, g.cy, 'x'], [g.cx - g.rx, g.cy, 'x'], [g.cx, g.cy + g.ry, 'y'], [g.cx, g.cy - g.ry, 'y']]; };
+function meshHandleAt(raw) { const l = meshHandleOf(); if (!l) return null; const tol = 7 / view.z; const h = meshHandles(l).find(q => Math.abs(raw[0] - q[0]) <= tol && Math.abs(raw[1] - q[1]) <= tol); return h ? { l, axis: h[2] } : null; }
 function plotHandleAt(raw) { const l = plotHandleOf(); if (!l) return null; const f = isPlot(l) ? plotFrame(l) : lineBB(l), tol = 7 / view.z; return Math.abs(raw[0] - f[2]) <= tol && Math.abs(raw[1] - f[3]) <= tol ? l : null; }
 const shapeOfL = l => l.shape || 'line';
 const radOf = l => Math.hypot(l.b[0] - l.a[0], l.b[1] - l.a[1]);
@@ -2241,6 +2246,7 @@ function renderSel() {
   for (const w of sheet.wires) if (sel.has(w.id)) s += `<polyline class="selwire" points="${w.pts.map(p => p.join(',')).join(' ')}"/>`;
   for (const t of sheet.texts) if (sel.has(t.id)) { const b = textBB(t); s += `<rect class="selbox" x="${b[0] - 2}" y="${b[1] - 2}" width="${b[2] - b[0] + 4}" height="${b[3] - b[1] + 4}" rx="2"/>`; }
   for (const l of linesOf(sheet)) if (sel.has(l.id)) s += lineEl(l, 'class="selwire" style="fill:none"');
+  { const l = meshHandleOf(); if (l) { const r = 4 / view.z; for (const [x, y] of meshHandles(l)) s += `<rect x="${x - r}" y="${y - r}" width="${2 * r}" height="${2 * r}" style="fill:#FFFFFF;stroke:${LINK_COL};stroke-width:${1.4 / view.z}"/>`; } }
   { const l = plotHandleOf(); if (l) { const f = isPlot(l) ? plotFrame(l) : lineBB(l), r = 4.5 / view.z; s += `<rect x="${f[2] - r}" y="${f[3] - r}" width="${2 * r}" height="${2 * r}" style="fill:#FFFFFF;stroke:${LINK_COL};stroke-width:${1.4 / view.z}"/>`; } }
   for (const k of linksOf(sheet)) if (sel.has(k.id)) { const e = linkEnds(k); if (e) s += `<polyline class="selwire" points="${ptsAttr(e)}"/>`; }
   if (selLabel) { const q = sheet.parts.find(x => x.id === selLabel.id), l = q && labelLines(q).find(x => x.field === selLabel.field);
@@ -2620,7 +2626,7 @@ function renderProps() {
     const size = sh === 'mesh' ? `${+(Math.abs(l.b[0] - l.a[0]) / G).toFixed(1)} × ${+(Math.abs(l.b[1] - l.a[1]) / G).toFixed(1)}` : sh === 'arrow' ? `${+(Math.abs(l.b[0] - l.a[0]) / G).toFixed(1)} × ${+(Math.abs(l.b[1] - l.a[1]) / G).toFixed(1)}` : sh === 'circle' ? `radius ${(len / G).toFixed(1)}` : sh === 'rect' || sh === 'ellipse' ? `${(bb[2] - bb[0]) / G} × ${(bb[3] - bb[1]) / G}` : `${(len / G).toFixed(1)}`;
     b.innerHTML = `<div class="what">${isRound(l) ? 'Circle' : SHAPE_NAME[sh]}<small>${size} grid units${sh === 'arrow' ? ` · turned ${l.rot || 0}°${l.mx || l.my ? ' · mirrored' : ''}` : ''} · drawing only, not a wire</small></div>
       ${sh === 'arrow' ? `${arrowStyleField(l.astyle || 'straight', 'pArrSel')}<div class="field"><label for="pArrRot">Angle (degrees)</label><input id="pArrRot" type="number" step="15" value="${l.rot || 0}"></div>` : ''}${penFields(l.color || 'ink', l.w || 1.4, l.dash || 'solid')}${sh === 'mesh' ? meshFields(l.gap ?? 60, l.gapAt ?? 120, !!l.ccw, true) : ''}${canFill(l) ? fillFields(l.fill || '', l.fillA || 1) : ''}
-      <div class="empty">${sh === 'mesh' ? 'Drag it to move it. <b>R</b> moves the gap round 45°, <b>X</b> / <b>Y</b> mirror it (which reverses the current).' : sh === 'arrow' ? 'Drag it to move it. <b>R</b> turns it 45° clockwise, <b>X</b> flips it left to right, <b>Y</b> top to bottom.' : 'Drag it to move it. Draw more with the Line (L), Ellipse (O) and Rectangle (B) tools.'}</div>
+      <div class="empty">${sh === 'mesh' ? 'Drag it to move it; drag the side handles to change its width and the top and bottom ones to change its height. <b>R</b> moves the gap round 45°, <b>X</b> / <b>Y</b> mirror it (which reverses the current).' : sh === 'arrow' ? 'Drag it to move it. <b>R</b> turns it 45° clockwise, <b>X</b> flips it left to right, <b>Y</b> top to bottom.' : 'Drag it to move it. Draw more with the Line (L), Ellipse (O) and Rectangle (B) tools.'}</div>
       <div class="row-btns">${sh === 'mesh' ? '<button data-act="rot">Move gap 45°</button>' : ''}${sh === 'arrow' ? '<button data-act="rot">Rotate 45°</button><button data-act="flip">Flip H</button><button data-act="flipv">Flip V</button>' : ''}<button data-act="dup">Duplicate</button><button class="del" data-act="del">Delete</button></div>`;
   } else if (it.k === 'wire') {
     const w = it.o, len = w.pts.slice(1).reduce((a, p, i) => a + Math.abs(p[0] - w.pts[i][0]) + Math.abs(p[1] - w.pts[i][1]), 0);
@@ -2898,6 +2904,7 @@ svg.addEventListener('pointerdown', e => {
   if (mode === 'cut' || mode === 'snip') { cutAt(raw, mode === 'snip'); return; }
   if (mode === 'wire') { wireClick(p, raw); return; }
   // select mode
+  { const mh = meshHandleAt(raw); if (mh) { snapshot(); const g = meshGeom(mh.l); drag = { kind: 'meshsize', o: mh.l, axis: mh.axis, c: [g.cx, g.cy], start: p, moved: false }; return; } }
   { const pl = plotHandleAt(raw); if (pl) { snapshot(); drag = isImage(pl) ? { kind: 'imgsize', o: pl, a: lineBB(pl).slice(0, 2), start: p, moved: false } : { kind: 'plotsize', o: pl, a: plotFrame(pl).slice(0, 2), start: p, moved: false }; return; } }
   if (plotAreaAt(raw) && !hit(raw)) return;   // the plot area is reserved for cursors and probing: no marquee, no wiring from parts it covers
   const h = hookAt(raw);
@@ -2967,6 +2974,11 @@ svg.addEventListener('pointermove', e => {
       if (w !== o.b[0] - a[0] || h !== o.b[1] - a[1] || o.a[0] !== a[0] || o.a[1] !== a[1]) { o.a = [...a]; o.b = [a[0] + w, a[1] + h]; drag.moved = true; render(); renderProps(); }
       setMsg(e.altKey ? 'Keeping the picture\'s proportions (Alt)' : 'Hold Alt to keep the picture\'s proportions');
     }
+    else if (drag.kind === 'meshsize') {   // the center stays put; the dragged handle sets the half-width or half-height (at least 10, on the grid)
+      const o = drag.o, c = drag.c, ax = drag.axis === 'x' ? 0 : 1, r = Math.max(10, snap(Math.abs(raw[ax] - c[ax]))), na = [...o.a], nb = [...o.b];
+      na[ax] = c[ax] - r; nb[ax] = c[ax] + r; [na[1 - ax], nb[1 - ax]] = [Math.min(o.a[1 - ax], o.b[1 - ax]), Math.max(o.a[1 - ax], o.b[1 - ax])];
+      if (na[ax] !== Math.min(o.a[ax], o.b[ax]) || nb[ax] !== Math.max(o.a[ax], o.b[ax])) { o.a = na; o.b = nb; drag.moved = true; render(); renderProps(); }
+    }
     else if (drag.kind === 'plotsize') { const nb = plotSize(drag.a, raw), o = drag.o; if (nb[0] !== o.b[0] || nb[1] !== o.b[1]) { o.a = [...drag.a]; o.b = nb; drag.moved = true; render(); renderProps(); } }
     else if (drag.kind === 'seg') {
       const pts = drag.pts.map(q => [...q]);
@@ -2980,7 +2992,7 @@ svg.addEventListener('pointermove', e => {
   if ((h && key(h.pos)) !== (hoverHook && key(hoverHook.pos))) { hoverHook = h; renderHooks(); }
   if (mode === 'select') {
     const t = h ? null : hit(raw);
-    svg.style.cursor = !h && plotHandleAt(raw) ? 'nwse-resize' : !t && plotAreaAt(raw) ? 'crosshair' : h ? 'crosshair' : (!t && blockAt(raw)) ? 'grab' : t ? (t.k === 'wire' || t.k === 'link' ? (t.o.pts[t.seg][1] === t.o.pts[t.seg + 1][1] ? 'ns-resize' : 'ew-resize') : 'move') : 'default';
+    svg.style.cursor = !h && meshHandleAt(raw) ? (meshHandleAt(raw).axis === 'x' ? 'ew-resize' : 'ns-resize') : !h && plotHandleAt(raw) ? 'nwse-resize' : !t && plotAreaAt(raw) ? 'crosshair' : h ? 'crosshair' : (!t && blockAt(raw)) ? 'grab' : t ? (t.k === 'wire' || t.k === 'link' ? (t.o.pts[t.seg][1] === t.o.pts[t.seg + 1][1] ? 'ns-resize' : 'ew-resize') : 'move') : 'default';
   } else svg.style.cursor = mode === 'link' ? (linkTarget(raw) || linkAt(raw) ? 'crosshair' : linkDraft ? 'cell' : 'default') : '';
   if (mode === 'cut' || mode === 'snip') { const t = hit(raw); cutHover = t; $('stMsg').textContent = t ? (t.k === 'label' ? `Click to hide this ${FIELD_NAME[t.field]}` : `Click to cut ${t.k === 'part' ? (t.o.ref || LIB[t.o.type].name) : t.k === 'wire' && mode === 'snip' ? 'this segment' : t.k}`) : ''; }
   renderOver();
@@ -2989,7 +3001,7 @@ svg.addEventListener('pointerup', e => {
   if (panning) { panning = null; $('view').classList.remove('panning'); return; }
   if (drag) {
     if (drag.kind === 'block') { const moved = drag.moved; drag = null; if (moved) { render(); changed(); } return; }
-    if ((drag.kind === 'move' || drag.kind === 'label' || drag.kind === 'pin' || drag.kind === 'plotsize' || drag.kind === 'imgsize') && !drag.moved) undoStack.pop();
+    if ((drag.kind === 'move' || drag.kind === 'label' || drag.kind === 'pin' || drag.kind === 'plotsize' || drag.kind === 'imgsize' || drag.kind === 'meshsize') && !drag.moved) undoStack.pop();
     if (drag.kind === 'seg') { if (drag.w.pts.length === drag.pts.length && drag.w.pts.every((q, i) => q[0] === drag.pts[i][0] && q[1] === drag.pts[i][1])) { drag.w.pts = simplify(drag.pts); undoStack.pop(); } else drag.w.pts = simplify(drag.w.pts); }
     finishWires(); drag = null; render(); changed(); return;
   }

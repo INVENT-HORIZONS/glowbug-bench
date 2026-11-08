@@ -535,6 +535,7 @@ button, input, select, textarea { font: inherit; color: inherit; box-sizing: bor
     <button class="tool" id="mEllipse" title="Draw an ellipse (O): click two opposite corners of its box; hold Alt for a circle. Drawing only, not a wire." aria-label="Ellipse" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><ellipse cx="12" cy="12" rx="8" ry="5.2"/></svg><span class="k">O</span></button>
     <button class="tool" id="mLine" title="Draw a straight line (L): click the start, then click the end. Lines are drawing only, not wires." aria-label="Line" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M8 16L16 8"/></svg><span class="k">L</span></button>
     <button class="tool" id="mArrow" title="Draw an arrow (A): click one end, then the other; the arrow points toward the second click. Rotate (R), flip (X, Y), and set its line and fill colors. Drawing only, for pointing things out." aria-label="Arrow" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"><path d="M3.5 9.5h9.5V5.5l7.5 6.5-7.5 6.5v-4H3.5z" fill="currentColor" fill-opacity=".22"/></svg><span class="k">A</span></button>
+    <button class="tool" id="mMesh" title="Mesh current (M): click the loop's center, then a point to set its width, then one to set its height. Dotted and thin to start; set the gap, its position and the direction in Properties." aria-label="Mesh current" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M5.6 17.4A8.4 8.4 0 1 1 18.4 17.8" stroke-dasharray="0.1 2.9" stroke-width="2.3"/><path d="M20.9 14.6l-1.2 5.4-5.2-2.1z" fill="currentColor" stroke="none"/></svg><span class="k">M</span></button>
   </nav>
 
   <footer class="status">
@@ -1913,7 +1914,7 @@ const wstyle = w => w.color && w.color !== 'ink' ? ` style="stroke:${wcol(w.colo
 let lineDraft = null;               // { a: [x, y] } while a line is being drawn
 // Circle and Rectangle tools (Larry, under Line) make the same kind of drawing-only item, with l.shape set: a circle is
 // its center a and a point b on the edge (radius |b - a|); a rectangle is two opposite corners a and b. Unset = line.
-const SHAPE_TOOLS = ['line', 'ellipse', 'rect', 'arrow'], SHAPE_NAME = { line: 'Line', circle: 'Circle', ellipse: 'Ellipse', rect: 'Rectangle', arrow: 'Arrow', plot: 'Active Plot', image: 'Picture' };
+const SHAPE_TOOLS = ['line', 'ellipse', 'rect', 'arrow', 'mesh'], SHAPE_NAME = { line: 'Line', circle: 'Circle', ellipse: 'Ellipse', rect: 'Rectangle', arrow: 'Arrow', mesh: 'Mesh current', plot: 'Active Plot', image: 'Picture' };
 // Arrows (Arrow tool, A; Larry, 2026-11-08): block arrows for pointing things out, mostly in animation steps. l.shape 'arrow', a and b
 // opposite corners of its unturned box (the arrow points to +x inside it), l.rot the turn in degrees about the box center (any angle,
 // R steps 45°), l.mx / l.my mirror it in its own frame before turning, l.astyle 'straight' (default), 'double', 'bent' or 'curved'.
@@ -1946,9 +1947,30 @@ function arrowFromDrag(a, p) {
   return { a: [cx - L / 2, cy - T / 2], b: [cx + L / 2, cy + T / 2], rot: horiz ? (dx < 0 ? 180 : 0) : (dy < 0 ? 270 : 90) };
 }
 const normRot = d => ((Math.round(d) % 360) + 360) % 360;
-function arrowTurn(l, d) { const r = normRot((l.rot || 0) + d); if (r) l.rot = r; else delete l.rot; }
+function arrowTurn(l, d) { if (isMesh(l)) { l.gapAt = normRot((l.gapAt ?? 120) + d); return; } const r = normRot((l.rot || 0) + d); if (r) l.rot = r; else delete l.rot; }
 // mirror in sheet space about the arrow's center: a world flip of R(t)·S is R(-t)·S with the matching own-frame mirror toggled
-function arrowFlip(l, axis) { const r = normRot(-(l.rot || 0)); if (r) l.rot = r; else delete l.rot; const k = axis === 'h' ? 'mx' : 'my'; if (l[k]) delete l[k]; else l[k] = true; }
+// Mesh currents (Mesh tool, M; Larry, 2026-11-08): an elliptical loop with a gap and an arrowhead, like the curved arrows in a mesh
+// analysis figure. l.shape 'mesh', a / b opposite corners of the ellipse's box (center and radii from the three clicks), l.gap the
+// gap in degrees (default 60), l.gapAt where the gap sits (degrees clockwise from 3 o'clock, default 120, about 7 o'clock), l.ccw
+// for a counterclockwise current. Pen as for lines, but new loops start blue, thin and dotted (pen.mcolor / mw / mdash).
+const isMesh = l => l && l.shape === 'mesh';
+const isTurnable = l => isArrow(l) || isMesh(l);
+const MESH_GAPS = [20, 30, 45, 60, 90, 120];
+function meshGeom(l) {
+  const [x0, y0, x1, y1] = [Math.min(l.a[0], l.b[0]), Math.min(l.a[1], l.b[1]), Math.max(l.a[0], l.b[0]), Math.max(l.a[1], l.b[1])];
+  const cx = (x0 + x1) / 2, cy = (y0 + y1) / 2, rx = Math.max((x1 - x0) / 2, 1), ry = Math.max((y1 - y0) / 2, 1);
+  const gap = Math.max(5, Math.min(300, l.gap ?? 60)), at = l.gapAt ?? 120, rad = d => d * Math.PI / 180;
+  const pt = d => [+(cx + rx * Math.cos(rad(d))).toFixed(2), +(cy + ry * Math.sin(rad(d))).toFixed(2)];
+  const s0 = at + gap / 2, s1 = at + 360 - gap / 2, P0 = pt(s0), P1 = pt(s1);
+  const tan = d => { const tx = -rx * Math.sin(rad(d)), ty = ry * Math.cos(rad(d)), n = Math.hypot(tx, ty) || 1; return [tx / n, ty / n]; };
+  const tip = l.ccw ? P0 : P1, dir = l.ccw ? tan(s0).map(v => -v) : tan(s1);
+  return { cx, cy, rx, ry, d: `M${P0[0]} ${P0[1]}A${rx} ${ry} 0 ${360 - gap > 180 ? 1 : 0} 1 ${P1[0]} ${P1[1]}`, tip, dir };
+}
+function meshHead(l, col) {
+  const g = meshGeom(l), w = l.w || 1.4, h = Math.max(7, 3.2 * w + 5), hw = h * 0.5, [tx, ty] = g.tip, [dx, dy] = g.dir, bx = tx - dx * h, by = ty - dy * h;
+  return `<polygon points="${+tx.toFixed(2)},${+ty.toFixed(2)} ${+(bx - dy * hw).toFixed(2)},${+(by + dx * hw).toFixed(2)} ${+(bx + dy * hw).toFixed(2)},${+(by - dx * hw).toFixed(2)}" style="fill:${col};stroke:none"/>`;
+}
+function arrowFlip(l, axis) { if (isMesh(l)) { l.gapAt = normRot(axis === 'h' ? 180 - (l.gapAt ?? 120) : -(l.gapAt ?? 120)); if (l.ccw) delete l.ccw; else l.ccw = true; return; } const r = normRot(-(l.rot || 0)); if (r) l.rot = r; else delete l.rot; const k = axis === 'h' ? 'mx' : 'my'; if (l[k]) delete l[k]; else l[k] = true; }
 const ptInPoly = (p, P) => { let inn = false; for (let i = 0, j = P.length - 1; i < P.length; j = i++) { const [xi, yi] = P[i], [xj, yj] = P[j]; if ((yi > p[1]) !== (yj > p[1]) && p[0] < (xj - xi) * (p[1] - yi) / (yj - yi) + xi) inn = !inn; } return inn; };
 // Ellipse tool (Larry, 2026-11-07; it replaced the Circle tool): l.shape 'ellipse' with a and b opposite corners of its box, like a rectangle;
 // Alt makes the box square, so a circle. Circles drawn earlier (shape 'circle': center a, edge point b) still load and draw as before.
@@ -2011,6 +2033,7 @@ const radOf = l => Math.hypot(l.b[0] - l.a[0], l.b[1] - l.a[1]);
 function lineEl(l, attrs) {
   const sh = shapeOfL(l);
   if (sh === 'arrow') return `<polygon points="${ptsAttr(arrowPts(l))}" ${attrs}/>`;
+  if (sh === 'mesh') return `<path d="${meshGeom(l).d}" ${attrs}/>`;
   if (sh === 'circle') return `<circle cx="${l.a[0]}" cy="${l.a[1]}" r="${+radOf(l).toFixed(2)}" ${attrs}/>`;
   if (sh === 'ellipse') { const [x0, y0, x1, y1] = lineBB(l); return `<ellipse cx="${(x0 + x1) / 2}" cy="${(y0 + y1) / 2}" rx="${(x1 - x0) / 2}" ry="${(y1 - y0) / 2}" ${attrs}/>`; }
   if (sh === 'rect' || sh === 'plot' || sh === 'image') { const [x0, y0, x1, y1] = lineBB(l); return `<rect x="${x0}" y="${y0}" width="${x1 - x0}" height="${y1 - y0}" ${attrs}/>`; }
@@ -2043,11 +2066,15 @@ function fillShapes(k) {   // set (or clear, k = '') the fill of the selected re
 let pen = (q => ({ color: typeof q.color === 'string' ? q.color : 'ink',   // wcol() falls back to ink for an unknown key
   w: PEN_W.some(x => x[0] === q.w) ? q.w : 1.4, dash: PEN_DASH.some(x => x[0] === q.dash) ? q.dash : 'solid',
   fill: typeof q.fill === 'string' ? q.fill : '', fillA: FILL_ALPHA.some(x => x[0] === q.fillA) ? q.fillA : 1,
-  afill: typeof q.afill === 'string' ? q.afill : 'red', afillA: FILL_ALPHA.some(x => x[0] === q.afillA) ? q.afillA : 1, astyle: ARROW_STYLES.some(x => x[0] === q.astyle) ? q.astyle : 'straight' }))(lsGet('gs.pen', {}) || {});
+  afill: typeof q.afill === 'string' ? q.afill : 'red', afillA: FILL_ALPHA.some(x => x[0] === q.afillA) ? q.afillA : 1, astyle: ARROW_STYLES.some(x => x[0] === q.astyle) ? q.astyle : 'straight',
+  mcolor: typeof q.mcolor === 'string' ? q.mcolor : 'blue', mw: PEN_W.some(x => x[0] === q.mw) ? q.mw : 1.4, mdash: PEN_DASH.some(x => x[0] === q.mdash) ? q.mdash : 'dot', mgap: MESH_GAPS.includes(q.mgap) ? q.mgap : 60 }))(lsGet('gs.pen', {}) || {});
 const savePen = () => lsSet('gs.pen', pen);
+const penKey = k => (mode === 'mesh' ? { color: 'mcolor', w: 'mw', dash: 'mdash' }[k] || k : k);   // the Mesh tool keeps its own pen (blue, thin, dotted)
+const meshFields = (gap, at, ccw, sel) => `<div class="field"><label for="pMeshGap">Gap</label><select id="pMeshGap">${[...new Set([...MESH_GAPS, gap])].sort((x, y) => x - y).map(v => `<option value="${v}"${v === gap ? ' selected' : ''}>${v}°</option>`).join('')}</select></div>`
+  + (sel ? `<div class="field"><label for="pMeshAt">Gap at (°)</label><input id="pMeshAt" type="number" step="15" value="${at}" title="Where the gap sits: degrees clockwise from 3 o'clock (90 = bottom, 180 = left)"></div><div class="field"><label for="pMeshDir">Direction</label><select id="pMeshDir"><option value="cw"${ccw ? '' : ' selected'}>Clockwise</option><option value="ccw"${ccw ? ' selected' : ''}>Counterclockwise</option></select></div>` : '');
 const penFillKey = () => mode === 'arrow' ? ['afill', 'afillA'] : ['fill', 'fillA'];   // arrows keep their own fill for new ones (red by default)
 const arrowStyleField = (cur, id) => `<div class="field"><label for="${id}">Arrow style</label><select id="${id}">${ARROW_STYLES.map(([v, n]) => `<option value="${v}"${v === cur ? ' selected' : ''}>${n}</option>`).join('')}</select></div>`;
-const lineSVG = l => { if (isPlot(l)) return plotSVG(l); if (isImage(l)) return imageSVG(l); const w = l.w || 1.4, d = penDash(l.dash, w), fl = isArrow(l) && fcol(l.fill) ? `fill:${fcol(l.fill)};fill-opacity:${l.fillA || 1}` : 'fill:none'; return lineEl(l, `style="stroke:${wcol(l.color || 'ink')};stroke-width:${w};stroke-linecap:round;stroke-linejoin:round;${fl}${d ? `;stroke-dasharray:${d}` : ''}"`); };
+const lineSVG = l => { if (isPlot(l)) return plotSVG(l); if (isImage(l)) return imageSVG(l); if (isMesh(l)) { const w = l.w || 1.4, d = penDash(l.dash || 'solid', w), col = wcol(l.color || 'ink'); return `<g>${lineEl(l, `style="stroke:${col};stroke-width:${w};stroke-linecap:round;fill:none${d ? `;stroke-dasharray:${d}` : ''}"`)}${meshHead(l, col)}</g>`; } const w = l.w || 1.4, d = penDash(l.dash, w), fl = isArrow(l) && fcol(l.fill) ? `fill:${fcol(l.fill)};fill-opacity:${l.fillA || 1}` : 'fill:none'; return lineEl(l, `style="stroke:${wcol(l.color || 'ink')};stroke-width:${w};stroke-linecap:round;stroke-linejoin:round;${fl}${d ? `;stroke-dasharray:${d}` : ''}"`); };
 // the pen fields for the Properties panel: color swatches, pen size and line style
 const penFields = (color, w, dash) => `<div class="field"><label>Color</label>${swatchRow(color)}</div>
       <div class="field"><label for="pPenW">Pen size</label><select id="pPenW">${PEN_W.map(([v, n]) => `<option value="${v}"${v === w ? ' selected' : ''}>${n} (${v} px)</option>`).join('')}</select></div>
@@ -2056,6 +2083,7 @@ const lineBB = l => { if (isPlot(l)) return plotFrame(l); if (isArrow(l)) { cons
 // distance from p to the drawn outline (hit testing)
 function lineDist(p, l) {
   const sh = shapeOfL(l);
+  if (sh === 'mesh') { const g = meshGeom(l), u = (p[0] - g.cx) / g.rx, v = (p[1] - g.cy) / g.ry; return Math.abs(Math.hypot(u, v) - 1) * Math.min(g.rx, g.ry); }
   if (sh === 'arrow') { const P = arrowPts(l); return ptInPoly(p, P) ? 0 : Math.min(...P.map((q, i) => distSeg(p, q, P[(i + 1) % P.length]))); }   // picked anywhere on it
   if (sh === 'image') { const [x0, y0, x1, y1] = lineBB(l); if (p[0] >= x0 && p[0] <= x1 && p[1] >= y0 && p[1] <= y1) return 0; }   // a picture is picked anywhere on it
   if (canFill(l) && fcol(l.fill)) { const inside = sh === 'circle' ? Math.hypot(p[0] - l.a[0], p[1] - l.a[1]) <= radOf(l) : sh === 'ellipse' ? (() => { const [x0, y0, x1, y1] = lineBB(l), rx = (x1 - x0) / 2, ry = (y1 - y0) / 2; return rx > 0 && ry > 0 && ((p[0] - x0 - rx) / rx) ** 2 + ((p[1] - y0 - ry) / ry) ** 2 <= 1; })() : (([x0, y0, x1, y1]) => p[0] >= x0 && p[0] <= x1 && p[1] >= y0 && p[1] <= y1)(lineBB(l)); if (inside) return 0; }   // filled: pick anywhere inside
@@ -2271,7 +2299,8 @@ function renderOver() {
   }
   if (SHAPE_TOOLS.includes(mode)) {
     s += `<line class="cursor-x" x1="${mouse[0] - 6}" y1="${mouse[1]}" x2="${mouse[0] + 6}" y2="${mouse[1]}"/><line class="cursor-x" x1="${mouse[0]}" y1="${mouse[1] - 6}" x2="${mouse[0]}" y2="${mouse[1] + 6}"/>`;
-    if (lineDraft) s += lineDraft.shape === 'arrow' ? (key(lineDraft.a) === key(mouse) ? '' : lineSVG({ ...arrowFromDrag(lineDraft.a, mouse), shape: 'arrow', astyle: pen.astyle, color: pen.color, w: pen.w, dash: pen.dash, fill: pen.afill, fillA: pen.afillA })) : lineSVG({ a: lineDraft.a, b: rectEnd(lineDraft.a, mouse), shape: lineDraft.shape, color: pen.color, w: pen.w, dash: pen.dash });
+    if (lineDraft && lineDraft.shape === 'mesh') s += lineSVG(meshDraftObj(lineDraft, mouse)) + `<circle cx="${lineDraft.a[0]}" cy="${lineDraft.a[1]}" r="2" style="fill:${wcol(pen.mcolor)}"/>`;
+    else if (lineDraft) s += lineDraft.shape === 'arrow' ? (key(lineDraft.a) === key(mouse) ? '' : lineSVG({ ...arrowFromDrag(lineDraft.a, mouse), shape: 'arrow', astyle: pen.astyle, color: pen.color, w: pen.w, dash: pen.dash, fill: pen.afill, fillA: pen.afillA })) : lineSVG({ a: lineDraft.a, b: rectEnd(lineDraft.a, mouse), shape: lineDraft.shape, color: pen.color, w: pen.w, dash: pen.dash });
   }
   if (band) s += `<rect class="band" x="${Math.min(band.a[0], band.b[0])}" y="${Math.min(band.a[1], band.b[1])}" width="${Math.abs(band.b[0] - band.a[0])}" height="${Math.abs(band.b[1] - band.a[1])}"/>`;
   $('layerOver').innerHTML = s;
@@ -2521,6 +2550,7 @@ function renderProps() {
   propsSig = sig;
   if (viewOnly()) { const st = project.stage; b.innerHTML = `<div class="what">${playing ? 'Playing' : 'Viewing a snapshot'}<small>snapshot ${st.cur + 1} of ${st.snaps.length}</small></div><div class="empty">${playing ? '→ moves on, ← goes back. Stop or Esc ends and puts the stage back as you left it.' : 'View only. Esc goes back to your stage, unchanged; Copy to stage (in the stage panel) puts this snapshot on it to change.'}</div>`; return; }
   if (!items.length && SHAPE_TOOLS.includes(mode)) {
+    if (mode === 'mesh') { b.innerHTML = `<div class="what">Mesh current tool<small>pen and gap for new loops</small></div>${penFields(pen.mcolor, pen.mw, pen.mdash)}${meshFields(pen.mgap, 120, false, false)}<div class="empty">Click the loop's center, then a point to set its width, then a point to set its height. Once placed, R moves the gap round 45° and X / Y reverse the direction.</div>`; return; }
     b.innerHTML = `<div class="what">${SHAPE_NAME[mode]} tool<small>${mode === 'arrow' ? 'line and fill for new arrows' : 'pen for new lines, ellipses and rectangles'}</small></div>
       ${mode === 'arrow' ? arrowStyleField(pen.astyle, 'pArrStyle') : ''}${penFields(pen.color, pen.w, pen.dash)}${mode === 'rect' || mode === 'ellipse' ? fillFields(pen.fill, pen.fillA) : mode === 'arrow' ? fillFields(pen.afill, pen.afillA) : ''}
       <div class="empty">${mode === 'arrow' ? 'Click where the arrow starts, then where it points. It runs along the direction you moved farther. Turn it with R (45° steps) and flip it with X or Y once placed.' : mode === 'ellipse' ? 'Click one corner of its box, then the opposite corner. Hold Alt for a circle.' : mode === 'rect' ? 'Click one corner, then the opposite corner.' : 'Click the start, then the end.'}</div>`; return;
@@ -2586,11 +2616,11 @@ function renderProps() {
       <div class="row-btns"><button data-act="dup">Duplicate</button><button class="del" data-act="del">Delete</button></div>`;
   } else if (it.k === 'line') {
     const l = it.o, sh = shapeOfL(l), bb = lineBB(l), len = Math.hypot(l.b[0] - l.a[0], l.b[1] - l.a[1]);
-    const size = sh === 'arrow' ? `${+(Math.abs(l.b[0] - l.a[0]) / G).toFixed(1)} × ${+(Math.abs(l.b[1] - l.a[1]) / G).toFixed(1)}` : sh === 'circle' ? `radius ${(len / G).toFixed(1)}` : sh === 'rect' || sh === 'ellipse' ? `${(bb[2] - bb[0]) / G} × ${(bb[3] - bb[1]) / G}` : `${(len / G).toFixed(1)}`;
+    const size = sh === 'mesh' ? `${+(Math.abs(l.b[0] - l.a[0]) / G).toFixed(1)} × ${+(Math.abs(l.b[1] - l.a[1]) / G).toFixed(1)}` : sh === 'arrow' ? `${+(Math.abs(l.b[0] - l.a[0]) / G).toFixed(1)} × ${+(Math.abs(l.b[1] - l.a[1]) / G).toFixed(1)}` : sh === 'circle' ? `radius ${(len / G).toFixed(1)}` : sh === 'rect' || sh === 'ellipse' ? `${(bb[2] - bb[0]) / G} × ${(bb[3] - bb[1]) / G}` : `${(len / G).toFixed(1)}`;
     b.innerHTML = `<div class="what">${isRound(l) ? 'Circle' : SHAPE_NAME[sh]}<small>${size} grid units${sh === 'arrow' ? ` · turned ${l.rot || 0}°${l.mx || l.my ? ' · mirrored' : ''}` : ''} · drawing only, not a wire</small></div>
-      ${sh === 'arrow' ? `${arrowStyleField(l.astyle || 'straight', 'pArrSel')}<div class="field"><label for="pArrRot">Angle (degrees)</label><input id="pArrRot" type="number" step="15" value="${l.rot || 0}"></div>` : ''}${penFields(l.color || 'ink', l.w || 1.4, l.dash || 'solid')}${canFill(l) ? fillFields(l.fill || '', l.fillA || 1) : ''}
-      <div class="empty">${sh === 'arrow' ? 'Drag it to move it. <b>R</b> turns it 45° clockwise, <b>X</b> flips it left to right, <b>Y</b> top to bottom.' : 'Drag it to move it. Draw more with the Line (L), Ellipse (O) and Rectangle (B) tools.'}</div>
-      <div class="row-btns">${sh === 'arrow' ? '<button data-act="rot">Rotate 45°</button><button data-act="flip">Flip H</button><button data-act="flipv">Flip V</button>' : ''}<button data-act="dup">Duplicate</button><button class="del" data-act="del">Delete</button></div>`;
+      ${sh === 'arrow' ? `${arrowStyleField(l.astyle || 'straight', 'pArrSel')}<div class="field"><label for="pArrRot">Angle (degrees)</label><input id="pArrRot" type="number" step="15" value="${l.rot || 0}"></div>` : ''}${penFields(l.color || 'ink', l.w || 1.4, l.dash || 'solid')}${sh === 'mesh' ? meshFields(l.gap ?? 60, l.gapAt ?? 120, !!l.ccw, true) : ''}${canFill(l) ? fillFields(l.fill || '', l.fillA || 1) : ''}
+      <div class="empty">${sh === 'mesh' ? 'Drag it to move it. <b>R</b> moves the gap round 45°, <b>X</b> / <b>Y</b> mirror it (which reverses the current).' : sh === 'arrow' ? 'Drag it to move it. <b>R</b> turns it 45° clockwise, <b>X</b> flips it left to right, <b>Y</b> top to bottom.' : 'Drag it to move it. Draw more with the Line (L), Ellipse (O) and Rectangle (B) tools.'}</div>
+      <div class="row-btns">${sh === 'mesh' ? '<button data-act="rot">Move gap 45°</button>' : ''}${sh === 'arrow' ? '<button data-act="rot">Rotate 45°</button><button data-act="flip">Flip H</button><button data-act="flipv">Flip V</button>' : ''}<button data-act="dup">Duplicate</button><button class="del" data-act="del">Delete</button></div>`;
   } else if (it.k === 'wire') {
     const w = it.o, len = w.pts.slice(1).reduce((a, p, i) => a + Math.abs(p[0] - w.pts[i][0]) + Math.abs(p[1] - w.pts[i][1]), 0);
     b.innerHTML = `<div class="what">Wire<small>${w.pts.length - 1} segment${w.pts.length > 2 ? 's' : ''} · ${len / G} grid units</small></div>
@@ -2615,6 +2645,10 @@ $('propBody').addEventListener('change', e => {
   if (e.target.id === 'pFillA') { const v = +e.target.value, ls = selItems().filter(i => i.k === 'line' && canFill(i.o) && i.o.fill).map(i => i.o);
     if (ls.length) { snapshot(); for (const l of ls) { if (v === 1) delete l.fillA; else l.fillA = v; } render(); changed(); } else if (SHAPE_TOOLS.includes(mode)) { pen[penFillKey()[1]] = v; savePen(); } return; }
   if (e.target.id === 'pArrStyle') { pen.astyle = e.target.value; savePen(); return; }
+  if (['pMeshGap', 'pMeshAt', 'pMeshDir'].includes(e.target.id)) { const ls = selItems().filter(i => isMesh(i.o)).map(i => i.o), v = e.target.value;
+    if (!ls.length) { if (e.target.id === 'pMeshGap' && mode === 'mesh') { pen.mgap = +v; savePen(); } return; }
+    snapshot(); for (const l of ls) { if (e.target.id === 'pMeshGap') { if (+v === 60) delete l.gap; else l.gap = +v; } else if (e.target.id === 'pMeshAt') l.gapAt = normRot(+v || 0); else { if (v === 'ccw') l.ccw = true; else delete l.ccw; } }
+    propsSig = ''; render(); renderProps(); changed(); return; }
   if (e.target.id === 'pArrSel' || e.target.id === 'pArrRot') { const ls = selItems().filter(i => isArrow(i.o)).map(i => i.o); if (!ls.length) return; snapshot();
     for (const l of ls) { if (e.target.id === 'pArrSel') { if (e.target.value === 'straight') delete l.astyle; else l.astyle = e.target.value; } else { const r = normRot(+e.target.value || 0); if (r) l.rot = r; else delete l.rot; } }
     propsSig = ''; render(); renderProps(); changed(); return; }
@@ -2622,12 +2656,12 @@ $('propBody').addEventListener('change', e => {
   const key = e.target.id === 'pPenW' ? 'w' : 'dash', v = key === 'w' ? +e.target.value : e.target.value;
   const ls = selItems().filter(i => i.k === 'line' && !noPen(i.o)).map(i => i.o);
   if (ls.length) { snapshot(); for (const l of ls) { if ((key === 'w' && v === 1.4) || (key === 'dash' && v === 'solid')) delete l[key]; else l[key] = v; } render(); changed(); return; }
-  if (SHAPE_TOOLS.includes(mode)) { pen[key] = v; savePen(); renderOver(); }
+  if (SHAPE_TOOLS.includes(mode)) { pen[penKey(key)] = v; savePen(); renderOver(); }
 });
 $('propBody').addEventListener('click', e => {
   const pc = e.target.closest('[data-pc]'); if (pc) { colorParts(pc.dataset.pc); return; }
   const fc = e.target.closest('[data-fc]'); if (fc) { if (!selItems().length && SHAPE_TOOLS.includes(mode)) { pen[penFillKey()[0]] = fc.dataset.fc; savePen(); renderProps(); renderOver(); return; } fillShapes(fc.dataset.fc); return; }
-  const wc = e.target.closest('[data-wc]'); if (wc) { if (!selItems().length && SHAPE_TOOLS.includes(mode)) { pen.color = wc.dataset.wc; savePen(); renderProps(); renderOver(); return; } colorWires(wc.dataset.wc); return; }
+  const wc = e.target.closest('[data-wc]'); if (wc) { if (!selItems().length && SHAPE_TOOLS.includes(mode)) { pen[penKey('color')] = wc.dataset.wc; savePen(); renderProps(); renderOver(); return; } colorWires(wc.dataset.wc); return; }
   const a = e.target.closest('[data-act]'); if (!a) return;
   if (a.dataset.act.startsWith('unit-')) { const it = selItems()[0]; if (it && it.k === 'part') addSection(it.o, a.dataset.act.slice(5)); return; }
   ({ imgar: () => { const it = selItems()[0]; if (it && isImage(it.o) && it.o.ar > 0) { snapshot(); const [x0, y0, x1] = lineBB(it.o); it.o.a = [x0, y0]; it.o.b = [x1, y0 + Math.max(1, Math.round((x1 - x0) / it.o.ar))]; render(); renderProps(); changed(); setMsg('Picture back to its own proportions'); } }, windings: () => { const it = selItems()[0]; if (it && it.k === 'part') windingDialog(it.o); }, rot: rotateSel, flip: () => flipSel('h'), flipv: () => flipSel('v'), dup: duplicate, del: deleteSel, lreset: () => { snapshot(); for (const it of selItems()) if (it.k === 'part') { Object.assign(it.o, { lx: 0, ly: 0, rdx: 0, rdy: 0, vdx: 0, vdy: 0, pdx: 0, pdy: 0, sdx: 0, sdy: 0 }); } render(); changed(); } })[a.dataset.act]();
@@ -2734,7 +2768,7 @@ function setVary(p, n, vk) {
 }
 function rotateSel() {
   if (mode === 'place') { placeRot = (placeRot + 1) % 4; renderOver(); return; }
-  const parts = selItems().filter(i => i.k === 'part'), arrows = selItems().filter(i => isArrow(i.o)); if (!parts.length && !arrows.length) return;
+  const parts = selItems().filter(i => i.k === 'part'), arrows = selItems().filter(i => isTurnable(i.o)); if (!parts.length && !arrows.length) return;
   snapshot(); for (const it of arrows) arrowTurn(it.o, 45);   // arrows turn 45° a press about their own center
   const base = JSON.stringify(sheet);
   for (const it of parts) {
@@ -2752,7 +2786,7 @@ function rotateSel() {
 function flipOrient(rot, flip, axis) { return { rot: ((axis === 'h' ? 4 : 6) - (rot || 0)) % 4, flip: !flip }; }
 function flipSel(axis = 'h') {
   if (mode === 'place') { const o = flipOrient(placeRot, placeFlip, axis); placeRot = o.rot; placeFlip = o.flip; renderOver(); return; }
-  const parts = selItems().filter(i => i.k === 'part'), arrows = selItems().filter(i => isArrow(i.o)); if (!parts.length && !arrows.length) return;
+  const parts = selItems().filter(i => i.k === 'part'), arrows = selItems().filter(i => isTurnable(i.o)); if (!parts.length && !arrows.length) return;
   snapshot(); for (const it of arrows) arrowFlip(it.o, axis);
   for (const it of parts) {
     const p = it.o, before = hooksOf(p).map(h => h.pos);
@@ -3179,7 +3213,7 @@ function partMenu(e, raw) {
   const target = t.o;
   if (!sel.has(target.id)) { sel.clear(); sel.add(target.id); }
   selLabel = t.k === 'label' ? { id: target.id, field: t.field } : null; renderSel();
-  const items = selItems(), hasPart = items.some(i => i.k === 'part'), hasArrow = items.some(i => isArrow(i.o));
+  const items = selItems(), hasPart = items.some(i => i.k === 'part'), hasArrow = items.some(i => isTurnable(i.o));
   const many = items.length > 1 ? ` ${items.length} items` : '';
   const what = items.length > 1 ? `${items.length} items` : items[0].k === 'part' ? (refText(items[0].o) || LIB[items[0].o.type].name) : items[0].k === 'wire' ? 'Wire' : items[0].k === 'line' ? SHAPE_NAME[shapeOfL(items[0].o)] : 'Text';
   menuEl = document.createElement('div'); menuEl.className = 'menu'; menuEl.setAttribute('role', 'menu');
@@ -3336,7 +3370,18 @@ function linkClick(raw, p) {
 let altDown = false;
 const squareEnd = (a, p) => { const dx = p[0] - a[0], dy = p[1] - a[1], s = Math.max(Math.abs(dx), Math.abs(dy)); return [a[0] + (dx < 0 ? -s : s), a[1] + (dy < 0 ? -s : s)]; };
 const rectEnd = (a, p) => lineDraft && (lineDraft.shape === 'rect' || lineDraft.shape === 'ellipse') && altDown ? squareEnd(a, p) : p;   // Alt: square / circle
+function meshDraftObj(d, p) {   // the loop being drawn: center d.a, width from the second click (or the pointer), height from the third
+  const rx = Math.max(10, d.rx ?? Math.abs(p[0] - d.a[0])), ry = Math.max(10, d.rx != null ? Math.abs(p[1] - d.a[1]) : rx);
+  return { shape: 'mesh', a: [d.a[0] - rx, d.a[1] - ry], b: [d.a[0] + rx, d.a[1] + ry], color: pen.mcolor, w: pen.mw, dash: pen.mdash, gap: pen.mgap };
+}
 function lineClick(p) {
+  if (mode === 'mesh') {
+    if (!lineDraft) { lineDraft = { a: p, shape: 'mesh' }; setMsg('Click a point to set the loop\'s width (left or right of the center). Esc or right-click cancels.'); renderOver(); return; }
+    if (lineDraft.rx == null) { lineDraft.rx = Math.max(10, Math.abs(p[0] - lineDraft.a[0])); setMsg('Now click a point to set its height (above or below the center).'); renderOver(); return; }
+    const o = meshDraftObj(lineDraft, p); lineDraft = null; snapshot();
+    const l = { id: uid(), shape: 'mesh', a: o.a, b: o.b }; if (pen.mcolor !== 'ink') l.color = pen.mcolor; if (pen.mw !== 1.4) l.w = pen.mw; if (pen.mdash !== 'solid') l.dash = pen.mdash; if (pen.mgap !== 60) l.gap = pen.mgap;
+    linesOf(sheet).push(l); render(); renderOver(); changed(); setMsg('Mesh current added. R moves the gap round 45°, X or Y reverses it; set gap and direction in Properties.'); return;
+  }
   const sh = mode === 'ellipse' || mode === 'rect' || mode === 'arrow' ? mode : null;
   if (!lineDraft) { lineDraft = { a: p, shape: sh }; setMsg(sh === 'arrow' ? 'Click where the arrow points to. Esc or right-click cancels.' : sh === 'ellipse' ? 'Click the opposite corner (hold Alt for a circle). Esc or right-click cancels.' : sh === 'rect' ? 'Click the opposite corner (hold Alt for a square). Esc or right-click cancels.' : 'Click where the line ends. Esc or right-click cancels.'); renderOver(); return; }
   const a = lineDraft.a; p = rectEnd(a, p); lineDraft = null;
@@ -3389,7 +3434,7 @@ function finishDraft() {
 /* =====================================================================
    MODES, KEYS, TOOLBAR
    ===================================================================== */
-const MODE_LABEL = { select: 'Select', wire: 'Wire', text: 'Text', line: 'Line', arrow: 'Arrow', ellipse: 'Ellipse', rect: 'Rectangle', link: 'Link', place: 'Place', plot: 'Active Plot', cut: 'Cut', snip: 'Snip' };
+const MODE_LABEL = { select: 'Select', wire: 'Wire', text: 'Text', line: 'Line', arrow: 'Arrow', mesh: 'Mesh current', ellipse: 'Ellipse', rect: 'Rectangle', link: 'Link', place: 'Place', plot: 'Active Plot', cut: 'Cut', snip: 'Snip' };
 const HINT = {
   select: '<b>Drag</b> to move · <b>Click a hook</b> to wire · <b>Double-click</b> a part or its label to edit · <b>Right-click</b> to rotate, flip or delete · wheel zooms, Shift+wheel pans up/down, Alt+wheel pans left/right',
   wire: '<b>Click</b> to add corners · end on a <b>hook</b> or wire · <b>Space</b> flips the corner · <b>Backspace</b> removes the last corner · <b>Esc</b> cancels',
@@ -3398,6 +3443,7 @@ const HINT = {
   ellipse: '<b>Click</b> one corner, then <b>click</b> the opposite corner · hold <b>Alt</b> for a circle · drawing only, not a wire · <b>Esc</b> or right-click cancels',
   rect: '<b>Click</b> one corner, then <b>click</b> the opposite corner · hold <b>Alt</b> for a square · drawing only, not a wire · <b>Esc</b> or right-click cancels',
   arrow: '<b>Click</b> where the arrow starts, then <b>click</b> where it points · <b>R</b> turns a selected arrow 45°, <b>X</b> / <b>Y</b> flip it · set its line and fill in Properties · <b>Esc</b> or right-click cancels',
+  mesh: '<b>Click</b> the loop\'s center, <b>click</b> to set its width, <b>click</b> to set its height · R moves the gap, X / Y reverse it · <b>Esc</b> or right-click cancels',
   line: '<b>Click</b> the start, then <b>click</b> the end: one straight line at any angle · lines are drawing only, not wires · <b>Esc</b> or right-click cancels',
   snip: '<b>Click</b> a wire segment to cut just that segment · parts and text are deleted · click a ref des or value to hide it · <b>Esc</b> back to Select',
   cut: '<b>Click</b> a part, wire or text to delete it · click a ref des or value to hide it · <b>Ctrl+Z</b> undoes · <b>Esc</b> back to Select',
@@ -3410,7 +3456,7 @@ function setMode(m) {
   if (m !== mode || !SHAPE_TOOLS.includes(m)) lineDraft = null;
   if (m !== 'link') linkDraft = null;
   mode = m; if (m !== 'place') placeType = null;
-  $('mSelect').setAttribute('aria-pressed', m === 'select'); $('mWire').setAttribute('aria-pressed', m === 'wire'); $('mText').setAttribute('aria-pressed', m === 'text'); $('mLine').setAttribute('aria-pressed', m === 'line'); $('mArrow').setAttribute('aria-pressed', m === 'arrow'); $('mEllipse').setAttribute('aria-pressed', m === 'ellipse'); $('mRect').setAttribute('aria-pressed', m === 'rect'); $('mLink').setAttribute('aria-pressed', m === 'link'); $('mCut').setAttribute('aria-pressed', m === 'cut'); $('mSnip').setAttribute('aria-pressed', m === 'snip'); $('bPlot').setAttribute('aria-pressed', m === 'plot');
+  $('mSelect').setAttribute('aria-pressed', m === 'select'); $('mWire').setAttribute('aria-pressed', m === 'wire'); $('mText').setAttribute('aria-pressed', m === 'text'); $('mLine').setAttribute('aria-pressed', m === 'line'); $('mArrow').setAttribute('aria-pressed', m === 'arrow'); $('mMesh').setAttribute('aria-pressed', m === 'mesh'); $('mEllipse').setAttribute('aria-pressed', m === 'ellipse'); $('mRect').setAttribute('aria-pressed', m === 'rect'); $('mLink').setAttribute('aria-pressed', m === 'link'); $('mCut').setAttribute('aria-pressed', m === 'cut'); $('mSnip').setAttribute('aria-pressed', m === 'snip'); $('bPlot').setAttribute('aria-pressed', m === 'plot');
   $('view').className = 'view mode-' + m; $('stMode').textContent = MODE_LABEL[m]; $('hint').innerHTML = HINT[m];
   renderLib(); renderOver(); updateButtons(); renderProps();
 }
@@ -3419,6 +3465,7 @@ $('mWire').onclick = () => setMode('wire');
 $('mText').onclick = () => setMode('text');
 $('mLine').onclick = () => setMode(mode === 'line' ? 'select' : 'line');
 $('mArrow').onclick = () => setMode(mode === 'arrow' ? 'select' : 'arrow');
+$('mMesh').onclick = () => setMode(mode === 'mesh' ? 'select' : 'mesh');
 $('mEllipse').onclick = () => setMode(mode === 'ellipse' ? 'select' : 'ellipse');
 $('mRect').onclick = () => setMode(mode === 'rect' ? 'select' : 'rect');
 $('mLink').onclick = () => setMode(mode === 'link' ? 'select' : 'link');
@@ -3468,7 +3515,7 @@ document.addEventListener('keydown', e => {
   if (k === '/' && linkDraft) { linkDraft.hv = !linkDraft.hv; renderOver(); return; }
   if (k === '/' && wireDraft) { wireDraft.hv = !wireDraft.hv; renderOver(); return; }
   if (k === 'enter' && wireDraft) { finishDraft(); return; }
-  if (k === 'v') setMode('select'); else if (k === 'w') setMode('wire'); else if (k === 't') setMode('text'); else if (k === 'l') setMode('line'); else if (k === 'a') setMode(mode === 'arrow' ? 'select' : 'arrow'); else if (k === 'o') setMode('ellipse'); else if (k === 'b') setMode('rect'); else if (k === 'j') setMode('link'); else if (k === 'c') setMode(mode === 'cut' ? 'select' : 'cut'); else if (k === 's') setMode(mode === 'snip' ? 'select' : 'snip');
+  if (k === 'v') setMode('select'); else if (k === 'w') setMode('wire'); else if (k === 't') setMode('text'); else if (k === 'l') setMode('line'); else if (k === 'a') setMode(mode === 'arrow' ? 'select' : 'arrow'); else if (k === 'm') setMode(mode === 'mesh' ? 'select' : 'mesh'); else if (k === 'o') setMode('ellipse'); else if (k === 'b') setMode('rect'); else if (k === 'j') setMode('link'); else if (k === 'c') setMode(mode === 'cut' ? 'select' : 'cut'); else if (k === 's') setMode(mode === 'snip' ? 'select' : 'snip');
   else if (k === 'r') rotateSel(); else if (k === 'x') flipSel('h'); else if (k === 'y') flipSel('v'); else if (k === 'f') (e.shiftKey ? fitDrawing() : fit());
   else if (k === 'g') $('bGrid').click(); else if (k === 'h') $('bHooks').click(); else if (k === 'k') $('bCam').click();
   else if (k === '+' || k === '=') zoomAt(null, 1.25); else if (k === '-') zoomAt(null, 0.8);

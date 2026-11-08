@@ -222,6 +222,8 @@ button, input, select, textarea { font: inherit; color: inherit; box-sizing: bor
 .props .body { padding: 0 12px 12px; display: grid; gap: 8px; }
 .props .empty { color: var(--muted); line-height: 1.45; font-size: 12px; }
 .props .what { font: 600 13px var(--font-ui); }
+.tfmt { display: flex; gap: 4px; } .tfmt button { width: 30px; height: 26px; padding: 0; border: 1px solid var(--line); border-radius: 4px; background: var(--paper, #FBF8F3); color: var(--ink); font: 15px Georgia, serif; cursor: pointer; }
+.tfmt button[aria-pressed="true"] { background: var(--ink); color: var(--paper, #FBF8F3); border-color: var(--ink); }
 .qexpr { min-height: 34px; padding: 5px 8px; border: 1px solid var(--line); border-radius: 4px; background: var(--paper, #FBF8F3); font-size: 20px; line-height: 1.5; cursor: text; outline: none; caret-color: transparent; white-space: pre-wrap; overflow-wrap: anywhere; color: var(--ink); }
 .qexpr:focus { border-color: var(--accent, #9A5210); box-shadow: 0 0 0 2px rgba(154, 82, 16, .18); }
 .qexpr .qs { font-size: .62em; vertical-align: .62em; } .qexpr .qb { font-size: .62em; vertical-align: -.3em; }
@@ -1928,8 +1930,8 @@ function textSVG(t) {
     const body = t.expr.map(([str, l]) => { const off = Q_OFF[l] * t.size, dy = +(off - cur).toFixed(2); cur = off; return `<tspan font-size="${l ? ss : t.size}"${dy ? ` dy="${dy}"` : ''}>${qRuns(str)}</tspan>`; }).join('');
     return `<text class="stxt" x="${t.x}" y="${t.y}" font-size="${t.size}"${rt} style="fill:${fill}">${body}</text>`;
   }
-  const lines = String(t.text).split('\n');
-  return `<text class="stxt" x="${t.x}" y="${t.y}" font-size="${t.size}"${rt} style="fill:${fill}">${lines.map((l, i) => `<tspan x="${t.x}" dy="${i ? t.size * 1.25 : 0}">${esc(l) || ' '}</tspan>`).join('')}</text>`;
+  const lines = String(t.text).split('\n'), fw = (t.bold ? ';font-weight:700' : '') + (t.ital ? ';font-style:italic' : '');   // Bold / Italic (Larry, 2026-11-08)
+  return `<text class="stxt" x="${t.x}" y="${t.y}" font-size="${t.size}"${rt} style="fill:${fill}${fw}">${lines.map((l, i) => `<tspan x="${t.x}" dy="${i ? t.size * 1.25 : 0}">${esc(l) || ' '}</tspan>`).join('')}</text>`;
 }
 function textBB(t) {   // the box of the turned text (axis-aligned around it)
   const b = textBB0(t); if (!t.rot) return b;
@@ -1939,7 +1941,7 @@ function textBB(t) {   // the box of the turned text (axis-aligned around it)
 function textBB0(t) {
   if (isQty(t)) { const w = t.expr.reduce((a, [str, l]) => a + [...str].length * (l ? 0.62 : 1), 0) * 0.6 * t.size, sup = t.expr.some(r => r[1] === 1), sub = t.expr.some(r => r[1] === -1);
     return [t.x - 2, t.y - t.size * (sup ? 1.25 : 0.95), t.x + Math.max(w, 8) + 2, t.y + t.size * (sub ? 0.5 : 0.3)]; }
-  const lines = String(t.text).split('\n'), w = Math.max(...lines.map(l => l.length)) * t.size * 0.52;
+  const lines = String(t.text).split('\n'), w = Math.max(...lines.map(l => l.length)) * t.size * (t.bold ? 0.57 : 0.52);
   return [t.x - 2, t.y - t.size, t.x + Math.max(w, 8) + 2, t.y + (lines.length - 1) * t.size * 1.25 + t.size * 0.3];
 }
 const key = p => p[0] + ',' + p[1];
@@ -2754,11 +2756,13 @@ function renderProps() {
       <div class="field"><label for="tSize">Size</label><select id="tSize">${[...new Set([9, 10, 11, 12, 14, 15, 18, 24, 30, 36, 48, 60, 72, 96, 120, +t.size || 12])].sort((a, b) => a - b).map(s => `<option${s === t.size ? ' selected' : ''}>${s}</option>`).join('')}</select></div>
       <div class="field"><label for="tRot">Angle</label><select id="tRot">${[0, 90, 180, 270].concat(t.rot && ![90, 180, 270].includes(t.rot) ? [t.rot] : []).map(a => `<option value="${a}"${(t.rot || 0) === a ? ' selected' : ''}>${a ? (a === 270 ? '90° (reads bottom to top)' : a === 90 ? '90° clockwise (reads top to bottom)' : a === 180 ? '180° (upside down)' : a + '°') : 'Level'}</option>`).join('')}</select></div>
       <div class="field"><label for="tTone">Color</label><select id="tTone"><option value="ink"${t.tone === 'ink' ? ' selected' : ''}>Ink</option><option value="glow"${t.tone === 'glow' ? ' selected' : ''}>Glow (callouts)</option><option value="muted"${t.tone === 'muted' ? ' selected' : ''}>Muted</option><option value="blue"${t.tone === 'blue' ? ' selected' : ''}>Blue</option><option value="red"${t.tone === 'red' ? ' selected' : ''}>Red</option></select></div>
+      <div class="field"><label>Style</label><div class="tfmt" role="group" aria-label="Text style"><button data-tf="bold" title="Bold (Ctrl+B)" aria-pressed="${!!t.bold}"><b>B</b></button><button data-tf="ital" title="Italic (Ctrl+I)" aria-pressed="${!!t.ital}"><i>I</i></button></div></div>
       <div class="row-btns"><button data-act="rotl" title="Turn a quarter counterclockwise (R)">Rotate left</button><button data-act="rotr" title="Turn a quarter clockwise (Shift+R)">Rotate right</button><button data-act="dup">Duplicate</button><button class="del" data-act="del">Delete</button></div>`;
     const ta = $('tTxt'); ta.addEventListener('focus', () => snapshot(), { once: true });
-    ta.addEventListener('input', () => { t.text = ta.value; render(); changedSoon(); }); ta.addEventListener('keydown', e => e.stopPropagation());
+    ta.addEventListener('input', () => { t.text = ta.value; render(); changedSoon(); }); ta.addEventListener('keydown', e => { e.stopPropagation(); if ((e.ctrlKey || e.metaKey) && /^[bi]$/i.test(e.key)) { e.preventDefault(); const c = ta.selectionStart; textFmt(e.key.toLowerCase() === 'b' ? 'bold' : 'ital'); const n = $('tTxt'); if (n) { n.focus(); n.setSelectionRange(c, c); } } });
     $('tSize').onchange = e => { snapshot(); t.size = +e.target.value; render(); changed(); };
     $('tTone').onchange = e => { snapshot(); t.tone = e.target.value; render(); changed(); };
+    b.querySelectorAll('[data-tf]').forEach(x => x.onclick = () => textFmt(x.dataset.tf));
     $('tRot').onchange = e => { snapshot(); const r = +e.target.value; if (r) t.rot = r; else delete t.rot; render(); changed(); };
   }
 }
@@ -3359,6 +3363,7 @@ function partMenu(e, raw) {
   menuEl = document.createElement('div'); menuEl.className = 'menu'; menuEl.setAttribute('role', 'menu');
   menuEl.innerHTML = `<div style="padding:5px 10px 6px;font:500 10.5px var(--font-mono);letter-spacing:.1em;text-transform:uppercase;color:var(--muted)">${esc(what)}</div>`
     + (!hasPart && !hasArrow && items.some(i => i.k === 'text') ? `<button role="menuitem" data-m="rotl"><span>Rotate left</span><span>R</span></button><button role="menuitem" data-m="rotr"><span>Rotate right</span><span>Shift+R</span></button>` : '')
+    + (items.some(i => i.k === 'text' && !isQty(i.o)) ? (() => { const ts = items.filter(i => i.k === 'text' && !isQty(i.o)).map(i => i.o); return [['bold', 'Bold', 'Ctrl+B'], ['ital', 'Italic', 'Ctrl+I']].map(([k, n, sc]) => `<button role="menuitemcheckbox" data-m="tf-${k}" aria-checked="${ts.every(t => t[k])}"><span>${ts.every(t => t[k]) ? '✓ ' : ''}${n}</span><span>${sc}</span></button>`).join(''); })() : '')
     + (hasPart || hasArrow ? `<button role="menuitem" data-m="rot"><span>${hasPart ? 'Rotate 90°' : items.filter(i => isTurnable(i.o)).every(i => isMesh(i.o)) ? 'Move gap 45°' : 'Rotate 45°'}</span><span>R</span></button><button role="menuitem" data-m="flip"><span>Flip horizontal</span><span>X</span></button><button role="menuitem" data-m="flipv"><span>Flip vertical</span><span>Y</span></button>` : '')
     + (selLabel ? `<button role="menuitem" data-m="edit"><span>Edit ${FIELD_NAME[selLabel.field]}</span><span>dbl-click</span></button>` : '')
     + (items.length === 1 && items[0].k === 'part' ? ['ref', 'value'].filter(f => !fieldShown(items[0].o, f)).map(f => `<button role="menuitem" data-m="show-${f}"><span>Show ${FIELD_NAME[f]}</span><span></span></button>`).join('') : '')
@@ -3413,6 +3418,7 @@ function partMenu(e, raw) {
     const b = ev.target.closest('[data-m]'); if (!b) return; const m = b.dataset.m; closeMenu();
     if (m === 'tostage') { sendToStage(); return; }
     if (m === 'snapsel') { snapFromSel(); return; }
+    if (m === 'tf-bold' || m === 'tf-ital') { textFmt(m.slice(3)); return; }
     if (m === 'edit') { const L0 = selLabel; if (L0) editInPlace(sheet.parts.find(x => x.id === L0.id), L0.field); return; }
     if (m === 'heater') { setHeater(items[0].o, !!items[0].o.noHeater); return; }
     if (m.startsWith('unit-')) { addSection(items[0].o, m.slice(5)); return; }
@@ -3583,6 +3589,12 @@ function exprEditor(el, modeEl, t) {
   });
   draw();
 }
+// Bold and Italic on plain text (Larry, 2026-11-08): t.bold / t.ital. Toggles every selected plain text: on for all unless all have it.
+function textFmt(k) {
+  const ts = selItems().filter(i => i.k === 'text' && !isQty(i.o)).map(i => i.o); if (!ts.length) return false;
+  const on = !ts.every(t => t[k]); snapshot(); for (const t of ts) { if (on) t[k] = true; else delete t[k]; }
+  propsSig = ''; render(); renderProps(); changed(); setMsg(`${k === 'bold' ? 'Bold' : 'Italic'} ${on ? 'on' : 'off'}`); return true;
+}
 function addQty(p) {
   snapshot(); const t = { id: uid(), x: p[0], y: p[1], text: '', expr: [], size: 18, tone: 'ink' };
   sheet.texts.push(t); sel.clear(); sel.add(t.id); setMode('select'); render(); changed();
@@ -3693,6 +3705,7 @@ document.addEventListener('keydown', e => {
   if (mod && k === 'x') { e.preventDefault(); copySel(); deleteSel(); return; }
   if (mod && k === 'v') { e.preventDefault(); paste(); return; }
   if (mod && k === 'd') { e.preventDefault(); duplicate(); return; }
+  if (mod && (k === 'b' || k === 'i') && selItems().some(i => i.k === 'text' && !isQty(i.o))) { e.preventDefault(); textFmt(k === 'b' ? 'bold' : 'ital'); return; }
   if (mod && k === 'a') { e.preventDefault(); sel = new Set([...sheet.parts, ...sheet.wires, ...sheet.texts, ...linesOf(sheet), ...linksOf(sheet)].map(o => o.id)); renderSel(); return; }
   if (mod) return;
   if (k === 'escape') {

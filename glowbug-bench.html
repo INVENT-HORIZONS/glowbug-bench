@@ -2664,7 +2664,7 @@ function renderProps() {
         <div class="field"><label for="tRot">Angle</label><select id="tRot">${[0, 90, 180, 270].concat(t.rot && ![90, 180, 270].includes(t.rot) ? [t.rot] : []).map(a => `<option value="${a}"${(t.rot || 0) === a ? ' selected' : ''}>${a ? (a === 270 ? '90° (reads bottom to top)' : a === 90 ? '90° clockwise (reads top to bottom)' : a === 180 ? '180° (upside down)' : a + '°') : 'Level'}</option>`).join('')}</select></div>
         <div class="field"><label for="tTone">Color</label><select id="tTone">${tones.map(([v, n]) => `<option value="${v}"${(t.tone || 'ink') === v ? ' selected' : ''}>${n}</option>`).join('')}</select></div>
         <div class="empty">Uppercase symbol and subscript for DC (V<sub>A</sub>), lowercase for AC (v<sub>a</sub>); mixed for the total (v<sub>A</sub>) or the AC amplitude (V<sub>a</sub>). Lowercase letters are set in italic.</div>
-        <div class="row-btns"><button data-act="dup">Duplicate</button><button class="del" data-act="del">Delete</button></div>`;
+        <div class="row-btns"><button data-act="rotl" title="Turn a quarter counterclockwise (R)">Rotate left</button><button data-act="rotr" title="Turn a quarter clockwise (Shift+R)">Rotate right</button><button data-act="dup">Duplicate</button><button class="del" data-act="del">Delete</button></div>`;
       for (const [id, k] of [['tQ', 'text'], ['tSub', 'sub']]) { const el = $(id); el.addEventListener('focus', () => snapshot(), { once: true }); el.addEventListener('input', () => { t[k] = el.value; render(); changedSoon(); }); el.addEventListener('keydown', e => { e.stopPropagation(); if (e.key === 'Enter') el.blur(); }); }
       $('tSize').onchange = e => { snapshot(); t.size = +e.target.value; render(); changed(); };
       $('tTone').onchange = e => { snapshot(); t.tone = e.target.value; render(); changed(); };
@@ -2676,7 +2676,7 @@ function renderProps() {
       <div class="field"><label for="tSize">Size</label><select id="tSize">${[...new Set([9, 10, 11, 12, 14, 15, 18, 24, 30, 36, 48, 60, 72, 96, 120, +t.size || 12])].sort((a, b) => a - b).map(s => `<option${s === t.size ? ' selected' : ''}>${s}</option>`).join('')}</select></div>
       <div class="field"><label for="tRot">Angle</label><select id="tRot">${[0, 90, 180, 270].concat(t.rot && ![90, 180, 270].includes(t.rot) ? [t.rot] : []).map(a => `<option value="${a}"${(t.rot || 0) === a ? ' selected' : ''}>${a ? (a === 270 ? '90° (reads bottom to top)' : a === 90 ? '90° clockwise (reads top to bottom)' : a === 180 ? '180° (upside down)' : a + '°') : 'Level'}</option>`).join('')}</select></div>
       <div class="field"><label for="tTone">Color</label><select id="tTone"><option value="ink"${t.tone === 'ink' ? ' selected' : ''}>Ink</option><option value="glow"${t.tone === 'glow' ? ' selected' : ''}>Glow (callouts)</option><option value="muted"${t.tone === 'muted' ? ' selected' : ''}>Muted</option><option value="blue"${t.tone === 'blue' ? ' selected' : ''}>Blue</option><option value="red"${t.tone === 'red' ? ' selected' : ''}>Red</option></select></div>
-      <div class="row-btns"><button data-act="rot">Rotate 90°</button><button data-act="dup">Duplicate</button><button class="del" data-act="del">Delete</button></div>`;
+      <div class="row-btns"><button data-act="rotl" title="Turn a quarter counterclockwise (R)">Rotate left</button><button data-act="rotr" title="Turn a quarter clockwise (Shift+R)">Rotate right</button><button data-act="dup">Duplicate</button><button class="del" data-act="del">Delete</button></div>`;
     const ta = $('tTxt'); ta.addEventListener('focus', () => snapshot(), { once: true });
     ta.addEventListener('input', () => { t.text = ta.value; render(); changedSoon(); }); ta.addEventListener('keydown', e => e.stopPropagation());
     $('tSize').onchange = e => { snapshot(); t.size = +e.target.value; render(); changed(); };
@@ -2708,7 +2708,7 @@ $('propBody').addEventListener('click', e => {
   const wc = e.target.closest('[data-wc]'); if (wc) { if (!selItems().length && SHAPE_TOOLS.includes(mode)) { pen[penKey('color')] = wc.dataset.wc; savePen(); renderProps(); renderOver(); return; } colorWires(wc.dataset.wc); return; }
   const a = e.target.closest('[data-act]'); if (!a) return;
   if (a.dataset.act.startsWith('unit-')) { const it = selItems()[0]; if (it && it.k === 'part') addSection(it.o, a.dataset.act.slice(5)); return; }
-  ({ imgar: () => { const it = selItems()[0]; if (it && isImage(it.o) && it.o.ar > 0) { snapshot(); const [x0, y0, x1] = lineBB(it.o); it.o.a = [x0, y0]; it.o.b = [x1, y0 + Math.max(1, Math.round((x1 - x0) / it.o.ar))]; render(); renderProps(); changed(); setMsg('Picture back to its own proportions'); } }, windings: () => { const it = selItems()[0]; if (it && it.k === 'part') windingDialog(it.o); }, rot: rotateSel, flip: () => flipSel('h'), flipv: () => flipSel('v'), dup: duplicate, del: deleteSel, lreset: () => { snapshot(); for (const it of selItems()) if (it.k === 'part') { Object.assign(it.o, { lx: 0, ly: 0, rdx: 0, rdy: 0, vdx: 0, vdy: 0, pdx: 0, pdy: 0, sdx: 0, sdy: 0 }); } render(); changed(); } })[a.dataset.act]();
+  ({ imgar: () => { const it = selItems()[0]; if (it && isImage(it.o) && it.o.ar > 0) { snapshot(); const [x0, y0, x1] = lineBB(it.o); it.o.a = [x0, y0]; it.o.b = [x1, y0 + Math.max(1, Math.round((x1 - x0) / it.o.ar))]; render(); renderProps(); changed(); setMsg('Picture back to its own proportions'); } }, windings: () => { const it = selItems()[0]; if (it && it.k === 'part') windingDialog(it.o); }, rotl: () => rotateText(-90), rotr: () => rotateText(90), rot: rotateSel, flip: () => flipSel('h'), flipv: () => flipSel('v'), dup: duplicate, del: deleteSel, lreset: () => { snapshot(); for (const it of selItems()) if (it.k === 'part') { Object.assign(it.o, { lx: 0, ly: 0, rdx: 0, rdy: 0, vdx: 0, vdy: 0, pdx: 0, pdy: 0, sdx: 0, sdy: 0 }); } render(); changed(); } })[a.dataset.act]();
 });
 
 /* =====================================================================
@@ -2809,6 +2809,12 @@ function setVary(p, n, vk) {
   if (moves.size) dragWiresWithHooks(moves);
   if (p.pins) { for (const k of Object.keys(p.pins)) if (!(k in shapeOf(p).hooks)) delete p.pins[k]; if (p.showPins) for (const k of Object.keys(shapeOf(p).hooks)) p.pins[k] = p.pins[k] || { t: 'p?' }; }
   finishWires(); render(); changed(); setMsg(`${p.ref || L.name}: ${n} ${v.label.toLowerCase()}`);
+}
+// Text turns left (counterclockwise) or right (clockwise) a quarter at a time (Larry, 2026-11-08); R is left, Shift+R right
+function rotateText(d) {
+  const ts = selItems().filter(i => i.k === 'text').map(i => i.o); if (!ts.length) return;
+  snapshot(); for (const t of ts) { const r = normRot((t.rot || 0) + d); if (r) t.rot = r; else delete t.rot; }
+  propsSig = ''; render(); changed(); setMsg(`Text turned ${d < 0 ? 'left' : 'right'}`);
 }
 function rotateSel() {
   if (mode === 'place') { placeRot = (placeRot + 1) % 4; renderOver(); return; }
@@ -3270,7 +3276,7 @@ function partMenu(e, raw) {
   const what = items.length > 1 ? `${items.length} items` : items[0].k === 'part' ? (refText(items[0].o) || LIB[items[0].o.type].name) : items[0].k === 'wire' ? 'Wire' : items[0].k === 'line' ? SHAPE_NAME[shapeOfL(items[0].o)] : 'Text';
   menuEl = document.createElement('div'); menuEl.className = 'menu'; menuEl.setAttribute('role', 'menu');
   menuEl.innerHTML = `<div style="padding:5px 10px 6px;font:500 10.5px var(--font-mono);letter-spacing:.1em;text-transform:uppercase;color:var(--muted)">${esc(what)}</div>`
-    + (!hasPart && !hasArrow && items.some(i => i.k === 'text') ? `<button role="menuitem" data-m="rot"><span>Rotate 90°</span><span>R</span></button>` : '')
+    + (!hasPart && !hasArrow && items.some(i => i.k === 'text') ? `<button role="menuitem" data-m="rotl"><span>Rotate left</span><span>R</span></button><button role="menuitem" data-m="rotr"><span>Rotate right</span><span>Shift+R</span></button>` : '')
     + (hasPart || hasArrow ? `<button role="menuitem" data-m="rot"><span>${hasPart ? 'Rotate 90°' : items.filter(i => isTurnable(i.o)).every(i => isMesh(i.o)) ? 'Move gap 45°' : 'Rotate 45°'}</span><span>R</span></button><button role="menuitem" data-m="flip"><span>Flip horizontal</span><span>X</span></button><button role="menuitem" data-m="flipv"><span>Flip vertical</span><span>Y</span></button>` : '')
     + (selLabel ? `<button role="menuitem" data-m="edit"><span>Edit ${FIELD_NAME[selLabel.field]}</span><span>dbl-click</span></button>` : '')
     + (items.length === 1 && items[0].k === 'part' ? ['ref', 'value'].filter(f => !fieldShown(items[0].o, f)).map(f => `<button role="menuitem" data-m="show-${f}"><span>Show ${FIELD_NAME[f]}</span><span></span></button>`).join('') : '')
@@ -3335,7 +3341,7 @@ function partMenu(e, raw) {
       if (m.startsWith('wadd')) { snapshot(); setShown(q, f, true); render(); changed(); if ((q[f] || '').trim()) return; }
       editInPlace(q, f); return; }
     if (m.startsWith('show-')) { const q = items[0].o; snapshot(); if (m === 'show-ref') q.showRef = true; else q.showVal = true; render(); changed(); return; }
-    ({ rot: rotateSel, flip: () => flipSel('h'), flipv: () => flipSel('v'), dup: duplicate, del: deleteSel })[m](); };
+    ({ rotl: () => rotateText(-90), rotr: () => rotateText(90), rot: rotateSel, flip: () => flipSel('h'), flipv: () => flipSel('v'), dup: duplicate, del: deleteSel })[m](); };
   menuEl.addEventListener('keydown', ev => {
     const bs = [...menuEl.querySelectorAll('button')], i = bs.indexOf(document.activeElement);
     if (ev.key === 'Escape') { closeMenu(); ev.stopPropagation(); }
@@ -3582,7 +3588,7 @@ document.addEventListener('keydown', e => {
   if (k === '/' && wireDraft) { wireDraft.hv = !wireDraft.hv; renderOver(); return; }
   if (k === 'enter' && wireDraft) { finishDraft(); return; }
   if (k === 'v') setMode('select'); else if (k === 'w') setMode('wire'); else if (k === 't') setMode('text'); else if (k === 'l') setMode('line'); else if (k === 'a') setMode(mode === 'arrow' ? 'select' : 'arrow'); else if (k === 'm') setMode(mode === 'mesh' ? 'select' : 'mesh'); else if (k === 'o') setMode('ellipse'); else if (k === 'b') setMode('rect'); else if (k === 'j') setMode('link'); else if (k === 'c') setMode(mode === 'cut' ? 'select' : 'cut'); else if (k === 's') setMode(mode === 'snip' ? 'select' : 'snip');
-  else if (k === 'r') rotateSel(); else if (k === 'x') flipSel('h'); else if (k === 'y') flipSel('v'); else if (k === 'f') (e.shiftKey ? fitDrawing() : fit());
+  else if (k === 'r') { const it = selItems(); if (it.length && it.every(i => i.k === 'text')) rotateText(e.shiftKey ? 90 : -90); else rotateSel(); } else if (k === 'x') flipSel('h'); else if (k === 'y') flipSel('v'); else if (k === 'f') (e.shiftKey ? fitDrawing() : fit());
   else if (k === 'g') $('bGrid').click(); else if (k === 'h') $('bHooks').click(); else if (k === 'k') $('bCam').click();
   else if (k === '+' || k === '=') zoomAt(null, 1.25); else if (k === '-') zoomAt(null, 0.8);
   else if (k.startsWith('arrow') && sel.size) {

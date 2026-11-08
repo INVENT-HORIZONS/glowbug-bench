@@ -46,7 +46,7 @@ Open `glowbug-bench.html` in any modern browser. Everything is in the one file; 
 - **Rotary switch positions:** right-click a rotary switch (or use the properties panel) to set 2 to 12 positions (5 by default). The contacts fan out on an arc around the wiper; wires on contacts that move follow them.
 - **Photomultiplier dynodes:** right-click a photomultiplier (or use the properties panel) to set 2 to 14 dynodes. The photocathode and D1 stay put; the anode's wires follow it.
 - **Highlight parts:** right-click any component (or use Properties) and pick a color to highlight it, for example during a presentation; pick black to put it back. The heater stays orange and the labels stay black.
-- **Toolbox:** Select (V), Wire (W), Text (T; sizes from 9 up to 120, for titles and captions; turn it 90°, 180° or 270° from Properties, the right-click menu or R), Cut (C, removes a whole part or wire) and Snip (S, removes one wire segment).
+- **Toolbox:** Select (V), Wire (W), Text (T; sizes from 9 up to 120, for titles and captions; turn it with Rotate left / Rotate right in Properties or the right-click menu, or R / Shift+R), Cut (C, removes a whole part or wire) and Snip (S, removes one wire segment).
 - **Sheets:** ANSI A (Letter), B (Tabloid), C and D, portrait or landscape, with mixed sizes in one project. Each sheet can have:
   - A zoned border.
   - A revision chart.

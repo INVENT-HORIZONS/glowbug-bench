@@ -1891,11 +1891,17 @@ const QSERIF = "font-family:Georgia,'Times New Roman',serif;font-style:italic", 
 const qRuns = (str, extra = '') => (String(str).match(/\p{Ll}+|[^\p{Ll}]+/gu) || []).map((r, i) => `<tspan style="${/\p{Ll}/u.test(r) ? QSERIF : QSANS}"${i === 0 ? extra : ''}>${esc(r)}</tspan>`).join('');
 function textSVG(t) {
   const fill = t.tone === 'glow' ? '#9A5210' : t.tone === 'muted' ? '#5C5248' : t.tone === 'blue' ? '#1F4E8C' : t.tone === 'red' ? '#A3241B' : 'var(--ink)';
-  if (isQty(t)) { const ss = +(t.size * 0.62).toFixed(2); return `<text class="stxt" x="${t.x}" y="${t.y}" font-size="${t.size}" style="fill:${fill}">${qRuns(t.text || ' ')}${t.sub ? `<tspan font-size="${ss}" dy="${+(t.size * 0.28).toFixed(2)}">${qRuns(t.sub, ` dx="${+(t.size * 0.04).toFixed(2)}"`)}</tspan>` : ''}</text>`; }
+  const rt = t.rot ? ` transform="rotate(${t.rot} ${t.x} ${t.y})"` : '';   // text turns about its anchor (Larry, 2026-11-08)
+  if (isQty(t)) { const ss = +(t.size * 0.62).toFixed(2); return `<text class="stxt" x="${t.x}" y="${t.y}" font-size="${t.size}"${rt} style="fill:${fill}">${qRuns(t.text || ' ')}${t.sub ? `<tspan font-size="${ss}" dy="${+(t.size * 0.28).toFixed(2)}">${qRuns(t.sub, ` dx="${+(t.size * 0.04).toFixed(2)}"`)}</tspan>` : ''}</text>`; }
   const lines = String(t.text).split('\n');
-  return `<text class="stxt" x="${t.x}" y="${t.y}" font-size="${t.size}" style="fill:${fill}">${lines.map((l, i) => `<tspan x="${t.x}" dy="${i ? t.size * 1.25 : 0}">${esc(l) || ' '}</tspan>`).join('')}</text>`;
+  return `<text class="stxt" x="${t.x}" y="${t.y}" font-size="${t.size}"${rt} style="fill:${fill}">${lines.map((l, i) => `<tspan x="${t.x}" dy="${i ? t.size * 1.25 : 0}">${esc(l) || ' '}</tspan>`).join('')}</text>`;
 }
-function textBB(t) {
+function textBB(t) {   // the box of the turned text (axis-aligned around it)
+  const b = textBB0(t); if (!t.rot) return b;
+  const r = t.rot * Math.PI / 180, c = Math.cos(r), sn = Math.sin(r), P = [[b[0], b[1]], [b[2], b[1]], [b[2], b[3]], [b[0], b[3]]].map(([x, y]) => [t.x + (x - t.x) * c - (y - t.y) * sn, t.y + (x - t.x) * sn + (y - t.y) * c]);
+  return [Math.min(...P.map(q => q[0])), Math.min(...P.map(q => q[1])), Math.max(...P.map(q => q[0])), Math.max(...P.map(q => q[1]))];
+}
+function textBB0(t) {
   if (isQty(t)) { const w = (String(t.text).length * 0.62 + String(t.sub).length * 0.62 * 0.62) * t.size + t.size * 0.08; return [t.x - 2, t.y - t.size * 0.95, t.x + Math.max(w, 8) + 2, t.y + t.size * 0.5]; }
   const lines = String(t.text).split('\n'), w = Math.max(...lines.map(l => l.length)) * t.size * 0.52;
   return [t.x - 2, t.y - t.size, t.x + Math.max(w, 8) + 2, t.y + (lines.length - 1) * t.size * 1.25 + t.size * 0.3];
@@ -2655,23 +2661,27 @@ function renderProps() {
         <div class="field"><label for="tQ">Symbol</label><input id="tQ" type="text" value="${esc(t.text)}" autocomplete="off"></div>
         <div class="field"><label for="tSub">Subscript</label><input id="tSub" type="text" value="${esc(t.sub)}" autocomplete="off"></div>
         <div class="field"><label for="tSize">Size</label><select id="tSize">${[...new Set([9, 10, 11, 12, 14, 15, 18, 24, 30, 36, 48, 60, 72, 96, 120, +t.size || 18])].sort((a, b) => a - b).map(sz => `<option${sz === t.size ? ' selected' : ''}>${sz}</option>`).join('')}</select></div>
+        <div class="field"><label for="tRot">Angle</label><select id="tRot">${[0, 90, 180, 270].concat(t.rot && ![90, 180, 270].includes(t.rot) ? [t.rot] : []).map(a => `<option value="${a}"${(t.rot || 0) === a ? ' selected' : ''}>${a ? (a === 270 ? '90° (reads bottom to top)' : a === 90 ? '90° clockwise (reads top to bottom)' : a === 180 ? '180° (upside down)' : a + '°') : 'Level'}</option>`).join('')}</select></div>
         <div class="field"><label for="tTone">Color</label><select id="tTone">${tones.map(([v, n]) => `<option value="${v}"${(t.tone || 'ink') === v ? ' selected' : ''}>${n}</option>`).join('')}</select></div>
         <div class="empty">Uppercase symbol and subscript for DC (V<sub>A</sub>), lowercase for AC (v<sub>a</sub>); mixed for the total (v<sub>A</sub>) or the AC amplitude (V<sub>a</sub>). Lowercase letters are set in italic.</div>
         <div class="row-btns"><button data-act="dup">Duplicate</button><button class="del" data-act="del">Delete</button></div>`;
       for (const [id, k] of [['tQ', 'text'], ['tSub', 'sub']]) { const el = $(id); el.addEventListener('focus', () => snapshot(), { once: true }); el.addEventListener('input', () => { t[k] = el.value; render(); changedSoon(); }); el.addEventListener('keydown', e => { e.stopPropagation(); if (e.key === 'Enter') el.blur(); }); }
       $('tSize').onchange = e => { snapshot(); t.size = +e.target.value; render(); changed(); };
       $('tTone').onchange = e => { snapshot(); t.tone = e.target.value; render(); changed(); };
+      $('tRot').onchange = e => { snapshot(); const r = +e.target.value; if (r) t.rot = r; else delete t.rot; render(); changed(); };
       return;
     }
     b.innerHTML = `<div class="what">Text</div>
       <div class="field"><label for="tTxt">Text</label><textarea id="tTxt" rows="2">${esc(t.text)}</textarea></div>
       <div class="field"><label for="tSize">Size</label><select id="tSize">${[...new Set([9, 10, 11, 12, 14, 15, 18, 24, 30, 36, 48, 60, 72, 96, 120, +t.size || 12])].sort((a, b) => a - b).map(s => `<option${s === t.size ? ' selected' : ''}>${s}</option>`).join('')}</select></div>
+      <div class="field"><label for="tRot">Angle</label><select id="tRot">${[0, 90, 180, 270].concat(t.rot && ![90, 180, 270].includes(t.rot) ? [t.rot] : []).map(a => `<option value="${a}"${(t.rot || 0) === a ? ' selected' : ''}>${a ? (a === 270 ? '90° (reads bottom to top)' : a === 90 ? '90° clockwise (reads top to bottom)' : a === 180 ? '180° (upside down)' : a + '°') : 'Level'}</option>`).join('')}</select></div>
       <div class="field"><label for="tTone">Color</label><select id="tTone"><option value="ink"${t.tone === 'ink' ? ' selected' : ''}>Ink</option><option value="glow"${t.tone === 'glow' ? ' selected' : ''}>Glow (callouts)</option><option value="muted"${t.tone === 'muted' ? ' selected' : ''}>Muted</option><option value="blue"${t.tone === 'blue' ? ' selected' : ''}>Blue</option><option value="red"${t.tone === 'red' ? ' selected' : ''}>Red</option></select></div>
-      <div class="row-btns"><button data-act="dup">Duplicate</button><button class="del" data-act="del">Delete</button></div>`;
+      <div class="row-btns"><button data-act="rot">Rotate 90°</button><button data-act="dup">Duplicate</button><button class="del" data-act="del">Delete</button></div>`;
     const ta = $('tTxt'); ta.addEventListener('focus', () => snapshot(), { once: true });
     ta.addEventListener('input', () => { t.text = ta.value; render(); changedSoon(); }); ta.addEventListener('keydown', e => e.stopPropagation());
     $('tSize').onchange = e => { snapshot(); t.size = +e.target.value; render(); changed(); };
     $('tTone').onchange = e => { snapshot(); t.tone = e.target.value; render(); changed(); };
+    $('tRot').onchange = e => { snapshot(); const r = +e.target.value; if (r) t.rot = r; else delete t.rot; render(); changed(); };
   }
 }
 // pen size and line style: for the selected lines/shapes, or the pen for new ones while a drawing tool is on
@@ -2802,8 +2812,9 @@ function setVary(p, n, vk) {
 }
 function rotateSel() {
   if (mode === 'place') { placeRot = (placeRot + 1) % 4; renderOver(); return; }
-  const parts = selItems().filter(i => i.k === 'part'), arrows = selItems().filter(i => isTurnable(i.o)); if (!parts.length && !arrows.length) return;
-  snapshot(); for (const it of arrows) arrowTurn(it.o, 45);   // arrows turn 45° a press about their own center
+  const parts = selItems().filter(i => i.k === 'part'), arrows = selItems().filter(i => isTurnable(i.o)), texts = selItems().filter(i => i.k === 'text'); if (!parts.length && !arrows.length && !texts.length) return;
+  snapshot(); for (const it of arrows) arrowTurn(it.o, 45);
+  for (const it of texts) { const r = normRot((it.o.rot || 0) + (parts.length || arrows.length ? 90 : -90)); if (r) it.o.rot = r; else delete it.o.rot; }   // alone, text turns a quarter counterclockwise (reads bottom to top)   // arrows turn 45° a press about their own center
   const base = JSON.stringify(sheet);
   for (const it of parts) {
     const p = it.o, before = hooksOf(p).map(h => h.pos);
@@ -3259,6 +3270,7 @@ function partMenu(e, raw) {
   const what = items.length > 1 ? `${items.length} items` : items[0].k === 'part' ? (refText(items[0].o) || LIB[items[0].o.type].name) : items[0].k === 'wire' ? 'Wire' : items[0].k === 'line' ? SHAPE_NAME[shapeOfL(items[0].o)] : 'Text';
   menuEl = document.createElement('div'); menuEl.className = 'menu'; menuEl.setAttribute('role', 'menu');
   menuEl.innerHTML = `<div style="padding:5px 10px 6px;font:500 10.5px var(--font-mono);letter-spacing:.1em;text-transform:uppercase;color:var(--muted)">${esc(what)}</div>`
+    + (!hasPart && !hasArrow && items.some(i => i.k === 'text') ? `<button role="menuitem" data-m="rot"><span>Rotate 90°</span><span>R</span></button>` : '')
     + (hasPart || hasArrow ? `<button role="menuitem" data-m="rot"><span>${hasPart ? 'Rotate 90°' : items.filter(i => isTurnable(i.o)).every(i => isMesh(i.o)) ? 'Move gap 45°' : 'Rotate 45°'}</span><span>R</span></button><button role="menuitem" data-m="flip"><span>Flip horizontal</span><span>X</span></button><button role="menuitem" data-m="flipv"><span>Flip vertical</span><span>Y</span></button>` : '')
     + (selLabel ? `<button role="menuitem" data-m="edit"><span>Edit ${FIELD_NAME[selLabel.field]}</span><span>dbl-click</span></button>` : '')
     + (items.length === 1 && items[0].k === 'part' ? ['ref', 'value'].filter(f => !fieldShown(items[0].o, f)).map(f => `<button role="menuitem" data-m="show-${f}"><span>Show ${FIELD_NAME[f]}</span><span></span></button>`).join('') : '')

@@ -45,6 +45,7 @@ Open `glowbug-bench.html` in any modern browser. Everything is in the one file; 
 - **Winding text on transformers:** every transformer starts with "Pri" and "Sec" over its windings. Double-click either to change it to voltages, turns, impedance or anything else. Each has its own Show checkbox in Properties and in the double-click dialog, and the right-click menu can edit, hide or show them. Drag them anywhere; Delete on a selected one just hides it, and its text is kept.
 - **Rotary switch positions:** right-click a rotary switch (or use the properties panel) to set 2 to 12 positions (5 by default). The contacts fan out on an arc around the wiper; wires on contacts that move follow them.
 - **Photomultiplier dynodes:** right-click a photomultiplier (or use the properties panel) to set 2 to 14 dynodes. The photocathode and D1 stay put; the anode's wires follow it.
+- **Highlight parts:** right-click any component (or use Properties) and pick a color to highlight it, for example during a presentation; pick black to put it back. The heater stays orange and the labels stay black.
 - **Toolbox:** Select (V), Wire (W), Text (T; sizes from 9 up to 120, for titles and captions), Cut (C, removes a whole part or wire) and Snip (S, removes one wire segment).
 - **Sheets:** ANSI A (Letter), B (Tabloid), C and D, portrait or landscape, with mixed sizes in one project. Each sheet can have:
   - A zoned border.

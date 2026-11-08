@@ -519,6 +519,7 @@ button, input, select, textarea { font: inherit; color: inherit; box-sizing: bor
     <button class="tool" id="mRect" title="Draw a rectangle (B): click one corner, then click the opposite corner. Drawing only, not a wire." aria-label="Rectangle" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><rect x="6" y="7.5" width="12" height="9"/></svg><span class="k">B</span></button>
     <button class="tool" id="mEllipse" title="Draw an ellipse (O): click two opposite corners of its box; hold Alt for a circle. Drawing only, not a wire." aria-label="Ellipse" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><ellipse cx="12" cy="12" rx="8" ry="5.2"/></svg><span class="k">O</span></button>
     <button class="tool" id="mLine" title="Draw a straight line (L): click the start, then click the end. Lines are drawing only, not wires." aria-label="Line" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M8 16L16 8"/></svg><span class="k">L</span></button>
+    <button class="tool" id="mArrow" title="Draw an arrow (A): click one end, then the other; the arrow points toward the second click. Rotate (R), flip (X, Y), and set its line and fill colors. Drawing only, for pointing things out." aria-label="Arrow" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"><path d="M3.5 9.5h9.5V5.5l7.5 6.5-7.5 6.5v-4H3.5z" fill="currentColor" fill-opacity=".22"/></svg><span class="k">A</span></button>
   </nav>
 
   <footer class="status">
@@ -1636,7 +1637,43 @@ const wstyle = w => w.color && w.color !== 'ink' ? ` style="stroke:${wcol(w.colo
 let lineDraft = null;               // { a: [x, y] } while a line is being drawn
 // Circle and Rectangle tools (Larry, under Line) make the same kind of drawing-only item, with l.shape set: a circle is
 // its center a and a point b on the edge (radius |b - a|); a rectangle is two opposite corners a and b. Unset = line.
-const SHAPE_TOOLS = ['line', 'ellipse', 'rect'], SHAPE_NAME = { line: 'Line', circle: 'Circle', ellipse: 'Ellipse', rect: 'Rectangle', plot: 'Active Plot', image: 'Picture' };
+const SHAPE_TOOLS = ['line', 'ellipse', 'rect', 'arrow'], SHAPE_NAME = { line: 'Line', circle: 'Circle', ellipse: 'Ellipse', rect: 'Rectangle', arrow: 'Arrow', plot: 'Active Plot', image: 'Picture' };
+// Arrows (Arrow tool, A; Larry, 2026-11-08): block arrows for pointing things out, mostly in animation steps. l.shape 'arrow', a and b
+// opposite corners of its unturned box (the arrow points to +x inside it), l.rot the turn in degrees about the box center (any angle,
+// R steps 45°), l.mx / l.my mirror it in its own frame before turning, l.astyle 'straight' (default), 'double', 'bent' or 'curved'.
+// Outline uses the pen (color, size, style); fill uses l.fill / l.fillA like rectangles. Drawn above the parts and wires, under text.
+const isArrow = l => l && l.shape === 'arrow';
+const ARROW_STYLES = [['straight', 'Straight'], ['double', 'Double-headed'], ['bent', 'Bent'], ['curved', 'Curved']];
+function arrowLocal(W, H, st) {   // outline in the arrow's own frame, centered on 0, pointing to +x
+  const x0 = -W / 2, x1 = W / 2, y0 = -H / 2, y1 = H / 2;
+  if (st === 'bent' || st === 'curved') {
+    const t = Math.max(2, Math.min(W, H) * 0.26), hw = Math.min(t * 1.15, H / 2 - 0.5), hl = Math.min(t * 1.5, W * 0.45), xh = x1 - hl, yh = y0 + hw;
+    const head = [[xh, yh - t / 2], [xh, yh - hw], [x1, yh], [xh, yh + hw], [xh, yh + t / 2]];
+    if (st === 'bent') return [[x0, y1], [x0, yh - t / 2], ...head, [x0 + t, yh + t / 2], [x0 + t, y1]];
+    const cx = xh, cy = y1, arc = (rx, ry, from, to) => Array.from({ length: 17 }, (_, i) => { const a = from + (to - from) * i / 16; return [cx + rx * Math.cos(a), cy + ry * Math.sin(a)]; });
+    const rx = Math.max(cx - x0, 1), ry = Math.max(cy - (yh - t / 2), 1), ix = Math.max(rx - t, 0.5), iy = Math.max(ry - t, 0.5);
+    return [...arc(rx, ry, Math.PI, 1.5 * Math.PI), ...head.slice(1, 4), ...arc(ix, iy, 1.5 * Math.PI, Math.PI)];
+  }
+  const s = H * 0.22, hl = Math.min(H * 0.95, W * (st === 'double' ? 0.42 : 0.6));
+  if (st === 'double') return [[x0, 0], [x0 + hl, y0], [x0 + hl, -s], [x1 - hl, -s], [x1 - hl, y0], [x1, 0], [x1 - hl, y1], [x1 - hl, s], [x0 + hl, s], [x0 + hl, y1]];
+  return [[x0, -s], [x1 - hl, -s], [x1 - hl, y0], [x1, 0], [x1 - hl, y1], [x1 - hl, s], [x0, s]];
+}
+function arrowPts(l) {   // the outline in sheet coordinates
+  const W = Math.abs(l.b[0] - l.a[0]), H = Math.abs(l.b[1] - l.a[1]), cx = (l.a[0] + l.b[0]) / 2, cy = (l.a[1] + l.b[1]) / 2;
+  const r = (l.rot || 0) * Math.PI / 180, c = Math.cos(r), sn = Math.sin(r);
+  return arrowLocal(W, H, l.astyle).map(([u, v]) => { u *= l.mx ? -1 : 1; v *= l.my ? -1 : 1; return [+(cx + u * c - v * sn).toFixed(2), +(cy + u * sn + v * c).toFixed(2)]; });
+}
+// From the two clicks: the arrow runs from the first toward the second, along whichever direction was dragged farther.
+function arrowFromDrag(a, p) {
+  const dx = p[0] - a[0], dy = p[1] - a[1], cx = (a[0] + p[0]) / 2, cy = (a[1] + p[1]) / 2, horiz = Math.abs(dx) >= Math.abs(dy);
+  const L = Math.max(Math.abs(horiz ? dx : dy), 20), c = Math.abs(horiz ? dy : dx), T = c >= 10 ? c : Math.max(20, Math.round(L * 0.3 / 10) * 10);   // a straight drag gets a sensible width
+  return { a: [cx - L / 2, cy - T / 2], b: [cx + L / 2, cy + T / 2], rot: horiz ? (dx < 0 ? 180 : 0) : (dy < 0 ? 270 : 90) };
+}
+const normRot = d => ((Math.round(d) % 360) + 360) % 360;
+function arrowTurn(l, d) { const r = normRot((l.rot || 0) + d); if (r) l.rot = r; else delete l.rot; }
+// mirror in sheet space about the arrow's center: a world flip of R(t)·S is R(-t)·S with the matching own-frame mirror toggled
+function arrowFlip(l, axis) { const r = normRot(-(l.rot || 0)); if (r) l.rot = r; else delete l.rot; const k = axis === 'h' ? 'mx' : 'my'; if (l[k]) delete l[k]; else l[k] = true; }
+const ptInPoly = (p, P) => { let inn = false; for (let i = 0, j = P.length - 1; i < P.length; j = i++) { const [xi, yi] = P[i], [xj, yj] = P[j]; if ((yi > p[1]) !== (yj > p[1]) && p[0] < (xj - xi) * (p[1] - yi) / (yj - yi) + xi) inn = !inn; } return inn; };
 // Ellipse tool (Larry, 2026-11-07; it replaced the Circle tool): l.shape 'ellipse' with a and b opposite corners of its box, like a rectangle;
 // Alt makes the box square, so a circle. Circles drawn earlier (shape 'circle': center a, edge point b) still load and draw as before.
 const isRound = l => shapeOfL(l) === 'ellipse' && Math.abs(l.b[0] - l.a[0]) === Math.abs(l.b[1] - l.a[1]);
@@ -1697,6 +1734,7 @@ const radOf = l => Math.hypot(l.b[0] - l.a[0], l.b[1] - l.a[1]);
 // the outline as one SVG element: attrs is a class or an inline style
 function lineEl(l, attrs) {
   const sh = shapeOfL(l);
+  if (sh === 'arrow') return `<polygon points="${ptsAttr(arrowPts(l))}" ${attrs}/>`;
   if (sh === 'circle') return `<circle cx="${l.a[0]}" cy="${l.a[1]}" r="${+radOf(l).toFixed(2)}" ${attrs}/>`;
   if (sh === 'ellipse') { const [x0, y0, x1, y1] = lineBB(l); return `<ellipse cx="${(x0 + x1) / 2}" cy="${(y0 + y1) / 2}" rx="${(x1 - x0) / 2}" ry="${(y1 - y0) / 2}" ${attrs}/>`; }
   if (sh === 'rect' || sh === 'plot' || sh === 'image') { const [x0, y0, x1, y1] = lineBB(l); return `<rect x="${x0}" y="${y0}" width="${x1 - x0}" height="${y1 - y0}" ${attrs}/>`; }
@@ -1716,8 +1754,8 @@ const FILL_COLORS = [{ k: 'white', name: 'White', c: '#FFFFFF' }, { k: 'gray', n
   { k: 'brown', name: 'Brown', c: '#7A4A22' }, { k: 'orange', name: 'Orange', c: '#C2571A' }];
 const FILL_ALPHA = [[1, 'Solid'], [0.5, 'Medium'], [0.25, 'Light'], [0.12, 'Faint']];
 const fcol = k => (FILL_COLORS.find(c => c.k === k) || {}).c;
-const canFill = l => ['rect', 'ellipse', 'circle'].includes(shapeOfL(l));
-const fillSVG = l => canFill(l) && fcol(l.fill) ? lineEl(l, `style="fill:${fcol(l.fill)};fill-opacity:${l.fillA || 1};stroke:none"`) : '';
+const canFill = l => ['rect', 'ellipse', 'circle', 'arrow'].includes(shapeOfL(l));
+const fillSVG = l => canFill(l) && !isArrow(l) && fcol(l.fill) ? lineEl(l, `style="fill:${fcol(l.fill)};fill-opacity:${l.fillA || 1};stroke:none"`) : '';
 const fillRow = cur => `<div class="swatches" role="group" aria-label="Fill color"><button class="sw none" data-fc="" title="No fill" aria-label="No fill" aria-pressed="${cur === ''}"></button>${FILL_COLORS.map(c => `<button class="sw" data-fc="${c.k}" title="${c.name}" aria-label="${c.name} fill" aria-pressed="${c.k === cur}" style="background:${c.c}${c.k === 'white' ? ';box-shadow:inset 0 0 0 1px #B4B4B4' : ''}"></button>`).join('')}</div>`;
 const fillFields = (fill, a) => `<div class="field"><label>Fill</label>${fillRow(fill)}</div>
       <div class="field"><label for="pFillA">Fill strength</label><select id="pFillA"${fill ? '' : ' disabled'}>${FILL_ALPHA.map(([v, n]) => `<option value="${v}"${v === a ? ' selected' : ''}>${n}</option>`).join('')}</select></div>`;
@@ -1728,17 +1766,21 @@ function fillShapes(k) {   // set (or clear, k = '') the fill of the selected re
 }
 let pen = (q => ({ color: typeof q.color === 'string' ? q.color : 'ink',   // wcol() falls back to ink for an unknown key
   w: PEN_W.some(x => x[0] === q.w) ? q.w : 1.4, dash: PEN_DASH.some(x => x[0] === q.dash) ? q.dash : 'solid',
-  fill: typeof q.fill === 'string' ? q.fill : '', fillA: FILL_ALPHA.some(x => x[0] === q.fillA) ? q.fillA : 1 }))(lsGet('gs.pen', {}) || {});
+  fill: typeof q.fill === 'string' ? q.fill : '', fillA: FILL_ALPHA.some(x => x[0] === q.fillA) ? q.fillA : 1,
+  afill: typeof q.afill === 'string' ? q.afill : 'red', afillA: FILL_ALPHA.some(x => x[0] === q.afillA) ? q.afillA : 1, astyle: ARROW_STYLES.some(x => x[0] === q.astyle) ? q.astyle : 'straight' }))(lsGet('gs.pen', {}) || {});
 const savePen = () => lsSet('gs.pen', pen);
-const lineSVG = l => { if (isPlot(l)) return plotSVG(l); if (isImage(l)) return imageSVG(l); const w = l.w || 1.4, d = penDash(l.dash, w); return lineEl(l, `style="stroke:${wcol(l.color || 'ink')};stroke-width:${w};stroke-linecap:round;stroke-linejoin:round;fill:none${d ? `;stroke-dasharray:${d}` : ''}"`); };
+const penFillKey = () => mode === 'arrow' ? ['afill', 'afillA'] : ['fill', 'fillA'];   // arrows keep their own fill for new ones (red by default)
+const arrowStyleField = (cur, id) => `<div class="field"><label for="${id}">Arrow style</label><select id="${id}">${ARROW_STYLES.map(([v, n]) => `<option value="${v}"${v === cur ? ' selected' : ''}>${n}</option>`).join('')}</select></div>`;
+const lineSVG = l => { if (isPlot(l)) return plotSVG(l); if (isImage(l)) return imageSVG(l); const w = l.w || 1.4, d = penDash(l.dash, w), fl = isArrow(l) && fcol(l.fill) ? `fill:${fcol(l.fill)};fill-opacity:${l.fillA || 1}` : 'fill:none'; return lineEl(l, `style="stroke:${wcol(l.color || 'ink')};stroke-width:${w};stroke-linecap:round;stroke-linejoin:round;${fl}${d ? `;stroke-dasharray:${d}` : ''}"`); };
 // the pen fields for the Properties panel: color swatches, pen size and line style
 const penFields = (color, w, dash) => `<div class="field"><label>Color</label>${swatchRow(color)}</div>
       <div class="field"><label for="pPenW">Pen size</label><select id="pPenW">${PEN_W.map(([v, n]) => `<option value="${v}"${v === w ? ' selected' : ''}>${n} (${v} px)</option>`).join('')}</select></div>
       <div class="field"><label for="pPenD">Line style</label><select id="pPenD">${PEN_DASH.map(([v, n]) => `<option value="${v}"${v === dash ? ' selected' : ''}>${n}</option>`).join('')}</select></div>`;
-const lineBB = l => { if (isPlot(l)) return plotFrame(l); if (shapeOfL(l) === 'circle') { const r = radOf(l); return [l.a[0] - r, l.a[1] - r, l.a[0] + r, l.a[1] + r]; } return [Math.min(l.a[0], l.b[0]), Math.min(l.a[1], l.b[1]), Math.max(l.a[0], l.b[0]), Math.max(l.a[1], l.b[1])]; };
+const lineBB = l => { if (isPlot(l)) return plotFrame(l); if (isArrow(l)) { const P = arrowPts(l), xs = P.map(q => q[0]), ys = P.map(q => q[1]); return [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)]; } if (shapeOfL(l) === 'circle') { const r = radOf(l); return [l.a[0] - r, l.a[1] - r, l.a[0] + r, l.a[1] + r]; } return [Math.min(l.a[0], l.b[0]), Math.min(l.a[1], l.b[1]), Math.max(l.a[0], l.b[0]), Math.max(l.a[1], l.b[1])]; };
 // distance from p to the drawn outline (hit testing)
 function lineDist(p, l) {
   const sh = shapeOfL(l);
+  if (sh === 'arrow') { const P = arrowPts(l); return ptInPoly(p, P) ? 0 : Math.min(...P.map((q, i) => distSeg(p, q, P[(i + 1) % P.length]))); }   // picked anywhere on it
   if (sh === 'image') { const [x0, y0, x1, y1] = lineBB(l); if (p[0] >= x0 && p[0] <= x1 && p[1] >= y0 && p[1] <= y1) return 0; }   // a picture is picked anywhere on it
   if (canFill(l) && fcol(l.fill)) { const inside = sh === 'circle' ? Math.hypot(p[0] - l.a[0], p[1] - l.a[1]) <= radOf(l) : sh === 'ellipse' ? (() => { const [x0, y0, x1, y1] = lineBB(l), rx = (x1 - x0) / 2, ry = (y1 - y0) / 2; return rx > 0 && ry > 0 && ((p[0] - x0 - rx) / rx) ** 2 + ((p[1] - y0 - ry) / ry) ** 2 <= 1; })() : (([x0, y0, x1, y1]) => p[0] >= x0 && p[0] <= x1 && p[1] >= y0 && p[1] <= y1)(lineBB(l)); if (inside) return 0; }   // filled: pick anywhere inside
   if (sh === 'circle') return Math.abs(Math.hypot(p[0] - l.a[0], p[1] - l.a[1]) - radOf(l));
@@ -1841,8 +1883,8 @@ function render() {
   const dotColor = k => { const w = sheet.wires.find(w => w.color && w.pts.some(q => key(q) === k)); return w ? ` style="fill:${wcol(w.color)}"` : ''; };
   ws += [...dots].map(k => { const [x, y] = k.split(','); return `<circle class="jdot"${dotColor(k)} cx="${x}" cy="${y}" r="3"/>`; }).join('');
   $('layerPlots').innerHTML = linesOf(sheet).filter(isPlot).map(lineSVG).join('');   // Active Plots sit above all schematic content (Larry: nothing bleeds through)
-  $('layerWires').innerHTML = linesOf(sheet).filter(l => !noPen(l)).map(lineSVG).join('') + ws + linksOf(sheet).map(k => { const e = linkEnds(k); return e ? linkSVG(e) + [[k.ta, e[0]], [k.tb, e[e.length - 1]]].filter(x => x[0]).map(x => `<circle cx="${x[1][0]}" cy="${x[1][1]}" r="2.4" style="fill:${LINK_COL}"/>`).join('') : ''; }).join('');
-  $('layerText').innerHTML = sheet.texts.map(textSVG).join('');
+  $('layerWires').innerHTML = linesOf(sheet).filter(l => !noPen(l) && !isArrow(l)).map(lineSVG).join('') + ws + linksOf(sheet).map(k => { const e = linkEnds(k); return e ? linkSVG(e) + [[k.ta, e[0]], [k.tb, e[e.length - 1]]].filter(x => x[0]).map(x => `<circle cx="${x[1][0]}" cy="${x[1][1]}" r="2.4" style="fill:${LINK_COL}"/>`).join('') : ''; }).join('');
+  $('layerText').innerHTML = linesOf(sheet).filter(isArrow).map(lineSVG).join('') + sheet.texts.map(textSVG).join('');   // arrows point things out: above parts and wires, under text
   renderSel(); renderHooks(cnt); renderDoc(); applyView();
   $('stCount').textContent = `${sheet.parts.length} part${sheet.parts.length === 1 ? '' : 's'} · ${sheet.wires.length} wire${sheet.wires.length === 1 ? '' : 's'}`;
   renderSheets(); renderInst();
@@ -1922,7 +1964,7 @@ function renderOver() {
   }
   if (SHAPE_TOOLS.includes(mode)) {
     s += `<line class="cursor-x" x1="${mouse[0] - 6}" y1="${mouse[1]}" x2="${mouse[0] + 6}" y2="${mouse[1]}"/><line class="cursor-x" x1="${mouse[0]}" y1="${mouse[1] - 6}" x2="${mouse[0]}" y2="${mouse[1] + 6}"/>`;
-    if (lineDraft) s += lineSVG({ a: lineDraft.a, b: rectEnd(lineDraft.a, mouse), shape: lineDraft.shape, color: pen.color, w: pen.w, dash: pen.dash });
+    if (lineDraft) s += lineDraft.shape === 'arrow' ? (key(lineDraft.a) === key(mouse) ? '' : lineSVG({ ...arrowFromDrag(lineDraft.a, mouse), shape: 'arrow', astyle: pen.astyle, color: pen.color, w: pen.w, dash: pen.dash, fill: pen.afill, fillA: pen.afillA })) : lineSVG({ a: lineDraft.a, b: rectEnd(lineDraft.a, mouse), shape: lineDraft.shape, color: pen.color, w: pen.w, dash: pen.dash });
   }
   if (band) s += `<rect class="band" x="${Math.min(band.a[0], band.b[0])}" y="${Math.min(band.a[1], band.b[1])}" width="${Math.abs(band.b[0] - band.a[0])}" height="${Math.abs(band.b[1] - band.a[1])}"/>`;
   $('layerOver').innerHTML = s;
@@ -2150,9 +2192,9 @@ function renderProps() {
   if (sig === propsSig && b.contains(document.activeElement) && document.activeElement.matches('input, textarea, select, [contenteditable]')) return;
   propsSig = sig;
   if (!items.length && SHAPE_TOOLS.includes(mode)) {
-    b.innerHTML = `<div class="what">${SHAPE_NAME[mode]} tool<small>pen for new lines, ellipses and rectangles</small></div>
-      ${penFields(pen.color, pen.w, pen.dash)}${mode === 'rect' || mode === 'ellipse' ? fillFields(pen.fill, pen.fillA) : ''}
-      <div class="empty">${mode === 'ellipse' ? 'Click one corner of its box, then the opposite corner. Hold Alt for a circle.' : mode === 'rect' ? 'Click one corner, then the opposite corner.' : 'Click the start, then the end.'}</div>`; return;
+    b.innerHTML = `<div class="what">${SHAPE_NAME[mode]} tool<small>${mode === 'arrow' ? 'line and fill for new arrows' : 'pen for new lines, ellipses and rectangles'}</small></div>
+      ${mode === 'arrow' ? arrowStyleField(pen.astyle, 'pArrStyle') : ''}${penFields(pen.color, pen.w, pen.dash)}${mode === 'rect' || mode === 'ellipse' ? fillFields(pen.fill, pen.fillA) : mode === 'arrow' ? fillFields(pen.afill, pen.afillA) : ''}
+      <div class="empty">${mode === 'arrow' ? 'Click where the arrow starts, then where it points. It runs along the direction you moved farther. Turn it with R (45° steps) and flip it with X or Y once placed.' : mode === 'ellipse' ? 'Click one corner of its box, then the opposite corner. Hold Alt for a circle.' : mode === 'rect' ? 'Click one corner, then the opposite corner.' : 'Click the start, then the end.'}</div>`; return;
   }
   if (!items.length) { b.innerHTML = `<div class="empty">Select a part, wire or text to edit it. Click a part in the library to place it; click any hook to start a wire.</div>`; return; }
   if (items.length > 1) {
@@ -2214,11 +2256,11 @@ function renderProps() {
       <div class="row-btns"><button data-act="dup">Duplicate</button><button class="del" data-act="del">Delete</button></div>`;
   } else if (it.k === 'line') {
     const l = it.o, sh = shapeOfL(l), bb = lineBB(l), len = Math.hypot(l.b[0] - l.a[0], l.b[1] - l.a[1]);
-    const size = sh === 'circle' ? `radius ${(len / G).toFixed(1)}` : sh === 'rect' || sh === 'ellipse' ? `${(bb[2] - bb[0]) / G} × ${(bb[3] - bb[1]) / G}` : `${(len / G).toFixed(1)}`;
-    b.innerHTML = `<div class="what">${isRound(l) ? 'Circle' : SHAPE_NAME[sh]}<small>${size} grid units · drawing only, not a wire</small></div>
-      ${penFields(l.color || 'ink', l.w || 1.4, l.dash || 'solid')}${canFill(l) ? fillFields(l.fill || '', l.fillA || 1) : ''}
-      <div class="empty">Drag it to move it. Draw more with the Line (L), Ellipse (O) and Rectangle (B) tools.</div>
-      <div class="row-btns"><button data-act="dup">Duplicate</button><button class="del" data-act="del">Delete</button></div>`;
+    const size = sh === 'arrow' ? `${+(Math.abs(l.b[0] - l.a[0]) / G).toFixed(1)} × ${+(Math.abs(l.b[1] - l.a[1]) / G).toFixed(1)}` : sh === 'circle' ? `radius ${(len / G).toFixed(1)}` : sh === 'rect' || sh === 'ellipse' ? `${(bb[2] - bb[0]) / G} × ${(bb[3] - bb[1]) / G}` : `${(len / G).toFixed(1)}`;
+    b.innerHTML = `<div class="what">${isRound(l) ? 'Circle' : SHAPE_NAME[sh]}<small>${size} grid units${sh === 'arrow' ? ` · turned ${l.rot || 0}°${l.mx || l.my ? ' · mirrored' : ''}` : ''} · drawing only, not a wire</small></div>
+      ${sh === 'arrow' ? `${arrowStyleField(l.astyle || 'straight', 'pArrSel')}<div class="field"><label for="pArrRot">Angle (degrees)</label><input id="pArrRot" type="number" step="15" value="${l.rot || 0}"></div>` : ''}${penFields(l.color || 'ink', l.w || 1.4, l.dash || 'solid')}${canFill(l) ? fillFields(l.fill || '', l.fillA || 1) : ''}
+      <div class="empty">${sh === 'arrow' ? 'Drag it to move it. <b>R</b> turns it 45° clockwise, <b>X</b> flips it left to right, <b>Y</b> top to bottom.' : 'Drag it to move it. Draw more with the Line (L), Ellipse (O) and Rectangle (B) tools.'}</div>
+      <div class="row-btns">${sh === 'arrow' ? '<button data-act="rot">Rotate 45°</button><button data-act="flip">Flip H</button><button data-act="flipv">Flip V</button>' : ''}<button data-act="dup">Duplicate</button><button class="del" data-act="del">Delete</button></div>`;
   } else if (it.k === 'wire') {
     const w = it.o, len = w.pts.slice(1).reduce((a, p, i) => a + Math.abs(p[0] - w.pts[i][0]) + Math.abs(p[1] - w.pts[i][1]), 0);
     b.innerHTML = `<div class="what">Wire<small>${w.pts.length - 1} segment${w.pts.length > 2 ? 's' : ''} · ${len / G} grid units</small></div>
@@ -2241,7 +2283,11 @@ function renderProps() {
 // pen size and line style: for the selected lines/shapes, or the pen for new ones while a drawing tool is on
 $('propBody').addEventListener('change', e => {
   if (e.target.id === 'pFillA') { const v = +e.target.value, ls = selItems().filter(i => i.k === 'line' && canFill(i.o) && i.o.fill).map(i => i.o);
-    if (ls.length) { snapshot(); for (const l of ls) { if (v === 1) delete l.fillA; else l.fillA = v; } render(); changed(); } else if (SHAPE_TOOLS.includes(mode)) { pen.fillA = v; savePen(); } return; }
+    if (ls.length) { snapshot(); for (const l of ls) { if (v === 1) delete l.fillA; else l.fillA = v; } render(); changed(); } else if (SHAPE_TOOLS.includes(mode)) { pen[penFillKey()[1]] = v; savePen(); } return; }
+  if (e.target.id === 'pArrStyle') { pen.astyle = e.target.value; savePen(); return; }
+  if (e.target.id === 'pArrSel' || e.target.id === 'pArrRot') { const ls = selItems().filter(i => isArrow(i.o)).map(i => i.o); if (!ls.length) return; snapshot();
+    for (const l of ls) { if (e.target.id === 'pArrSel') { if (e.target.value === 'straight') delete l.astyle; else l.astyle = e.target.value; } else { const r = normRot(+e.target.value || 0); if (r) l.rot = r; else delete l.rot; } }
+    propsSig = ''; render(); renderProps(); changed(); return; }
   if (e.target.id !== 'pPenW' && e.target.id !== 'pPenD') return;
   const key = e.target.id === 'pPenW' ? 'w' : 'dash', v = key === 'w' ? +e.target.value : e.target.value;
   const ls = selItems().filter(i => i.k === 'line' && !noPen(i.o)).map(i => i.o);
@@ -2249,7 +2295,7 @@ $('propBody').addEventListener('change', e => {
   if (SHAPE_TOOLS.includes(mode)) { pen[key] = v; savePen(); renderOver(); }
 });
 $('propBody').addEventListener('click', e => {
-  const fc = e.target.closest('[data-fc]'); if (fc) { if (!selItems().length && SHAPE_TOOLS.includes(mode)) { pen.fill = fc.dataset.fc; savePen(); renderProps(); return; } fillShapes(fc.dataset.fc); return; }
+  const fc = e.target.closest('[data-fc]'); if (fc) { if (!selItems().length && SHAPE_TOOLS.includes(mode)) { pen[penFillKey()[0]] = fc.dataset.fc; savePen(); renderProps(); renderOver(); return; } fillShapes(fc.dataset.fc); return; }
   const wc = e.target.closest('[data-wc]'); if (wc) { if (!selItems().length && SHAPE_TOOLS.includes(mode)) { pen.color = wc.dataset.wc; savePen(); renderProps(); renderOver(); return; } colorWires(wc.dataset.wc); return; }
   const a = e.target.closest('[data-act]'); if (!a) return;
   if (a.dataset.act.startsWith('unit-')) { const it = selItems()[0]; if (it && it.k === 'part') addSection(it.o, a.dataset.act.slice(5)); return; }
@@ -2357,8 +2403,8 @@ function setVary(p, n, vk) {
 }
 function rotateSel() {
   if (mode === 'place') { placeRot = (placeRot + 1) % 4; renderOver(); return; }
-  const parts = selItems().filter(i => i.k === 'part'); if (!parts.length) return;
-  snapshot();
+  const parts = selItems().filter(i => i.k === 'part'), arrows = selItems().filter(i => isArrow(i.o)); if (!parts.length && !arrows.length) return;
+  snapshot(); for (const it of arrows) arrowTurn(it.o, 45);   // arrows turn 45° a press about their own center
   const base = JSON.stringify(sheet);
   for (const it of parts) {
     const p = it.o, before = hooksOf(p).map(h => h.pos);
@@ -2375,8 +2421,8 @@ function rotateSel() {
 function flipOrient(rot, flip, axis) { return { rot: ((axis === 'h' ? 4 : 6) - (rot || 0)) % 4, flip: !flip }; }
 function flipSel(axis = 'h') {
   if (mode === 'place') { const o = flipOrient(placeRot, placeFlip, axis); placeRot = o.rot; placeFlip = o.flip; renderOver(); return; }
-  const parts = selItems().filter(i => i.k === 'part'); if (!parts.length) return;
-  snapshot();
+  const parts = selItems().filter(i => i.k === 'part'), arrows = selItems().filter(i => isArrow(i.o)); if (!parts.length && !arrows.length) return;
+  snapshot(); for (const it of arrows) arrowFlip(it.o, axis);
   for (const it of parts) {
     const p = it.o, before = hooksOf(p).map(h => h.pos);
     const xs = before.map(b => b[0]), ys = before.map(b => b[1]);
@@ -2449,6 +2495,7 @@ function distSeg(p, a, b) {
 function hit(p) {
   const tol = 5 / view.z + 1;
   { const pc = plotCardAt(p); if (pc) return p[1] <= plotFrame(pc)[1] + PLOT_TB ? { k: 'line', o: pc } : null; }   // an Active Plot covers everything under it: its title bar grabs it, its area is kept for cursors and probing
+  { const ls = linesOf(sheet); for (let i = ls.length - 1; i >= 0; i--) if (isArrow(ls[i]) && lineDist(p, ls[i]) < tol) return { k: 'line', o: ls[i] }; }   // arrows are drawn over the parts and wires
   for (let i = sheet.texts.length - 1; i >= 0; i--) { const b = textBB(sheet.texts[i]); if (p[0] >= b[0] && p[0] <= b[2] && p[1] >= b[1] && p[1] <= b[3]) return { k: 'text', o: sheet.texts[i] }; }
   for (let i = sheet.parts.length - 1; i >= 0; i--) {   // pin numbers
     const q = sheet.parts[i];
@@ -2800,12 +2847,12 @@ function partMenu(e, raw) {
   const target = t.o;
   if (!sel.has(target.id)) { sel.clear(); sel.add(target.id); }
   selLabel = t.k === 'label' ? { id: target.id, field: t.field } : null; renderSel();
-  const items = selItems(), hasPart = items.some(i => i.k === 'part');
+  const items = selItems(), hasPart = items.some(i => i.k === 'part'), hasArrow = items.some(i => isArrow(i.o));
   const many = items.length > 1 ? ` ${items.length} items` : '';
   const what = items.length > 1 ? `${items.length} items` : items[0].k === 'part' ? (refText(items[0].o) || LIB[items[0].o.type].name) : items[0].k === 'wire' ? 'Wire' : items[0].k === 'line' ? SHAPE_NAME[shapeOfL(items[0].o)] : 'Text';
   menuEl = document.createElement('div'); menuEl.className = 'menu'; menuEl.setAttribute('role', 'menu');
   menuEl.innerHTML = `<div style="padding:5px 10px 6px;font:500 10.5px var(--font-mono);letter-spacing:.1em;text-transform:uppercase;color:var(--muted)">${esc(what)}</div>`
-    + (hasPart ? `<button role="menuitem" data-m="rot"><span>Rotate 90°</span><span>R</span></button><button role="menuitem" data-m="flip"><span>Flip horizontal</span><span>X</span></button><button role="menuitem" data-m="flipv"><span>Flip vertical</span><span>Y</span></button>` : '')
+    + (hasPart || hasArrow ? `<button role="menuitem" data-m="rot"><span>Rotate ${hasPart ? '90°' : '45°'}</span><span>R</span></button><button role="menuitem" data-m="flip"><span>Flip horizontal</span><span>X</span></button><button role="menuitem" data-m="flipv"><span>Flip vertical</span><span>Y</span></button>` : '')
     + (selLabel ? `<button role="menuitem" data-m="edit"><span>Edit ${FIELD_NAME[selLabel.field]}</span><span>dbl-click</span></button>` : '')
     + (items.length === 1 && items[0].k === 'part' ? ['ref', 'value'].filter(f => !fieldShown(items[0].o, f)).map(f => `<button role="menuitem" data-m="show-${f}"><span>Show ${FIELD_NAME[f]}</span><span></span></button>`).join('') : '')
     + (items.length === 1 && items[0].k === 'part' && LIB[items[0].o.type].coreDef ? coreMenu(items[0].o) : '')
@@ -2955,9 +3002,15 @@ let altDown = false;
 const squareEnd = (a, p) => { const dx = p[0] - a[0], dy = p[1] - a[1], s = Math.max(Math.abs(dx), Math.abs(dy)); return [a[0] + (dx < 0 ? -s : s), a[1] + (dy < 0 ? -s : s)]; };
 const rectEnd = (a, p) => lineDraft && (lineDraft.shape === 'rect' || lineDraft.shape === 'ellipse') && altDown ? squareEnd(a, p) : p;   // Alt: square / circle
 function lineClick(p) {
-  const sh = mode === 'ellipse' || mode === 'rect' ? mode : null;
-  if (!lineDraft) { lineDraft = { a: p, shape: sh }; setMsg(sh === 'ellipse' ? 'Click the opposite corner (hold Alt for a circle). Esc or right-click cancels.' : sh === 'rect' ? 'Click the opposite corner (hold Alt for a square). Esc or right-click cancels.' : 'Click where the line ends. Esc or right-click cancels.'); renderOver(); return; }
+  const sh = mode === 'ellipse' || mode === 'rect' || mode === 'arrow' ? mode : null;
+  if (!lineDraft) { lineDraft = { a: p, shape: sh }; setMsg(sh === 'arrow' ? 'Click where the arrow points to. Esc or right-click cancels.' : sh === 'ellipse' ? 'Click the opposite corner (hold Alt for a circle). Esc or right-click cancels.' : sh === 'rect' ? 'Click the opposite corner (hold Alt for a square). Esc or right-click cancels.' : 'Click where the line ends. Esc or right-click cancels.'); renderOver(); return; }
   const a = lineDraft.a; p = rectEnd(a, p); lineDraft = null;
+  if (sh === 'arrow') {
+    if (a[0] === p[0] && a[1] === p[1]) { renderOver(); return; }
+    snapshot(); const l = Object.assign({ id: uid(), shape: 'arrow' }, arrowFromDrag(a, p)); if (!l.rot) delete l.rot; if (pen.astyle !== 'straight') l.astyle = pen.astyle;
+    if (pen.color !== 'ink') l.color = pen.color; if (pen.w !== 1.4) l.w = pen.w; if (pen.dash !== 'solid') l.dash = pen.dash; if (pen.afill && fcol(pen.afill)) { l.fill = pen.afill; if (pen.afillA !== 1) l.fillA = pen.afillA; }
+    linesOf(sheet).push(l); render(); renderOver(); changed(); setMsg('Arrow added. R turns it 45°, X and Y flip it. Click to start another, or press V to select.'); return;
+  }
   if ((a[0] === p[0] && a[1] === p[1]) || ((sh === 'rect' || sh === 'ellipse') && (a[0] === p[0] || a[1] === p[1]))) { renderOver(); return; }      // nothing to draw
   snapshot(); const l = { id: uid(), a: [...a], b: [...p] }; if (sh) l.shape = sh; if (pen.color !== 'ink') l.color = pen.color; if (pen.w !== 1.4) l.w = pen.w; if (pen.dash !== 'solid') l.dash = pen.dash; if (sh && pen.fill && fcol(pen.fill)) { l.fill = pen.fill; if (pen.fillA !== 1) l.fillA = pen.fillA; } linesOf(sheet).push(l);
   render(); renderOver(); changed(); setMsg(`${isRound(l) ? 'Circle' : SHAPE_NAME[sh || 'line']} added. Click to start another, or press V to select.`);
@@ -3001,7 +3054,7 @@ function finishDraft() {
 /* =====================================================================
    MODES, KEYS, TOOLBAR
    ===================================================================== */
-const MODE_LABEL = { select: 'Select', wire: 'Wire', text: 'Text', line: 'Line', ellipse: 'Ellipse', rect: 'Rectangle', link: 'Link', place: 'Place', plot: 'Active Plot', cut: 'Cut', snip: 'Snip' };
+const MODE_LABEL = { select: 'Select', wire: 'Wire', text: 'Text', line: 'Line', arrow: 'Arrow', ellipse: 'Ellipse', rect: 'Rectangle', link: 'Link', place: 'Place', plot: 'Active Plot', cut: 'Cut', snip: 'Snip' };
 const HINT = {
   select: '<b>Drag</b> to move · <b>Click a hook</b> to wire · <b>Double-click</b> a part or its label to edit · <b>Right-click</b> to rotate, flip or delete · wheel zooms, Shift+wheel pans up/down, Alt+wheel pans left/right',
   wire: '<b>Click</b> to add corners · end on a <b>hook</b> or wire · <b>Space</b> flips the corner · <b>Backspace</b> removes the last corner · <b>Esc</b> cancels',
@@ -3009,6 +3062,7 @@ const HINT = {
   link: '<b>Click</b> an adjustable control to start · <b>click</b> to add corners · end on another <b>control</b> · <b>Space</b> flips the corner · <b>Backspace</b> removes the last corner · <b>Esc</b> cancels',
   ellipse: '<b>Click</b> one corner, then <b>click</b> the opposite corner · hold <b>Alt</b> for a circle · drawing only, not a wire · <b>Esc</b> or right-click cancels',
   rect: '<b>Click</b> one corner, then <b>click</b> the opposite corner · hold <b>Alt</b> for a square · drawing only, not a wire · <b>Esc</b> or right-click cancels',
+  arrow: '<b>Click</b> where the arrow starts, then <b>click</b> where it points · <b>R</b> turns a selected arrow 45°, <b>X</b> / <b>Y</b> flip it · set its line and fill in Properties · <b>Esc</b> or right-click cancels',
   line: '<b>Click</b> the start, then <b>click</b> the end: one straight line at any angle · lines are drawing only, not wires · <b>Esc</b> or right-click cancels',
   snip: '<b>Click</b> a wire segment to cut just that segment · parts and text are deleted · click a ref des or value to hide it · <b>Esc</b> back to Select',
   cut: '<b>Click</b> a part, wire or text to delete it · click a ref des or value to hide it · <b>Ctrl+Z</b> undoes · <b>Esc</b> back to Select',
@@ -3020,7 +3074,7 @@ function setMode(m) {
   if (m !== mode || !SHAPE_TOOLS.includes(m)) lineDraft = null;
   if (m !== 'link') linkDraft = null;
   mode = m; if (m !== 'place') placeType = null;
-  $('mSelect').setAttribute('aria-pressed', m === 'select'); $('mWire').setAttribute('aria-pressed', m === 'wire'); $('mText').setAttribute('aria-pressed', m === 'text'); $('mLine').setAttribute('aria-pressed', m === 'line'); $('mEllipse').setAttribute('aria-pressed', m === 'ellipse'); $('mRect').setAttribute('aria-pressed', m === 'rect'); $('mLink').setAttribute('aria-pressed', m === 'link'); $('mCut').setAttribute('aria-pressed', m === 'cut'); $('mSnip').setAttribute('aria-pressed', m === 'snip'); $('bPlot').setAttribute('aria-pressed', m === 'plot');
+  $('mSelect').setAttribute('aria-pressed', m === 'select'); $('mWire').setAttribute('aria-pressed', m === 'wire'); $('mText').setAttribute('aria-pressed', m === 'text'); $('mLine').setAttribute('aria-pressed', m === 'line'); $('mArrow').setAttribute('aria-pressed', m === 'arrow'); $('mEllipse').setAttribute('aria-pressed', m === 'ellipse'); $('mRect').setAttribute('aria-pressed', m === 'rect'); $('mLink').setAttribute('aria-pressed', m === 'link'); $('mCut').setAttribute('aria-pressed', m === 'cut'); $('mSnip').setAttribute('aria-pressed', m === 'snip'); $('bPlot').setAttribute('aria-pressed', m === 'plot');
   $('view').className = 'view mode-' + m; $('stMode').textContent = MODE_LABEL[m]; $('hint').innerHTML = HINT[m];
   renderLib(); renderOver(); updateButtons(); renderProps();
 }
@@ -3028,6 +3082,7 @@ $('mSelect').onclick = () => setMode('select');
 $('mWire').onclick = () => setMode('wire');
 $('mText').onclick = () => setMode('text');
 $('mLine').onclick = () => setMode(mode === 'line' ? 'select' : 'line');
+$('mArrow').onclick = () => setMode(mode === 'arrow' ? 'select' : 'arrow');
 $('mEllipse').onclick = () => setMode(mode === 'ellipse' ? 'select' : 'ellipse');
 $('mRect').onclick = () => setMode(mode === 'rect' ? 'select' : 'rect');
 $('mLink').onclick = () => setMode(mode === 'link' ? 'select' : 'link');
@@ -3076,7 +3131,7 @@ document.addEventListener('keydown', e => {
   if (k === '/' && linkDraft) { linkDraft.hv = !linkDraft.hv; renderOver(); return; }
   if (k === '/' && wireDraft) { wireDraft.hv = !wireDraft.hv; renderOver(); return; }
   if (k === 'enter' && wireDraft) { finishDraft(); return; }
-  if (k === 'v') setMode('select'); else if (k === 'w') setMode('wire'); else if (k === 't') setMode('text'); else if (k === 'l') setMode('line'); else if (k === 'o') setMode('ellipse'); else if (k === 'b') setMode('rect'); else if (k === 'j') setMode('link'); else if (k === 'c') setMode(mode === 'cut' ? 'select' : 'cut'); else if (k === 's') setMode(mode === 'snip' ? 'select' : 'snip');
+  if (k === 'v') setMode('select'); else if (k === 'w') setMode('wire'); else if (k === 't') setMode('text'); else if (k === 'l') setMode('line'); else if (k === 'a') setMode(mode === 'arrow' ? 'select' : 'arrow'); else if (k === 'o') setMode('ellipse'); else if (k === 'b') setMode('rect'); else if (k === 'j') setMode('link'); else if (k === 'c') setMode(mode === 'cut' ? 'select' : 'cut'); else if (k === 's') setMode(mode === 'snip' ? 'select' : 'snip');
   else if (k === 'r') rotateSel(); else if (k === 'x') flipSel('h'); else if (k === 'y') flipSel('v'); else if (k === 'f') (e.shiftKey ? fitDrawing() : fit());
   else if (k === 'g') $('bGrid').click(); else if (k === 'h') $('bHooks').click(); else if (k === 'k') $('bCam').click();
   else if (k === '+' || k === '=') zoomAt(null, 1.25); else if (k === '-') zoomAt(null, 0.8);

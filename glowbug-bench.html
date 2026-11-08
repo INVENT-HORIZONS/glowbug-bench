@@ -473,6 +473,7 @@ button, input, select, textarea { font: inherit; color: inherit; box-sizing: bor
              (built from the layers' contents) stay flat. The region is in sheet units and set to the sheet in applyView. -->
         <!-- Active Plot card: the instrument windows' shadow (CSS 5px 6px 7px rgba(0,0,0,.32)), always on like theirs; stripped from exports -->
         <filter id="plotShadow" x="-10%" y="-10%" width="130%" height="135%" color-interpolation-filters="sRGB"><feDropShadow dx="5" dy="6" stdDeviation="3.5" flood-color="#000000" flood-opacity="0.32"/></filter>
+        <filter id="arrowShadow" filterUnits="userSpaceOnUse" x="-200" y="-200" width="4000" height="3000" color-interpolation-filters="sRGB"><feDropShadow dx="5" dy="6" stdDeviation="3.5" flood-color="#000000" flood-opacity="0.32"/></filter>
         <filter id="inkShadow" filterUnits="userSpaceOnUse" x="-200" y="-200" width="4000" height="3000" color-interpolation-filters="sRGB"><feDropShadow dx="2.5" dy="3" stdDeviation="1.6" flood-color="#000000" flood-opacity="0.35"/></filter>
         <pattern id="gMinor" width="10" height="10" patternUnits="userSpaceOnUse"><circle cx="0" cy="0" r=".7" fill="#C9BBA6"/></pattern>
         <pattern id="gMajor" width="50" height="50" patternUnits="userSpaceOnUse"><rect width="50" height="50" fill="url(#gMinor)"/><circle cx="0" cy="0" r="1.25" fill="#B4A48D"/></pattern>
@@ -486,6 +487,7 @@ button, input, select, textarea { font: inherit; color: inherit; box-sizing: bor
         <g id="layerFills"></g>
         <g id="layerParts" filter="url(#inkShadow)"></g>
         <g id="layerWires" filter="url(#inkShadow)"></g>
+        <g id="layerArrows" filter="url(#arrowShadow)"></g>
         <g id="layerText" filter="url(#inkShadow)"></g>
         <g id="layerPlots"></g>
         <g id="layerSel"></g>
@@ -1565,7 +1567,7 @@ function applyView() {
   const W = svg.clientWidth, H = svg.clientHeight;
   const [SW, SH] = sheetDims(sheet);
   for (const id of ['paper', 'gridRect']) { const r = $(id); r.setAttribute('x', 0); r.setAttribute('y', 0); r.setAttribute('width', SW); r.setAttribute('height', SH); }
-  { const f = $('inkShadow'), m = 200; f.setAttribute('x', -m); f.setAttribute('y', -m); f.setAttribute('width', SW + 2 * m); f.setAttribute('height', SH + 2 * m); }   // shadow region covers the sheet
+  for (const id of ['inkShadow', 'arrowShadow']) { const f = $(id), m = 200; f.setAttribute('x', -m); f.setAttribute('y', -m); f.setAttribute('width', SW + 2 * m); f.setAttribute('height', SH + 2 * m); }   // shadow region covers the sheet
   const sh = $('sheetShadow'); sh.setAttribute('x', 4 / view.z); sh.setAttribute('y', 5 / view.z); sh.setAttribute('width', SW); sh.setAttribute('height', SH);
   $('gridRect').style.display = showGrid ? '' : 'none';
   $('stZoom').textContent = Math.round(view.z * 100) + '%';
@@ -1884,7 +1886,8 @@ function render() {
   ws += [...dots].map(k => { const [x, y] = k.split(','); return `<circle class="jdot"${dotColor(k)} cx="${x}" cy="${y}" r="3"/>`; }).join('');
   $('layerPlots').innerHTML = linesOf(sheet).filter(isPlot).map(lineSVG).join('');   // Active Plots sit above all schematic content (Larry: nothing bleeds through)
   $('layerWires').innerHTML = linesOf(sheet).filter(l => !noPen(l) && !isArrow(l)).map(lineSVG).join('') + ws + linksOf(sheet).map(k => { const e = linkEnds(k); return e ? linkSVG(e) + [[k.ta, e[0]], [k.tb, e[e.length - 1]]].filter(x => x[0]).map(x => `<circle cx="${x[1][0]}" cy="${x[1][1]}" r="2.4" style="fill:${LINK_COL}"/>`).join('') : ''; }).join('');
-  $('layerText').innerHTML = linesOf(sheet).filter(isArrow).map(lineSVG).join('') + sheet.texts.map(textSVG).join('');   // arrows point things out: above parts and wires, under text
+  $('layerArrows').innerHTML = linesOf(sheet).filter(isArrow).map(lineSVG).join('');   // arrows point things out: above parts and wires, under text, with the instrument windows' shadow always on
+  $('layerText').innerHTML = sheet.texts.map(textSVG).join('');
   renderSel(); renderHooks(cnt); renderDoc(); applyView();
   $('stCount').textContent = `${sheet.parts.length} part${sheet.parts.length === 1 ? '' : 's'} · ${sheet.wires.length} wire${sheet.wires.length === 1 ? '' : 's'}`;
   renderSheets(); renderInst();
@@ -3307,7 +3310,7 @@ function sheetSVG(withBg = true, whole = false) {
   if (whole) { const [SW, SH] = sheetDims(sheet); x0 = 0; y0 = 0; x1 = SW; y1 = SH; }
   else { if (!bbs.length) return null; const pad = 16; x0 = Math.min(...bbs.map(b => b[0])) - pad; y0 = Math.min(...bbs.map(b => b[1])) - pad; x1 = Math.max(...bbs.map(b => b[2])) + pad; y1 = Math.max(...bbs.map(b => b[3])) + pad; }
   const css = `.ink{stroke:#17120E;fill:none;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}.solid{fill:#17120E}.tgt{stroke:#2F8A45;fill:none;stroke-width:1.8;stroke-linecap:round}.env{stroke:#17120E;fill:none;stroke-width:1.8}.htr{stroke:#E8912D;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}.dash{stroke:#17120E;fill:none;stroke-width:1.6;stroke-dasharray:5 3.4}.xbox{fill:none;stroke:#B4B4B4;stroke-width:1.2}.dotl{stroke:#17120E;fill:none;stroke-width:2;stroke-linecap:round;stroke-dasharray:0 4.2}.wire{stroke:#17120E;fill:none;stroke-width:1.4;stroke-linecap:round;stroke-linejoin:round}.jdot{fill:#17120E}.lbl{font-family:'Libre Franklin','Franklin Gothic Book',Arial,sans-serif;font-size:11px;fill:#17120E}.lbl .ref,.lbl.ref{font-weight:600}.pinno{font-family:'Libre Franklin','Franklin Gothic Book',Arial,sans-serif;font-size:8.5px;fill:#17120E}.pinlead{stroke:#5C5248;stroke-width:.8;stroke-dasharray:1.2 2;fill:none}.stxt{font-family:'Libre Franklin','Franklin Gothic Book',Arial,sans-serif;white-space:pre}.fr{stroke:#17120E;fill:none;stroke-width:1.1}.fr-b{stroke:#17120E;fill:none;stroke-width:2}.fr-lab{font-family:'JetBrains Mono',Consolas,monospace;font-size:7.5px;letter-spacing:.08em;fill:#5C5248}.fr-val{font-family:'Libre Franklin','Franklin Gothic Book',Arial,sans-serif;fill:#17120E}.fr-zone{font-family:'JetBrains Mono',Consolas,monospace;font-size:10px;fill:#5C5248}.fr-co{font-family:'Big Shoulders Display','Arial Narrow',sans-serif;font-weight:800;fill:#17120E}`;
-  const body = ((whole ? $('layerFrame').innerHTML : '') + $('layerImages').innerHTML + $('layerFills').innerHTML + $('layerParts').innerHTML + $('layerWires').innerHTML + $('layerText').innerHTML + $('layerPlots').innerHTML.replace(/ filter="url\(#plotShadow\)"/g, '')).replace(/var\(--ink\)/g, '#17120E').replace(/var\(--paper\)/g, '#FBF8F3');
+  const body = ((whole ? $('layerFrame').innerHTML : '') + $('layerImages').innerHTML + $('layerFills').innerHTML + $('layerParts').innerHTML + $('layerWires').innerHTML + $('layerArrows').innerHTML + $('layerText').innerHTML + $('layerPlots').innerHTML.replace(/ filter="url\(#plotShadow\)"/g, '')).replace(/var\(--ink\)/g, '#17120E').replace(/var\(--paper\)/g, '#FBF8F3');
   return { w: x1 - x0, h: y1 - y0, svg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${x0} ${y0} ${x1 - x0} ${y1 - y0}" width="${x1 - x0}" height="${y1 - y0}"><style>${css}</style>${withBg ? `<rect x="${x0}" y="${y0}" width="${x1 - x0}" height="${y1 - y0}" fill="#FBF8F3"/>` : ''}${body}</svg>` };
 }
 const fileBase = () => (sheet.file || slugFile(sheet.name)).replace(/\.[a-z0-9]+$/i, '') || 'schematic';

@@ -126,6 +126,9 @@ button, input, select, textarea { font: inherit; color: inherit; box-sizing: bor
 .tnode input { flex: 1; min-width: 0; padding: 1px 4px; border: 1px solid var(--accent); border-radius: 3px; background: var(--paper); color: var(--ink); font: inherit; }
 .tnode.stg { margin-top: 3px; }
 .tnode.snap { padding-left: 22px; font-size: 12.5px; }
+.tnode.snap.dropb { box-shadow: inset 0 2px 0 var(--accent); }
+.tnode.snap.dropa { box-shadow: inset 0 -2px 0 var(--accent); }
+.tnode.snap.blank .nm { font-style: italic; }
 .tnode.snap.cur { box-shadow: inset 3px 0 0 var(--accent); font-weight: 600; }
 .stg-now { font: 600 13px var(--font-ui); margin: 2px 0; }
 .row-btns button[aria-pressed="true"] { background: var(--accent); color: var(--accent-fg); border-color: transparent; }
@@ -1651,9 +1654,20 @@ function delSnap(i) {
   if (previewing) { if (st.snaps.length) putData(sheet, st.snaps[st.cur].data); else endPreview(true); }
   render(); changed(); setMsg(`Snapshot ${i + 1} deleted. Ctrl+Z brings it back.`);
 }
-function moveSnap(d) {
-  const st = project.stage, i = st.cur, j = i + d; if (j < 0 || j >= st.snaps.length) return;
-  snapshot(); [st.snaps[i], st.snaps[j]] = [st.snaps[j], st.snaps[i]]; st.cur = j; if (previewing) putData(sheet, st.snaps[j].data); render(); changed(); setMsg(`Snapshot moved to place ${j + 1}.`);
+function moveSnap(d) { const st = project.stage; moveSnapTo(st.cur, st.cur + d); }
+// move snapshot i to place j (buttons, or dragging it in the tree); the moved snapshot stays the current one
+function moveSnapTo(i, j) {
+  const st = project.stage; if (!st || i === j || i < 0 || j < 0 || i >= st.snaps.length || j >= st.snaps.length) return;
+  snapshot(); const [q] = st.snaps.splice(i, 1); st.snaps.splice(j, 0, q); st.cur = j;
+  if (previewing) putData(sheet, q.data); render(); changed(); setMsg(`Snapshot moved to place ${j + 1}.`);
+}
+// a blank snapshot goes in at the selected snapshot's place (it moves down one); with none yet it is the first
+function insertBlank() {
+  const st = project.stage; if (!st || playing) return;
+  snapshot(); const at = st.snaps.length ? Math.min(st.cur, st.snaps.length) : 0;
+  st.snaps.splice(at, 0, { id: uid(), data: { parts: [], wires: [], texts: [], lines: [], links: [] } }); st.cur = at;
+  if (previewing) putData(sheet, st.snaps[at].data); render(); changed();
+  setMsg(`Blank snapshot ${at + 1} added.${st.snaps.length > at + 1 ? ` The one that was there is now ${at + 2}.` : ''}`);
 }
 function stopAnim() { if (anim) { cancelAnimationFrame(anim.raf); anim = null; render(); } }
 function showSnap(i) { if (anim) { cancelAnimationFrame(anim.raf); anim = null; } putData(sheet, project.stage.snaps[i].data); project.stage.cur = i; render(); }
@@ -1766,7 +1780,8 @@ function stagePanel(b) {
     <div class="dnote">${playing ? '→ moves on, ← goes back. Stop or Esc ends.' : previewing ? 'Viewing this snapshot; your stage is unchanged. ← → step through the snapshots.' : n ? 'Snapshot adds the stage as it is now to the end of the list. Click a snapshot in the tree to view it.' : 'Build on the stage, then press Snapshot (toolbar) at each step.'}</div>
     ${previewing ? `<div class="row-btns"><button id="stBack" title="Back to the stage as you left it (Esc)">Back to stage</button><button id="stCopy" title="Put this snapshot on the stage to change it (replaces what is on the stage; Ctrl+Z undoes)">Copy to stage</button></div>` : ''}
     ${n && !playing ? `<div class="row-btns">${previewing ? '' : `<button id="stUpd" title="Replace snapshot ${st.cur + 1} with the stage as it is now">Update snapshot</button>`}<button class="del" id="stDel">Delete</button></div>
-    <div class="row-btns"><button id="stUp" ${st.cur > 0 ? '' : 'disabled'} title="Move this snapshot one place earlier">Move earlier</button><button id="stDown" ${st.cur < n - 1 ? '' : 'disabled'} title="Move this snapshot one place later">Move later</button></div>` : ''}
+    <div class="row-btns"><button id="stUp" ${st.cur > 0 ? '' : 'disabled'} title="Move this snapshot one place earlier (or drag it in the tree)">Move earlier</button><button id="stDown" ${st.cur < n - 1 ? '' : 'disabled'} title="Move this snapshot one place later (or drag it in the tree)">Move later</button></div>` : ''}
+    ${project.stage && !playing ? `<div class="row-btns"><button id="stBlank" title="${n ? `Insert an empty snapshot at place ${st.cur + 1}; snapshot ${st.cur + 1} and the ones after it move down one` : 'Add an empty first snapshot'}">Insert blank snapshot</button></div>` : ''}
     ${playing || previewing ? '' : `<div class="dnote">Stage size</div>
     <div class="seg" role="group" aria-label="Stage size">${Object.entries(SIZES).map(([k, v]) => `<button data-size="${k}" aria-pressed="${sheet.size === k}" title="${v.name}${v.note ? ' (' + v.note + ')' : ''}"><b>${k}</b><small>${v.note || v.name.replace(' in', '')}</small></button>`).join('')}</div>
     <div class="seg two" role="group" aria-label="Orientation"><button data-or="L" aria-pressed="${sheet.orient !== 'P'}"><b>Landscape</b></button><button data-or="P" aria-pressed="${sheet.orient === 'P'}"><b>Portrait</b></button></div>`}`;
@@ -1777,7 +1792,7 @@ function stagePanel(b) {
   fd.addEventListener('change', () => { const v = +fd.value; if (project.stage && Number.isFinite(v) && v >= 0.1 && v <= 10) { st.fade = Math.round(v * 10) / 10; changed(); } fd.value = st.fade; });
   fd.addEventListener('keydown', ev => { ev.stopPropagation(); if (ev.key === 'Enter') fd.blur(); });
   const on = (id, fn) => { const x = $(id); if (x) x.onclick = () => { fn(); x.blur(); }; };   // blur, so the arrow keys go to the stage
-  on('stPlay', stagePlay); on('stStop', stageStop); on('stUp', () => moveSnap(-1)); on('stDown', () => moveSnap(1)); on('stDel', () => delSnap(st.cur));
+  on('stPlay', stagePlay); on('stStop', stageStop); on('stBlank', insertBlank); on('stUp', () => moveSnap(-1)); on('stDown', () => moveSnap(1)); on('stDel', () => delSnap(st.cur));
   on('stBack', () => endPreview()); on('stCopy', () => copyToStage(st.cur));
   on('stUpd', () => { snapshot(); st.snaps[st.cur].data = snapData(sheet); renderSheets(); changed(); setMsg(`Snapshot ${st.cur + 1} updated to the stage as it is now.`); });
 }
@@ -2243,7 +2258,7 @@ function renderSheets() {
   const st = project.stage, ss = stageSh();
   const stg = !st || !ss ? '' : confirmDel === STAGE_ID ? `<div class="confirm">Delete the Animation Stage and its ${st.snaps.length} snapshot${st.snaps.length === 1 ? '' : 's'}? <button class="yes" data-yes="${STAGE_ID}">Delete</button><button data-no="1">Keep</button></div>`
     : `<div class="tnode stg${sheet.id === ss.id && !viewOnly() ? ' on' : ''}" role="treeitem" data-sheet="${ss.id}" title="Animation Stage: build on it like any sheet; ${st.snaps.length} snapshot${st.snaps.length === 1 ? '' : 's'}">${ICON_STAGE}<span class="nm">Animation Stage</span><span class="ct">${st.snaps.length}</span><button class="x" data-del="${STAGE_ID}" title="Delete the Animation Stage" aria-label="Delete the Animation Stage">×</button></div>`
-      + st.snaps.map((q, i) => `<div class="tnode snap${st.cur === i ? ' cur' : ''}${previewing && st.cur === i ? ' on' : ''}" role="treeitem" data-snap="${i}" title="Snapshot ${i + 1}: click to view it; your stage stays as it is">${ICON_SNAP}<span class="nm">Snapshot ${i + 1}</span><button class="x" data-delsnap="${i}" title="Delete this snapshot" aria-label="Delete snapshot ${i + 1}">×</button></div>`).join('');
+      + st.snaps.map((q, i) => `<div class="tnode snap${st.cur === i ? ' cur' : ''}${previewing && st.cur === i ? ' on' : ''}${q.data.parts.length + q.data.wires.length + q.data.texts.length + q.data.lines.length ? '' : ' blank'}" role="treeitem" data-snap="${i}" draggable="${!playing}" title="Snapshot ${i + 1}: click to view it (your stage stays as it is); drag it to move it">${ICON_SNAP}<span class="nm">Snapshot ${i + 1}</span>${q.data.parts.length + q.data.wires.length + q.data.texts.length + q.data.lines.length ? '' : '<span class="ct">blank</span>'}<button class="x" data-delsnap="${i}" title="Delete this snapshot" aria-label="Delete snapshot ${i + 1}">×</button></div>`).join('');
   el.innerHTML = `<div class="tnode root" role="treeitem" aria-expanded="${treeOpen}" data-root="1" title="Double-click to rename the project"><button class="car${treeOpen ? ' open' : ''}" data-tog="1" aria-label="${treeOpen ? 'Collapse' : 'Expand'}">▶</button>${ICON_PROJ}${rootName}</div>`
     + (treeOpen ? `<div class="tkids" role="group">${kids}${stg}</div>` : '');
   el.tabIndex = 0;
@@ -2277,6 +2292,13 @@ $('sheets').addEventListener('click', e => {
   if (t.dataset.sheet && viewOnly() && t.dataset.sheet === sheet.id) { if (playing) stageStop(); else endPreview(); return; }   // the stage node: back to the stage itself
   if (t.dataset.sheet && t.dataset.sheet !== sheet.id) switchSheet(t.dataset.sheet);
 });
+// drag a snapshot up or down the tree to move it; a line shows where it will land
+{ let from = null; const clear = () => $('sheets').querySelectorAll('.dropb, .dropa').forEach(x => x.classList.remove('dropb', 'dropa'));
+  const spot = e => { const r = e.target.closest('[data-snap]'); if (!r) return null; const b = r.getBoundingClientRect(); return { r, i: +r.dataset.snap, after: e.clientY > b.top + b.height / 2 }; };
+  $('sheets').addEventListener('dragstart', e => { const r = e.target.closest('[data-snap]'); if (!r || playing) { e.preventDefault(); return; } from = +r.dataset.snap; e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', 'snap'); });
+  $('sheets').addEventListener('dragover', e => { if (from == null) return; const p = spot(e); if (!p) return; e.preventDefault(); clear(); p.r.classList.add(p.after ? 'dropa' : 'dropb'); });
+  $('sheets').addEventListener('drop', e => { if (from == null) return; const p = spot(e); clear(); if (!p) return; e.preventDefault(); let to = p.i + (p.after ? 1 : 0); if (to > from) to--; const f = from; from = null; moveSnapTo(f, to); });
+  $('sheets').addEventListener('dragend', () => { from = null; clear(); }); }
 $('sheets').addEventListener('dblclick', e => {
   if (e.target.closest('[data-tog],[data-del],input')) return;
   const r = e.target.closest('[data-sheet],[data-root]'); if (!r) return;
@@ -2291,6 +2313,7 @@ $('sheets').addEventListener('keydown', e => {
   else if (e.key === 'F2' || e.key === 'Enter') { e.preventDefault(); renaming = sheet.id; renderSheets(); }
   else if (e.key === 'ArrowLeft' && treeOpen) { treeOpen = false; renderSheets(); }
   else if (e.key === 'ArrowRight' && !treeOpen) { treeOpen = true; renderSheets(); }
+  else return;   // keys the tree doesn't use (Ctrl+Z, Delete, tool keys…) go on to the app
   e.stopPropagation();
 });
 $('bAddSheet').onclick = () => {

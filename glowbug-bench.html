@@ -2541,7 +2541,7 @@ function renderProps() {
     const t = it.o;
     b.innerHTML = `<div class="what">Text</div>
       <div class="field"><label for="tTxt">Text</label><textarea id="tTxt" rows="2">${esc(t.text)}</textarea></div>
-      <div class="field"><label for="tSize">Size</label><select id="tSize">${[9, 10, 11, 12, 14, 15, 18, 24].map(s => `<option${s === t.size ? ' selected' : ''}>${s}</option>`).join('')}</select></div>
+      <div class="field"><label for="tSize">Size</label><select id="tSize">${[...new Set([9, 10, 11, 12, 14, 15, 18, 24, 30, 36, 48, 60, 72, 96, 120, +t.size || 12])].sort((a, b) => a - b).map(s => `<option${s === t.size ? ' selected' : ''}>${s}</option>`).join('')}</select></div>
       <div class="field"><label for="tTone">Color</label><select id="tTone"><option value="ink"${t.tone === 'ink' ? ' selected' : ''}>Ink</option><option value="glow"${t.tone === 'glow' ? ' selected' : ''}>Glow (callouts)</option><option value="muted"${t.tone === 'muted' ? ' selected' : ''}>Muted</option></select></div>
       <div class="row-btns"><button data-act="dup">Duplicate</button><button class="del" data-act="del">Delete</button></div>`;
     const ta = $('tTxt'); ta.addEventListener('focus', () => snapshot(), { once: true });

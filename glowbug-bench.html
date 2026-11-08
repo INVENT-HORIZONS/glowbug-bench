@@ -1608,6 +1608,47 @@ function cleanStage() {
   Object.assign(sh, { border: false, revs: false, title: false });
   delete st.sheet; for (const k of Object.keys(st)) if (!['cur', 'snaps'].includes(k)) delete st[k];
 }
+// Send to Animation Stage (Larry, 2026-11-08): right-click a group selection (or the empty canvas while one is selected) to copy it
+// onto the stage. It makes the stage if there is none; if the stage already has a drawing or snapshots, it asks first, because
+// they are all replaced (Ctrl+Z brings them back). Parts keep their ids, refs and values; links go along when both their ends do.
+function stageSendMenu(e) {
+  const n = sel.size; menuEl = document.createElement('div'); menuEl.className = 'menu'; menuEl.setAttribute('role', 'menu');
+  menuEl.innerHTML = `<div style="padding:5px 10px 6px;font:500 10.5px var(--font-mono);letter-spacing:.1em;text-transform:uppercase;color:var(--muted)">${n} selected</div><button role="menuitem" data-m="tostage"><span>Send ${n > 1 ? `${n} items` : ''} to Animation Stage</span><span></span></button>`.replace('Send  to', 'Send to');
+  document.body.appendChild(menuEl);
+  const mw = menuEl.offsetWidth, mh = menuEl.offsetHeight;
+  menuEl.style.left = Math.min(e.clientX, window.innerWidth - mw - 8) + 'px'; menuEl.style.top = Math.min(e.clientY, window.innerHeight - mh - 8) + 'px';
+  menuEl.onclick = ev => { if (!ev.target.closest('[data-m]')) return; closeMenu(); sendToStage(); };
+}
+function sendToStage() {
+  const items = selItems(); if (!items.length || onStage()) return;
+  const data = JSON.parse(JSON.stringify({ parts: items.filter(i => i.k === 'part').map(i => i.o), wires: items.filter(i => i.k === 'wire').map(i => i.o), texts: items.filter(i => i.k === 'text').map(i => i.o),
+    lines: items.filter(i => i.k === 'line').map(i => i.o), links: copyLinks(new Set(items.filter(i => i.k === 'part').map(i => i.o.id))) }));
+  const sh = stageSh(), st = project.stage, from = sheet;
+  const onIt = sh ? sh.parts.length + sh.wires.length + sh.texts.length + linesOf(sh).length + linksOf(sh).length : 0, nSnaps = st ? st.snaps.length : 0;
+  const go = () => {
+    snapshot();
+    if (!project.stage) project.stage = { cur: 0, snaps: [] };
+    let s2 = stageSh(); if (!s2) { s2 = newStageSheet(from); project.sheets.push(s2); }
+    project.stage.snaps = []; project.stage.cur = 0; putData(s2, data);
+    treeOpen = true; changed(); switchSheet(s2.id);
+    for (const k of SNAP_KINDS) for (const o of s2[k] || []) sel.add(o.id); render();
+    setMsg(`${items.length} item${items.length > 1 ? 's' : ''} sent to the Animation Stage. Press Snapshot to capture it.`);
+  };
+  if (!onIt && !nSnaps) { go(); return; }
+  const back = document.createElement('div'); back.className = 'dlg-back';
+  back.innerHTML = `<form class="dlg" role="dialog" aria-modal="true" aria-labelledby="tsT" style="width:min(440px,100%)">
+    <h2 id="tsT">Replace the Animation Stage?</h2><div style="padding:6px 16px 4px;line-height:1.45">
+      The Animation Stage already has ${[onIt ? `${onIt} item${onIt > 1 ? 's' : ''} on it` : '', nSnaps ? `${nSnaps} snapshot${nSnaps > 1 ? 's' : ''}` : ''].filter(Boolean).join(' and ')}.
+      Sending the ${items.length} selected item${items.length > 1 ? 's' : ''} there <b>deletes the current stage drawing and all its snapshots</b>.<br><small style="color:var(--muted)">Ctrl+Z brings them back.</small></div>
+    <div class="foot"><button type="button" id="tsCancel">Cancel</button><button type="submit" class="pri" id="tsOk" style="background:var(--danger);border-color:var(--danger)">Delete and replace</button></div></form>`;
+  document.body.appendChild(back);
+  const close = () => back.remove();
+  back.addEventListener('pointerdown', e => { if (e.target === back) close(); });
+  back.addEventListener('keydown', e => { if (e.key === 'Escape') close(); e.stopPropagation(); });
+  $('tsCancel').onclick = () => { close(); setMsg('Nothing sent; the Animation Stage is unchanged.'); };
+  back.querySelector('form').addEventListener('submit', e => { e.preventDefault(); close(); go(); });
+  $('tsCancel').focus();
+}
 function goStage() {
   let sh = stageSh();
   if (!sh) { snapshot(); project.stage = { cur: 0, snaps: [] }; sh = newStageSheet(onStage() ? null : sheet); project.sheets.push(sh); treeOpen = true; changed(); setMsg('Animation Stage added. Build on it like any sheet, and press Snapshot at each step.'); }
@@ -3143,7 +3184,7 @@ function blockMenu(e, which) {
 function partMenu(e, raw) {
   closeMenu();
   const t = hit(raw);
-  if (!t) { const b = blockAt(raw); if (b) blockMenu(e, b); return; }
+  if (!t) { const b = blockAt(raw); if (b) blockMenu(e, b); else if (sel.size && !onStage()) stageSendMenu(e); return; }
   const target = t.o;
   if (!sel.has(target.id)) { sel.clear(); sel.add(target.id); }
   selLabel = t.k === 'label' ? { id: target.id, field: t.field } : null; renderSel();
@@ -3183,6 +3224,7 @@ function partMenu(e, raw) {
     + (hasPart ? `<div class="mlabel">${items.filter(i => i.k === 'part').length > 1 ? 'Part color' : 'Color'} (highlight)</div>${partSwatchRow((() => { const cs = new Set(items.filter(i => i.k === 'part').map(i => i.o.color || 'ink')); return cs.size === 1 ? [...cs][0] : ''; })())}` : '')
     + (items.some(i => i.k === 'wire' || (i.k === 'line' && !noPen(i.o))) ? `<div class="mlabel">${items.some(i => i.k === 'wire') ? 'Wire color' : 'Line color'}</div>${swatchRow((() => { const cs = new Set(items.filter(i => i.k === 'wire' || i.k === 'line').map(i => i.o.color || 'ink')); return cs.size === 1 ? [...cs][0] : ''; })())}` : '')
     + (items.some(i => i.k === 'line' && canFill(i.o)) ? `<div class="mlabel">Fill</div>${fillRow((() => { const fs = new Set(items.filter(i => i.k === 'line' && canFill(i.o)).map(i => i.o.fill || '')); return fs.size === 1 ? [...fs][0] : null; })())}` : '')
+    + (!onStage() && !selLabel ? `<button role="menuitem" data-m="tostage"><span>Send ${items.length > 1 ? `${items.length} items` : 'to'} to Animation Stage</span><span></span></button>`.replace('Send to to', 'Send to') : '')
     + `<button role="menuitem" data-m="dup"><span>Duplicate</span><span>Ctrl+D</span></button>`
     + (selLabel ? `<button role="menuitem" data-m="del"><span>Hide ${FIELD_NAME[selLabel.field]}</span><span>Del</span></button>`
                 : `<button role="menuitem" data-m="del" style="color:var(--danger)"><span>Delete${many}</span><span>Del</span></button>`);
@@ -3197,6 +3239,7 @@ function partMenu(e, raw) {
     const cr = ev.target.closest('[data-core]'); if (cr) { closeMenu(); const q = items[0].o, k = cr.dataset.core; if (coreOf(q) !== k) { snapshot(); q.core = k; render(); changed(); setMsg(`${q.ref || LIB[q.type].name}: ${CORE_NAME[k]}`); } return; }
     const vy = ev.target.closest('[data-vary]'); if (vy) { closeMenu(); const [vk, vn] = vy.dataset.vary.split(':'); setVary(items[0].o, +vn, vk); return; }
     const b = ev.target.closest('[data-m]'); if (!b) return; const m = b.dataset.m; closeMenu();
+    if (m === 'tostage') { sendToStage(); return; }
     if (m === 'edit') { const L0 = selLabel; if (L0) editInPlace(sheet.parts.find(x => x.id === L0.id), L0.field); return; }
     if (m === 'heater') { setHeater(items[0].o, !!items[0].o.noHeater); return; }
     if (m.startsWith('unit-')) { addSection(items[0].o, m.slice(5)); return; }

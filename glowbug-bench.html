@@ -1856,7 +1856,7 @@ function applyView() {
   const sh = $('sheetShadow'); sh.setAttribute('x', 4 / view.z); sh.setAttribute('y', 5 / view.z); sh.setAttribute('width', SW); sh.setAttribute('height', SH);
   $('gridRect').style.display = showGrid ? '' : 'none';
   $('stZoom').textContent = Math.round(view.z * 100) + '%';
-  if (plotHandleOf() || meshHandleOf()) renderSel();     // keep the plot's resize handle the same size on screen
+  if (plotHandleOf() || meshHandleOf() || shapeHandleOf()) renderSel();     // keep the plot's resize handle the same size on screen
 }
 function partSVG(p, extra = '') {
   return `<g${p.color && p.color !== 'ink' && WIRE_COLORS.some(c => c.k === p.color) ? ` class="pc-${p.color}" style="--ink:${wcol(p.color)}"` : ''} transform="translate(${p.x} ${p.y}) rotate(${(p.rot || 0) * 90}) scale(${p.flip ? -1 : 1} 1)"${extra}>${hasBox(p) ? (b => `<rect class="xbox" x="${b[0]}" y="${b[1]}" width="${b[2] - b[0]}" height="${b[3] - b[1]}" rx="2"/>`)(localBB(p)) : ''}${shapeOf(p).draw(isXfmr(p) ? p.core || 'iron' : LIB[p.type].drawArg ? LIB[p.type].drawArg(p) : undefined)}</g>`;
@@ -2071,6 +2071,32 @@ const plotHandleOf = () => { if (sel.size !== 1) return null; const l = linesOf(
 const meshHandleOf = () => { if (sel.size !== 1) return null; const l = linesOf(sheet).find(x => sel.has(x.id)); return isMesh(l) ? l : null; };
 const meshHandles = l => { const g = meshGeom(l); return [[g.cx + g.rx, g.cy, 'x'], [g.cx - g.rx, g.cy, 'x'], [g.cx, g.cy + g.ry, 'y'], [g.cx, g.cy - g.ry, 'y']]; };
 function meshHandleAt(raw) { const l = meshHandleOf(); if (!l) return null; const tol = 7 / view.z; const h = meshHandles(l).find(q => Math.abs(raw[0] - q[0]) <= tol && Math.abs(raw[1] - q[1]) <= tol); return h ? { l, axis: h[2] } : null; }
+// Sizing handles (Larry, 2026-11-08) for one selected line, rectangle, ellipse or old-style circle: a line has one at each end;
+// rectangles and ellipses eight round their box (corners and side middles; Alt on a corner keeps it square); a circle four on its
+// edge, which set the radius. Drag kind 'shapesize'; everything lands on the grid and nothing gets smaller than one grid square.
+const shapeHandleOf = () => { if (sel.size !== 1) return null; const l = linesOf(sheet).find(x => sel.has(x.id)); return l && ['line', 'rect', 'ellipse', 'circle'].includes(shapeOfL(l)) ? l : null; };
+function shapeHandles(l) {
+  const sh = shapeOfL(l);
+  if (sh === 'line') return [[l.a[0], l.a[1], 'a'], [l.b[0], l.b[1], 'b']];
+  if (sh === 'circle') { const r = radOf(l), [x, y] = l.a; return [[x + r, y, 'e'], [x - r, y, 'w'], [x, y - r, 'n'], [x, y + r, 's']]; }
+  const [x0, y0, x1, y1] = lineBB(l), mx = (x0 + x1) / 2, my = (y0 + y1) / 2;
+  return [[x0, y0, 'nw'], [mx, y0, 'n'], [x1, y0, 'ne'], [x1, my, 'e'], [x1, y1, 'se'], [mx, y1, 's'], [x0, y1, 'sw'], [x0, my, 'w']];
+}
+function shapeHandleAt(raw) { const l = shapeHandleOf(); if (!l) return null; const tol = 7 / view.z; const h = shapeHandles(l).find(q => Math.abs(raw[0] - q[0]) <= tol && Math.abs(raw[1] - q[1]) <= tol); return h ? { l, id: h[2] } : null; }
+const SH_CURSOR = { a: 'move', b: 'move', n: 'ns-resize', s: 'ns-resize', e: 'ew-resize', w: 'ew-resize', nw: 'nwse-resize', se: 'nwse-resize', ne: 'nesw-resize', sw: 'nesw-resize' };
+function shapeResize(o, id, bb, raw) {   // returns true when the shape changed
+  const q = [snap(raw[0]), snap(raw[1])], sh = shapeOfL(o), old = JSON.stringify([o.a, o.b]);
+  if (sh === 'line') { const other = id === 'a' ? o.b : o.a; if (q[0] === other[0] && q[1] === other[1]) return false; o[id] = q; }
+  else if (sh === 'circle') { const r = Math.max(G, snap(Math.hypot(raw[0] - o.a[0], raw[1] - o.a[1]))); o.b = [o.a[0] + r, o.a[1]]; }
+  else {
+    let [x0, y0, x1, y1] = bb;
+    if (id.includes('w')) x0 = Math.min(q[0], x1 - G); if (id.includes('e')) x1 = Math.max(q[0], x0 + G);
+    if (id.includes('n')) y0 = Math.min(q[1], y1 - G); if (id.includes('s')) y1 = Math.max(q[1], y0 + G);
+    if (altDown && id.length === 2) { const d = Math.max(x1 - x0, y1 - y0); if (id.includes('w')) x0 = x1 - d; else x1 = x0 + d; if (id.includes('n')) y0 = y1 - d; else y1 = y0 + d; }
+    o.a = [x0, y0]; o.b = [x1, y1];
+  }
+  return JSON.stringify([o.a, o.b]) !== old;
+}
 function plotHandleAt(raw) { const l = plotHandleOf(); if (!l) return null; const f = isPlot(l) ? plotFrame(l) : lineBB(l), tol = 7 / view.z; return Math.abs(raw[0] - f[2]) <= tol && Math.abs(raw[1] - f[3]) <= tol ? l : null; }
 const shapeOfL = l => l.shape || 'line';
 const radOf = l => Math.hypot(l.b[0] - l.a[0], l.b[1] - l.a[1]);
@@ -2301,6 +2327,7 @@ function renderSel() {
   for (const w of sheet.wires) if (sel.has(w.id)) s += `<polyline class="selwire" points="${w.pts.map(p => p.join(',')).join(' ')}"/>`;
   for (const t of sheet.texts) if (sel.has(t.id)) { const b = textBB(t); s += `<rect class="selbox" x="${b[0] - 2}" y="${b[1] - 2}" width="${b[2] - b[0] + 4}" height="${b[3] - b[1] + 4}" rx="2"/>`; }
   for (const l of linesOf(sheet)) if (sel.has(l.id)) s += lineEl(l, 'class="selwire" style="fill:none"');
+  { const l = shapeHandleOf(); if (l) { const r = 4 / view.z; for (const [x, y] of shapeHandles(l)) s += `<rect x="${x - r}" y="${y - r}" width="${2 * r}" height="${2 * r}" style="fill:#FFFFFF;stroke:${LINK_COL};stroke-width:${1.4 / view.z}"/>`; } }
   { const l = meshHandleOf(); if (l) { const r = 4 / view.z; for (const [x, y] of meshHandles(l)) s += `<rect x="${x - r}" y="${y - r}" width="${2 * r}" height="${2 * r}" style="fill:#FFFFFF;stroke:${LINK_COL};stroke-width:${1.4 / view.z}"/>`; } }
   { const l = plotHandleOf(); if (l) { const f = isPlot(l) ? plotFrame(l) : lineBB(l), r = 4.5 / view.z; s += `<rect x="${f[2] - r}" y="${f[3] - r}" width="${2 * r}" height="${2 * r}" style="fill:#FFFFFF;stroke:${LINK_COL};stroke-width:${1.4 / view.z}"/>`; } }
   for (const k of linksOf(sheet)) if (sel.has(k.id)) { const e = linkEnds(k); if (e) s += `<polyline class="selwire" points="${ptsAttr(e)}"/>`; }
@@ -2986,6 +3013,7 @@ svg.addEventListener('pointerdown', e => {
   if (mode === 'cut' || mode === 'snip') { cutAt(raw, mode === 'snip'); return; }
   if (mode === 'wire') { wireClick(p, raw); return; }
   // select mode
+  { const sh = shapeHandleAt(raw); if (sh) { snapshot(); drag = { kind: 'shapesize', o: sh.l, id: sh.id, bb: lineBB(sh.l), start: p, moved: false }; return; } }
   { const mh = meshHandleAt(raw); if (mh) { snapshot(); const g = meshGeom(mh.l); drag = { kind: 'meshsize', o: mh.l, axis: mh.axis, c: [g.cx, g.cy], start: p, moved: false }; return; } }
   { const pl = plotHandleAt(raw); if (pl) { snapshot(); drag = isImage(pl) ? { kind: 'imgsize', o: pl, a: lineBB(pl).slice(0, 2), start: p, moved: false } : { kind: 'plotsize', o: pl, a: plotFrame(pl).slice(0, 2), start: p, moved: false }; return; } }
   if (plotAreaAt(raw) && !hit(raw)) return;   // the plot area is reserved for cursors and probing: no marquee, no wiring from parts it covers
@@ -3056,6 +3084,7 @@ svg.addEventListener('pointermove', e => {
       if (w !== o.b[0] - a[0] || h !== o.b[1] - a[1] || o.a[0] !== a[0] || o.a[1] !== a[1]) { o.a = [...a]; o.b = [a[0] + w, a[1] + h]; drag.moved = true; render(); renderProps(); }
       setMsg(e.altKey ? 'Keeping the picture\'s proportions (Alt)' : 'Hold Alt to keep the picture\'s proportions');
     }
+    else if (drag.kind === 'shapesize') { if (shapeResize(drag.o, drag.id, drag.bb, raw)) { drag.moved = true; render(); renderProps(); } }
     else if (drag.kind === 'meshsize') {   // the center stays put; the dragged handle sets the half-width or half-height (at least 10, on the grid)
       const o = drag.o, c = drag.c, ax = drag.axis === 'x' ? 0 : 1, r = Math.max(10, snap(Math.abs(raw[ax] - c[ax]))), na = [...o.a], nb = [...o.b];
       na[ax] = c[ax] - r; nb[ax] = c[ax] + r; [na[1 - ax], nb[1 - ax]] = [Math.min(o.a[1 - ax], o.b[1 - ax]), Math.max(o.a[1 - ax], o.b[1 - ax])];
@@ -3074,7 +3103,7 @@ svg.addEventListener('pointermove', e => {
   if ((h && key(h.pos)) !== (hoverHook && key(hoverHook.pos))) { hoverHook = h; renderHooks(); }
   if (mode === 'select') {
     const t = h ? null : hit(raw);
-    svg.style.cursor = !h && meshHandleAt(raw) ? (meshHandleAt(raw).axis === 'x' ? 'ew-resize' : 'ns-resize') : !h && plotHandleAt(raw) ? 'nwse-resize' : !t && plotAreaAt(raw) ? 'crosshair' : h ? 'crosshair' : (!t && blockAt(raw)) ? 'grab' : t ? (t.k === 'wire' || t.k === 'link' ? (t.o.pts[t.seg][1] === t.o.pts[t.seg + 1][1] ? 'ns-resize' : 'ew-resize') : 'move') : 'default';
+    svg.style.cursor = !h && shapeHandleAt(raw) ? SH_CURSOR[shapeHandleAt(raw).id] : !h && meshHandleAt(raw) ? (meshHandleAt(raw).axis === 'x' ? 'ew-resize' : 'ns-resize') : !h && plotHandleAt(raw) ? 'nwse-resize' : !t && plotAreaAt(raw) ? 'crosshair' : h ? 'crosshair' : (!t && blockAt(raw)) ? 'grab' : t ? (t.k === 'wire' || t.k === 'link' ? (t.o.pts[t.seg][1] === t.o.pts[t.seg + 1][1] ? 'ns-resize' : 'ew-resize') : 'move') : 'default';
   } else svg.style.cursor = mode === 'link' ? (linkTarget(raw) || linkAt(raw) ? 'crosshair' : linkDraft ? 'cell' : 'default') : '';
   if (mode === 'cut' || mode === 'snip') { const t = hit(raw); cutHover = t; $('stMsg').textContent = t ? (t.k === 'label' ? `Click to hide this ${FIELD_NAME[t.field]}` : `Click to cut ${t.k === 'part' ? (t.o.ref || LIB[t.o.type].name) : t.k === 'wire' && mode === 'snip' ? 'this segment' : t.k}`) : ''; }
   renderOver();
@@ -3083,7 +3112,7 @@ svg.addEventListener('pointerup', e => {
   if (panning) { panning = null; $('view').classList.remove('panning'); return; }
   if (drag) {
     if (drag.kind === 'block') { const moved = drag.moved; drag = null; if (moved) { render(); changed(); } return; }
-    if ((drag.kind === 'move' || drag.kind === 'label' || drag.kind === 'pin' || drag.kind === 'plotsize' || drag.kind === 'imgsize' || drag.kind === 'meshsize') && !drag.moved) undoStack.pop();
+    if ((drag.kind === 'move' || drag.kind === 'label' || drag.kind === 'pin' || drag.kind === 'plotsize' || drag.kind === 'imgsize' || drag.kind === 'meshsize' || drag.kind === 'shapesize') && !drag.moved) undoStack.pop();
     if (drag.kind === 'seg') { if (drag.w.pts.length === drag.pts.length && drag.w.pts.every((q, i) => q[0] === drag.pts[i][0] && q[1] === drag.pts[i][1])) { drag.w.pts = simplify(drag.pts); undoStack.pop(); } else drag.w.pts = simplify(drag.w.pts); }
     finishWires(); drag = null; render(); changed(); return;
   }

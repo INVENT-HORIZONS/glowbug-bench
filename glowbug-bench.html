@@ -253,6 +253,7 @@ button, input, select, textarea { font: inherit; color: inherit; box-sizing: bor
 .sw[aria-pressed="true"], .menu button.sw[aria-pressed="true"] { box-shadow: 0 0 0 2px var(--accent); }
 .sw:hover, .sw:focus-visible, .menu button.sw:hover, .menu button.sw:focus-visible { box-shadow: 0 0 0 2px var(--accent); outline: none; }
 .menu .swatches { padding: 2px 10px 8px; }
+.sw.none { background: #FFFFFF linear-gradient(135deg, transparent 45%, #A3241B 45%, #A3241B 55%, transparent 55%) !important; box-shadow: inset 0 0 0 1px #B4B4B4; }
 .chips { display: grid; grid-template-columns: repeat(7, 26px); gap: 3px; padding: 2px 10px 8px; }
 .chips.wide { grid-template-columns: repeat(4, 1fr); }
 .menu .chips.wide button.chip { width: auto; padding: 0 6px; font-size: 10.5px; }
@@ -480,6 +481,7 @@ button, input, select, textarea { font: inherit; color: inherit; box-sizing: bor
         <rect id="paper" style="fill:var(--paper)"/>
         <rect id="gridRect" fill="url(#gMajor)"/>
         <g id="layerFrame"></g>
+        <g id="layerFills"></g>
         <g id="layerParts" filter="url(#inkShadow)"></g>
         <g id="layerWires" filter="url(#inkShadow)"></g>
         <g id="layerText" filter="url(#inkShadow)"></g>
@@ -1646,8 +1648,27 @@ const PEN_W = [[0.8, 'Hairline'], [1.4, 'Thin'], [2, 'Medium'], [3, 'Thick'], [4
 const PEN_DASH = [['solid', 'Solid'], ['dash', 'Dashed'], ['long', 'Long dash'], ['dot', 'Dotted'], ['dashdot', 'Dash dot']];
 const penDash = (d, w) => ({ dash: `${+(4 * w + 2).toFixed(1)} ${+(3 * w + 1).toFixed(1)}`, long: `${+(8 * w + 4).toFixed(1)} ${+(3 * w + 2).toFixed(1)}`,
   dot: `0 ${+(2.5 * w + 1.5).toFixed(1)}`, dashdot: `${+(5 * w + 2).toFixed(1)} ${+(2 * w + 1.5).toFixed(1)} 0 ${+(2 * w + 1.5).toFixed(1)}` }[d] || '');
+// Fill for rectangles and ellipses (Larry, 2026-11-07): l.fill is a color key (unset = no fill), l.fillA its strength. The fill is drawn
+// in its own layer under the parts (layerFills), so a filled box highlights a section of the circuit without hiding it; the outline
+// stays where it was. A filled shape can be picked anywhere inside.
+const FILL_COLORS = [{ k: 'white', name: 'White', c: '#FFFFFF' }, { k: 'gray', name: 'Light gray', c: '#D9D4CC' }, { k: 'cream', name: 'Pale yellow', c: '#F6E7A8' },
+  { k: 'ink', name: 'Black', c: '#17120E' }, { k: 'red', name: 'Red', c: '#A3241B' }, { k: 'green', name: 'Green', c: '#2E6B34' }, { k: 'blue', name: 'Blue', c: '#1F4E8C' },
+  { k: 'brown', name: 'Brown', c: '#7A4A22' }, { k: 'orange', name: 'Orange', c: '#C2571A' }];
+const FILL_ALPHA = [[1, 'Solid'], [0.5, 'Medium'], [0.25, 'Light'], [0.12, 'Faint']];
+const fcol = k => (FILL_COLORS.find(c => c.k === k) || {}).c;
+const canFill = l => ['rect', 'ellipse', 'circle'].includes(shapeOfL(l));
+const fillSVG = l => canFill(l) && fcol(l.fill) ? lineEl(l, `style="fill:${fcol(l.fill)};fill-opacity:${l.fillA || 1};stroke:none"`) : '';
+const fillRow = cur => `<div class="swatches" role="group" aria-label="Fill color"><button class="sw none" data-fc="" title="No fill" aria-label="No fill" aria-pressed="${cur === ''}"></button>${FILL_COLORS.map(c => `<button class="sw" data-fc="${c.k}" title="${c.name}" aria-label="${c.name} fill" aria-pressed="${c.k === cur}" style="background:${c.c}${c.k === 'white' ? ';box-shadow:inset 0 0 0 1px #B4B4B4' : ''}"></button>`).join('')}</div>`;
+const fillFields = (fill, a) => `<div class="field"><label>Fill</label>${fillRow(fill)}</div>
+      <div class="field"><label for="pFillA">Fill strength</label><select id="pFillA"${fill ? '' : ' disabled'}>${FILL_ALPHA.map(([v, n]) => `<option value="${v}"${v === a ? ' selected' : ''}>${n}</option>`).join('')}</select></div>`;
+function fillShapes(k) {   // set (or clear, k = '') the fill of the selected rectangles and ellipses
+  const ls = selItems().filter(i => i.k === 'line' && canFill(i.o)).map(i => i.o); if (!ls.length) return false;
+  snapshot(); for (const l of ls) { if (k) l.fill = k; else { delete l.fill; delete l.fillA; } }
+  render(); renderProps(); changed(); setMsg(k ? `Fill set to ${FILL_COLORS.find(c => c.k === k).name.toLowerCase()}` : 'Fill removed'); return true;
+}
 let pen = (q => ({ color: typeof q.color === 'string' ? q.color : 'ink',   // wcol() falls back to ink for an unknown key
-  w: PEN_W.some(x => x[0] === q.w) ? q.w : 1.4, dash: PEN_DASH.some(x => x[0] === q.dash) ? q.dash : 'solid' }))(lsGet('gs.pen', {}) || {});
+  w: PEN_W.some(x => x[0] === q.w) ? q.w : 1.4, dash: PEN_DASH.some(x => x[0] === q.dash) ? q.dash : 'solid',
+  fill: typeof q.fill === 'string' ? q.fill : '', fillA: FILL_ALPHA.some(x => x[0] === q.fillA) ? q.fillA : 1 }))(lsGet('gs.pen', {}) || {});
 const savePen = () => lsSet('gs.pen', pen);
 const lineSVG = l => { if (isPlot(l)) return plotSVG(l); const w = l.w || 1.4, d = penDash(l.dash, w); return lineEl(l, `style="stroke:${wcol(l.color || 'ink')};stroke-width:${w};stroke-linecap:round;stroke-linejoin:round;fill:none${d ? `;stroke-dasharray:${d}` : ''}"`); };
 // the pen fields for the Properties panel: color swatches, pen size and line style
@@ -1658,6 +1679,7 @@ const lineBB = l => { if (isPlot(l)) return plotFrame(l); if (shapeOfL(l) === 'c
 // distance from p to the drawn outline (hit testing)
 function lineDist(p, l) {
   const sh = shapeOfL(l);
+  if (canFill(l) && fcol(l.fill)) { const inside = sh === 'circle' ? Math.hypot(p[0] - l.a[0], p[1] - l.a[1]) <= radOf(l) : sh === 'ellipse' ? (() => { const [x0, y0, x1, y1] = lineBB(l), rx = (x1 - x0) / 2, ry = (y1 - y0) / 2; return rx > 0 && ry > 0 && ((p[0] - x0 - rx) / rx) ** 2 + ((p[1] - y0 - ry) / ry) ** 2 <= 1; })() : (([x0, y0, x1, y1]) => p[0] >= x0 && p[0] <= x1 && p[1] >= y0 && p[1] <= y1)(lineBB(l)); if (inside) return 0; }   // filled: pick anywhere inside
   if (sh === 'circle') return Math.abs(Math.hypot(p[0] - l.a[0], p[1] - l.a[1]) - radOf(l));
   if (sh === 'ellipse') { const [x0, y0, x1, y1] = lineBB(l), rx = Math.max((x1 - x0) / 2, 0.01), ry = Math.max((y1 - y0) / 2, 0.01), u = (p[0] - (x0 + x1) / 2) / rx, v = (p[1] - (y0 + y1) / 2) / ry; return Math.abs(Math.hypot(u, v) - 1) * Math.min(rx, ry); }   // close enough for picking
   if (sh === 'plot') { const [x0, y0, x1] = plotFrame(l); return p[0] >= x0 && p[0] <= x1 && p[1] >= y0 && p[1] <= y0 + PLOT_TB ? 0 : Infinity; }
@@ -1747,6 +1769,7 @@ function colorWires(k) {   // recolor the selected wires
 function render() {
   pruneLinks(); syncLinks();
   $('layerFrame').innerHTML = frameSVG(sheet);
+  $('layerFills').innerHTML = linesOf(sheet).filter(l => !isPlot(l)).map(fillSVG).join('');
   $('layerParts').innerHTML = sheet.parts.map(p => partSVG(p) + labelSVG(p) + pinSVG(p)).join('');
   const cnt = connectivity();
   let ws = sheet.wires.map(w => `<polyline class="wire"${wstyle(w)} points="${w.pts.map(p => p.join(',')).join(' ')}"/>`).join('');
@@ -2066,7 +2089,7 @@ function renderProps() {
   propsSig = sig;
   if (!items.length && SHAPE_TOOLS.includes(mode)) {
     b.innerHTML = `<div class="what">${SHAPE_NAME[mode]} tool<small>pen for new lines, ellipses and rectangles</small></div>
-      ${penFields(pen.color, pen.w, pen.dash)}
+      ${penFields(pen.color, pen.w, pen.dash)}${mode === 'rect' || mode === 'ellipse' ? fillFields(pen.fill, pen.fillA) : ''}
       <div class="empty">${mode === 'ellipse' ? 'Click one corner of its box, then the opposite corner. Hold Alt for a circle.' : mode === 'rect' ? 'Click one corner, then the opposite corner.' : 'Click the start, then the end.'}</div>`; return;
   }
   if (!items.length) { b.innerHTML = `<div class="empty">Select a part, wire or text to edit it. Click a part in the library to place it; click any hook to start a wire.</div>`; return; }
@@ -2126,7 +2149,7 @@ function renderProps() {
     const l = it.o, sh = shapeOfL(l), bb = lineBB(l), len = Math.hypot(l.b[0] - l.a[0], l.b[1] - l.a[1]);
     const size = sh === 'circle' ? `radius ${(len / G).toFixed(1)}` : sh === 'rect' || sh === 'ellipse' ? `${(bb[2] - bb[0]) / G} × ${(bb[3] - bb[1]) / G}` : `${(len / G).toFixed(1)}`;
     b.innerHTML = `<div class="what">${isRound(l) ? 'Circle' : SHAPE_NAME[sh]}<small>${size} grid units · drawing only, not a wire</small></div>
-      ${penFields(l.color || 'ink', l.w || 1.4, l.dash || 'solid')}
+      ${penFields(l.color || 'ink', l.w || 1.4, l.dash || 'solid')}${canFill(l) ? fillFields(l.fill || '', l.fillA || 1) : ''}
       <div class="empty">Drag it to move it. Draw more with the Line (L), Ellipse (O) and Rectangle (B) tools.</div>
       <div class="row-btns"><button data-act="dup">Duplicate</button><button class="del" data-act="del">Delete</button></div>`;
   } else if (it.k === 'wire') {
@@ -2150,6 +2173,8 @@ function renderProps() {
 }
 // pen size and line style: for the selected lines/shapes, or the pen for new ones while a drawing tool is on
 $('propBody').addEventListener('change', e => {
+  if (e.target.id === 'pFillA') { const v = +e.target.value, ls = selItems().filter(i => i.k === 'line' && canFill(i.o) && i.o.fill).map(i => i.o);
+    if (ls.length) { snapshot(); for (const l of ls) { if (v === 1) delete l.fillA; else l.fillA = v; } render(); changed(); } else if (SHAPE_TOOLS.includes(mode)) { pen.fillA = v; savePen(); } return; }
   if (e.target.id !== 'pPenW' && e.target.id !== 'pPenD') return;
   const key = e.target.id === 'pPenW' ? 'w' : 'dash', v = key === 'w' ? +e.target.value : e.target.value;
   const ls = selItems().filter(i => i.k === 'line' && !isPlot(i.o)).map(i => i.o);
@@ -2157,6 +2182,7 @@ $('propBody').addEventListener('change', e => {
   if (SHAPE_TOOLS.includes(mode)) { pen[key] = v; savePen(); renderOver(); }
 });
 $('propBody').addEventListener('click', e => {
+  const fc = e.target.closest('[data-fc]'); if (fc) { if (!selItems().length && SHAPE_TOOLS.includes(mode)) { pen.fill = fc.dataset.fc; savePen(); renderProps(); return; } fillShapes(fc.dataset.fc); return; }
   const wc = e.target.closest('[data-wc]'); if (wc) { if (!selItems().length && SHAPE_TOOLS.includes(mode)) { pen.color = wc.dataset.wc; savePen(); renderProps(); renderOver(); return; } colorWires(wc.dataset.wc); return; }
   const a = e.target.closest('[data-act]'); if (!a) return;
   if (a.dataset.act.startsWith('unit-')) { const it = selItems()[0]; if (it && it.k === 'part') addSection(it.o, a.dataset.act.slice(5)); return; }
@@ -2735,6 +2761,7 @@ function partMenu(e, raw) {
         return varyList(LIB[q.type]).map(v => { const cur = varyVal(q, v);
           return `<div class="mlabel">${v.label}</div><div class="chips">${Array.from({ length: v.max - v.min + 1 }, (_, i) => v.min + i).map(n => `<button class="chip" data-vary="${v.key}:${n}" aria-pressed="${n === cur}">${n}</button>`).join('')}</div>`; }).join(''); })() : '')
     + (items.some(i => i.k === 'wire' || (i.k === 'line' && !isPlot(i.o))) ? `<div class="mlabel">${items.some(i => i.k === 'wire') ? 'Wire color' : 'Line color'}</div>${swatchRow((() => { const cs = new Set(items.filter(i => i.k === 'wire' || i.k === 'line').map(i => i.o.color || 'ink')); return cs.size === 1 ? [...cs][0] : ''; })())}` : '')
+    + (items.some(i => i.k === 'line' && canFill(i.o)) ? `<div class="mlabel">Fill</div>${fillRow((() => { const fs = new Set(items.filter(i => i.k === 'line' && canFill(i.o)).map(i => i.o.fill || '')); return fs.size === 1 ? [...fs][0] : null; })())}` : '')
     + `<button role="menuitem" data-m="dup"><span>Duplicate</span><span>Ctrl+D</span></button>`
     + (selLabel ? `<button role="menuitem" data-m="del"><span>Hide ${FIELD_NAME[selLabel.field]}</span><span>Del</span></button>`
                 : `<button role="menuitem" data-m="del" style="color:var(--danger)"><span>Delete${many}</span><span>Del</span></button>`);
@@ -2743,6 +2770,7 @@ function partMenu(e, raw) {
   menuEl.style.left = Math.min(e.clientX, window.innerWidth - mw - 8) + 'px';
   menuEl.style.top = Math.max(8, Math.min(e.clientY, window.innerHeight - mh - 8)) + 'px';
   menuEl.onclick = ev => { const wc = ev.target.closest('[data-wc]'); if (wc) { closeMenu(); colorWires(wc.dataset.wc); return; }
+    const fc = ev.target.closest('[data-fc]'); if (fc) { closeMenu(); fillShapes(fc.dataset.fc); return; }
     const tb = ev.target.closest('[data-tube]'); if (tb) { closeMenu(); setTubeType(items[0].o, tb.dataset.tube); return; }
     const lc = ev.target.closest('[data-led]'); if (lc) { closeMenu(); setLedColor(items[0].o, lc.dataset.led); return; }
     const cr = ev.target.closest('[data-core]'); if (cr) { closeMenu(); const q = items[0].o, k = cr.dataset.core; if (coreOf(q) !== k) { snapshot(); q.core = k; render(); changed(); setMsg(`${q.ref || LIB[q.type].name}: ${CORE_NAME[k]}`); } return; }
@@ -2858,7 +2886,7 @@ function lineClick(p) {
   if (!lineDraft) { lineDraft = { a: p, shape: sh }; setMsg(sh === 'ellipse' ? 'Click the opposite corner (hold Alt for a circle). Esc or right-click cancels.' : sh === 'rect' ? 'Click the opposite corner (hold Alt for a square). Esc or right-click cancels.' : 'Click where the line ends. Esc or right-click cancels.'); renderOver(); return; }
   const a = lineDraft.a; p = rectEnd(a, p); lineDraft = null;
   if ((a[0] === p[0] && a[1] === p[1]) || ((sh === 'rect' || sh === 'ellipse') && (a[0] === p[0] || a[1] === p[1]))) { renderOver(); return; }      // nothing to draw
-  snapshot(); const l = { id: uid(), a: [...a], b: [...p] }; if (sh) l.shape = sh; if (pen.color !== 'ink') l.color = pen.color; if (pen.w !== 1.4) l.w = pen.w; if (pen.dash !== 'solid') l.dash = pen.dash; linesOf(sheet).push(l);
+  snapshot(); const l = { id: uid(), a: [...a], b: [...p] }; if (sh) l.shape = sh; if (pen.color !== 'ink') l.color = pen.color; if (pen.w !== 1.4) l.w = pen.w; if (pen.dash !== 'solid') l.dash = pen.dash; if (sh && pen.fill && fcol(pen.fill)) { l.fill = pen.fill; if (pen.fillA !== 1) l.fillA = pen.fillA; } linesOf(sheet).push(l);
   render(); renderOver(); changed(); setMsg(`${isRound(l) ? 'Circle' : SHAPE_NAME[sh || 'line']} added. Click to start another, or press V to select.`);
 }
 function addText(p) {
@@ -3149,7 +3177,7 @@ function sheetSVG(withBg = true, whole = false) {
   if (whole) { const [SW, SH] = sheetDims(sheet); x0 = 0; y0 = 0; x1 = SW; y1 = SH; }
   else { if (!bbs.length) return null; const pad = 16; x0 = Math.min(...bbs.map(b => b[0])) - pad; y0 = Math.min(...bbs.map(b => b[1])) - pad; x1 = Math.max(...bbs.map(b => b[2])) + pad; y1 = Math.max(...bbs.map(b => b[3])) + pad; }
   const css = `.ink{stroke:#17120E;fill:none;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}.solid{fill:#17120E}.tgt{stroke:#2F8A45;fill:none;stroke-width:1.8;stroke-linecap:round}.env{stroke:#17120E;fill:none;stroke-width:1.8}.htr{stroke:#E8912D;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}.dash{stroke:#17120E;fill:none;stroke-width:1.6;stroke-dasharray:5 3.4}.xbox{fill:none;stroke:#B4B4B4;stroke-width:1.2}.dotl{stroke:#17120E;fill:none;stroke-width:2;stroke-linecap:round;stroke-dasharray:0 4.2}.wire{stroke:#17120E;fill:none;stroke-width:1.4;stroke-linecap:round;stroke-linejoin:round}.jdot{fill:#17120E}.lbl{font-family:'Libre Franklin','Franklin Gothic Book',Arial,sans-serif;font-size:11px;fill:#17120E}.lbl .ref,.lbl.ref{font-weight:600}.pinno{font-family:'Libre Franklin','Franklin Gothic Book',Arial,sans-serif;font-size:8.5px;fill:#17120E}.pinlead{stroke:#5C5248;stroke-width:.8;stroke-dasharray:1.2 2;fill:none}.stxt{font-family:'Libre Franklin','Franklin Gothic Book',Arial,sans-serif;white-space:pre}.fr{stroke:#17120E;fill:none;stroke-width:1.1}.fr-b{stroke:#17120E;fill:none;stroke-width:2}.fr-lab{font-family:'JetBrains Mono',Consolas,monospace;font-size:7.5px;letter-spacing:.08em;fill:#5C5248}.fr-val{font-family:'Libre Franklin','Franklin Gothic Book',Arial,sans-serif;fill:#17120E}.fr-zone{font-family:'JetBrains Mono',Consolas,monospace;font-size:10px;fill:#5C5248}.fr-co{font-family:'Big Shoulders Display','Arial Narrow',sans-serif;font-weight:800;fill:#17120E}`;
-  const body = ((whole ? $('layerFrame').innerHTML : '') + $('layerParts').innerHTML + $('layerWires').innerHTML + $('layerText').innerHTML + $('layerPlots').innerHTML.replace(/ filter="url\(#plotShadow\)"/g, '')).replace(/var\(--ink\)/g, '#17120E').replace(/var\(--paper\)/g, '#FBF8F3');
+  const body = ((whole ? $('layerFrame').innerHTML : '') + $('layerFills').innerHTML + $('layerParts').innerHTML + $('layerWires').innerHTML + $('layerText').innerHTML + $('layerPlots').innerHTML.replace(/ filter="url\(#plotShadow\)"/g, '')).replace(/var\(--ink\)/g, '#17120E').replace(/var\(--paper\)/g, '#FBF8F3');
   return { w: x1 - x0, h: y1 - y0, svg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${x0} ${y0} ${x1 - x0} ${y1 - y0}" width="${x1 - x0}" height="${y1 - y0}"><style>${css}</style>${withBg ? `<rect x="${x0}" y="${y0}" width="${x1 - x0}" height="${y1 - y0}" fill="#FBF8F3"/>` : ''}${body}</svg>` };
 }
 const fileBase = () => (sheet.file || slugFile(sheet.name)).replace(/\.[a-z0-9]+$/i, '') || 'schematic';
